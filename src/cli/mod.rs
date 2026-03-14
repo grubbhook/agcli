@@ -90,14 +90,17 @@ pub enum Commands {
     /// Transfer TAO to another account
     Transfer {
         /// Destination SS58 address
+        #[arg(long)]
         dest: String,
         /// Amount of TAO to send
+        #[arg(long)]
         amount: f64,
     },
 
     /// Transfer entire balance to another account (minus fees)
     TransferAll {
         /// Destination SS58 address
+        #[arg(long)]
         dest: String,
         /// Keep sender account alive (leave existential deposit)
         #[arg(long)]
@@ -178,7 +181,7 @@ pub enum Commands {
     /// Generate shell completions (bash, zsh, fish, powershell)
     Completions {
         /// Shell to generate completions for
-        #[arg(value_parser = ["bash", "zsh", "fish", "powershell"])]
+        #[arg(long, value_parser = ["bash", "zsh", "fish", "powershell"])]
         shell: String,
     },
 
@@ -191,6 +194,7 @@ pub enum Commands {
     Explain {
         /// Topic to explain (e.g., tempo, commit-reveal, amm, bootstrap)
         /// Omit to list all available topics.
+        #[arg(long)]
         topic: Option<String>,
     },
 
@@ -199,6 +203,7 @@ pub enum Commands {
     Batch {
         /// Path to JSON file containing an array of calls.
         /// Each call: {"pallet": "SubtensorModule", "call": "add_stake", "args": [...]}
+        #[arg(long)]
         file: String,
         /// Use batch (fail-safe, continues on error) instead of batch_all (atomic)
         #[arg(long)]
@@ -213,7 +218,7 @@ pub enum SubscribeCommands {
     /// Watch chain events (all, staking, registration, transfer, weights, subnet)
     Events {
         /// Event filter category
-        #[arg(default_value = "all")]
+        #[arg(long, default_value = "all")]
         filter: String,
         /// Filter by subnet UID (only show events mentioning this netuid)
         #[arg(long)]
@@ -276,16 +281,19 @@ pub enum WalletCommands {
     /// Create a new hotkey
     NewHotkey {
         /// Hotkey name
+        #[arg(long)]
         name: String,
     },
     /// Sign an arbitrary message with the coldkey
     Sign {
         /// Message to sign (hex-encoded if prefixed with 0x, otherwise UTF-8)
+        #[arg(long)]
         message: String,
     },
     /// Verify a signature against the coldkey
     Verify {
         /// Message that was signed
+        #[arg(long)]
         message: String,
         /// Signature (hex-encoded, 0x prefix optional)
         #[arg(long)]
@@ -297,6 +305,7 @@ pub enum WalletCommands {
     /// Derive SS58 address from a public key or mnemonic (no secrets printed)
     Derive {
         /// Public key (0x hex) or mnemonic phrase
+        #[arg(long)]
         input: String,
     },
 }
@@ -306,6 +315,7 @@ pub enum StakeCommands {
     /// Add stake to a hotkey on a subnet
     Add {
         /// Amount of TAO to stake
+        #[arg(long)]
         amount: f64,
         /// Subnet UID
         #[arg(long)]
@@ -320,6 +330,7 @@ pub enum StakeCommands {
     /// Remove stake from a hotkey on a subnet
     Remove {
         /// Amount to unstake
+        #[arg(long)]
         amount: f64,
         /// Subnet UID
         #[arg(long)]
@@ -340,6 +351,7 @@ pub enum StakeCommands {
     /// Move stake between subnets
     Move {
         /// Amount of alpha to move
+        #[arg(long)]
         amount: f64,
         /// Source subnet
         #[arg(long)]
@@ -354,6 +366,7 @@ pub enum StakeCommands {
     /// Swap stake between hotkeys on same subnet
     Swap {
         /// Amount
+        #[arg(long)]
         amount: f64,
         /// Subnet UID
         #[arg(long)]
@@ -383,6 +396,7 @@ pub enum StakeCommands {
     /// Add stake with a limit price
     AddLimit {
         /// Amount of TAO
+        #[arg(long)]
         amount: f64,
         /// Subnet UID
         #[arg(long)]
@@ -400,6 +414,7 @@ pub enum StakeCommands {
     /// Remove stake with limit price
     RemoveLimit {
         /// Amount of alpha
+        #[arg(long)]
         amount: f64,
         /// Subnet UID
         #[arg(long)]
@@ -417,6 +432,7 @@ pub enum StakeCommands {
     /// Set childkey take
     ChildkeyTake {
         /// Take percentage (0-18)
+        #[arg(long)]
         take: f64,
         /// Subnet UID
         #[arg(long)]
@@ -437,6 +453,7 @@ pub enum StakeCommands {
     /// Recycle alpha tokens back to TAO
     RecycleAlpha {
         /// Amount of alpha to recycle
+        #[arg(long)]
         amount: f64,
         /// Subnet UID
         #[arg(long)]
@@ -454,6 +471,7 @@ pub enum StakeCommands {
     /// Burn alpha tokens permanently (reduce supply)
     BurnAlpha {
         /// Amount of alpha to burn
+        #[arg(long)]
         amount: f64,
         /// Subnet UID
         #[arg(long)]
@@ -465,6 +483,7 @@ pub enum StakeCommands {
     /// Swap stake between subnets with a limit price
     SwapLimit {
         /// Amount of alpha to swap
+        #[arg(long)]
         amount: f64,
         /// Source subnet
         #[arg(long)]
@@ -503,16 +522,19 @@ pub enum SubnetCommands {
     /// Show detailed info for a subnet
     Show {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
     /// Show subnet hyperparameters
     Hyperparams {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
     /// Show metagraph for a subnet (full or single UID)
     Metagraph {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
         /// Show only a specific neuron UID
         #[arg(long)]
@@ -523,11 +545,13 @@ pub enum SubnetCommands {
     /// Register a neuron on a subnet (burn)
     RegisterNeuron {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
     /// Register via POW
     Pow {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
         /// Number of threads
         #[arg(long, default_value = "4")]
@@ -536,6 +560,7 @@ pub enum SubnetCommands {
     /// Dissolve a subnet (owner only)
     Dissolve {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
     /// Live watch: tempo countdown, rate limits, commit-reveal status
@@ -568,16 +593,19 @@ pub enum SubnetCommands {
     /// Show subnet health: all miners, status, weights vs consensus
     Health {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
     /// Show who's earning what, projected next epoch
     Emissions {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
     /// Show current registration cost + recent trend
     Cost {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
 }
@@ -590,6 +618,7 @@ pub enum WeightCommands {
         #[arg(long)]
         netuid: u16,
         /// Weights as "uid:weight" pairs, comma-separated
+        #[arg(long)]
         weights: String,
         /// Version key
         #[arg(long, default_value = "0")]
@@ -604,6 +633,7 @@ pub enum WeightCommands {
         #[arg(long)]
         netuid: u16,
         /// Weights as "uid:weight" pairs
+        #[arg(long)]
         weights: String,
         /// Salt (random if not specified)
         #[arg(long)]
@@ -615,8 +645,10 @@ pub enum WeightCommands {
         #[arg(long)]
         netuid: u16,
         /// Weights as "uid:weight" pairs
+        #[arg(long)]
         weights: String,
         /// Salt used in commit
+        #[arg(long)]
         salt: String,
         /// Version key
         #[arg(long, default_value = "0")]
@@ -628,6 +660,7 @@ pub enum WeightCommands {
         #[arg(long)]
         netuid: u16,
         /// Weights as "uid:weight" pairs, comma-separated
+        #[arg(long)]
         weights: String,
         /// Version key
         #[arg(long, default_value = "0")]
@@ -645,6 +678,7 @@ pub enum RootCommands {
     /// Set root weights
     Weights {
         /// Weights as "netuid:weight" pairs
+        #[arg(long)]
         weights: String,
     },
 }
@@ -662,6 +696,7 @@ pub enum DelegateCommands {
     /// Decrease take
     DecreaseTake {
         /// New take percentage
+        #[arg(long)]
         take: f64,
         /// Hotkey SS58
         #[arg(long)]
@@ -670,6 +705,7 @@ pub enum DelegateCommands {
     /// Increase take
     IncreaseTake {
         /// New take percentage
+        #[arg(long)]
         take: f64,
         /// Hotkey SS58
         #[arg(long)]
@@ -691,6 +727,7 @@ pub enum ViewCommands {
         #[arg(long)]
         netuid: u16,
         /// Neuron UID
+        #[arg(long)]
         uid: u16,
     },
     /// Show network overview
@@ -724,6 +761,7 @@ pub enum ViewCommands {
     /// Subnet analytics (emission rates, top miners/validators, stats)
     SubnetAnalytics {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
     },
     /// Staking analytics (APY estimates, emission projections)
@@ -747,6 +785,7 @@ pub enum ViewCommands {
     /// Show who has nominated/delegated to a hotkey
     Nominations {
         /// Hotkey SS58 address
+        #[arg(long)]
         hotkey: String,
     },
 }
@@ -771,11 +810,13 @@ pub enum IdentityCommands {
     /// Show identity
     Show {
         /// SS58 address
+        #[arg(long)]
         address: String,
     },
     /// Set subnet identity (subnet owner only)
     SetSubnet {
         /// Subnet UID
+        #[arg(long)]
         netuid: u16,
         /// Subnet name
         #[arg(long)]
@@ -816,6 +857,7 @@ pub enum ProxyCommands {
     /// Add a proxy account
     Add {
         /// Proxy delegate SS58 address
+        #[arg(long)]
         delegate: String,
         /// Proxy type (any, owner, staking, non_transfer, non_critical, governance, senate)
         #[arg(long, default_value = "any")]
@@ -827,6 +869,7 @@ pub enum ProxyCommands {
     /// Remove a proxy account
     Remove {
         /// Proxy delegate SS58 address
+        #[arg(long)]
         delegate: String,
         /// Proxy type (must match what was set)
         #[arg(long, default_value = "any")]
@@ -848,11 +891,13 @@ pub enum SwapCommands {
     /// Swap hotkey
     Hotkey {
         /// New hotkey SS58
+        #[arg(long)]
         new_hotkey: String,
     },
     /// Schedule coldkey swap
     Coldkey {
         /// New coldkey SS58
+        #[arg(long)]
         new_coldkey: String,
     },
 }
@@ -862,6 +907,7 @@ pub enum MultisigCommands {
     /// Derive a multisig account address from signatories
     Address {
         /// Signatories as comma-separated SS58 addresses
+        #[arg(long)]
         signatories: String,
         /// Approval threshold
         #[arg(long)]
@@ -904,18 +950,22 @@ pub enum CrowdloanCommands {
     /// Contribute TAO to a crowdloan
     Contribute {
         /// Crowdloan ID
+        #[arg(long)]
         crowdloan_id: u32,
         /// Amount of TAO to contribute
+        #[arg(long)]
         amount: f64,
     },
     /// Withdraw contribution from an active crowdloan
     Withdraw {
         /// Crowdloan ID
+        #[arg(long)]
         crowdloan_id: u32,
     },
     /// Finalize a crowdloan that has reached its cap
     Finalize {
         /// Crowdloan ID
+        #[arg(long)]
         crowdloan_id: u32,
     },
 }
@@ -924,16 +974,19 @@ pub enum CrowdloanCommands {
 pub enum ConfigCommands {
     /// Show current configuration
     Show,
-    /// Set a config value (e.g., agcli config set network finney)
+    /// Set a config value (e.g., agcli config set --key network --value finney)
     Set {
         /// Key to set
+        #[arg(long)]
         key: String,
         /// Value to set
+        #[arg(long)]
         value: String,
     },
     /// Remove a config value
     Unset {
         /// Key to remove
+        #[arg(long)]
         key: String,
     },
     /// Show config file path

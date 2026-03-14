@@ -400,6 +400,10 @@ async fn handle_subnet(
             let params = client.get_subnet_hyperparams(NetUid(netuid)).await?;
             match params {
                 Some(h) => {
+                    if output == "json" {
+                        print_json_ser(&h);
+                        return Ok(());
+                    }
                     println!("Hyperparameters for SN{}", netuid);
                     let mut table = comfy_table::Table::new();
                     table.set_header(vec!["Parameter", "Value"]);

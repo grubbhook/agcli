@@ -109,7 +109,9 @@ fn parse_output_invalid_rejected() {
 /// Verify all stake subcommands parse.
 #[test]
 fn parse_stake_add() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "stake", "add", "1.5", "--netuid", "1"]);
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "add", "--amount", "1.5", "--netuid", "1",
+    ]);
     assert!(cli.is_ok(), "stake add should parse: {:?}", cli.err());
 }
 
@@ -119,7 +121,9 @@ fn parse_transfer() {
     let cli = agcli::cli::Cli::try_parse_from([
         "agcli",
         "transfer",
+        "--dest",
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--amount",
         "1.0",
     ]);
     assert!(cli.is_ok());
@@ -160,7 +164,7 @@ fn parse_config_show() {
 /// Verify completions subcommand parses.
 #[test]
 fn parse_completions() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions", "bash"]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions", "--shell", "bash"]);
     assert!(cli.is_ok());
 }
 
@@ -216,7 +220,15 @@ fn parse_live_flag() {
     // --live requires a value or no value; with Option<Option<u64>>,
     // the bare --live may conflict with subcommand parsing.
     // Test with explicit value:
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--live", "5", "subnet", "metagraph", "1"]);
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--live",
+        "5",
+        "subnet",
+        "metagraph",
+        "--netuid",
+        "1",
+    ]);
     assert!(cli.is_ok(), "should parse --live 5: {:?}", cli.err());
 }
 
@@ -231,6 +243,7 @@ fn parse_weights_commit_reveal() {
         "commit-reveal",
         "--netuid",
         "97",
+        "--weights",
         "0:100,1:200",
         "--wait",
     ]);
@@ -250,6 +263,7 @@ fn parse_weights_set_dry_run() {
         "set",
         "--netuid",
         "1",
+        "--weights",
         "0:100,1:200",
         "--dry-run",
     ]);
@@ -290,14 +304,14 @@ fn parse_subnet_monitor_interval() {
 /// Verify subnet health parses.
 #[test]
 fn parse_subnet_health() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "health", "97"]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "health", "--netuid", "97"]);
     assert!(cli.is_ok(), "should parse subnet health: {:?}", cli.err());
 }
 
 /// Verify subnet emissions parses.
 #[test]
 fn parse_subnet_emissions() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "emissions", "97"]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "emissions", "--netuid", "97"]);
     assert!(
         cli.is_ok(),
         "should parse subnet emissions: {:?}",
@@ -308,22 +322,29 @@ fn parse_subnet_emissions() {
 /// Verify subnet cost parses.
 #[test]
 fn parse_subnet_cost() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cost", "97"]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cost", "--netuid", "97"]);
     assert!(cli.is_ok(), "should parse subnet cost: {:?}", cli.err());
 }
 
 /// Verify metagraph --uid single-UID lookup parses.
 #[test]
 fn parse_metagraph_single_uid() {
-    let cli =
-        agcli::cli::Cli::try_parse_from(["agcli", "subnet", "metagraph", "97", "--uid", "11"]);
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "subnet",
+        "metagraph",
+        "--netuid",
+        "97",
+        "--uid",
+        "11",
+    ]);
     assert!(cli.is_ok(), "should parse metagraph --uid: {:?}", cli.err());
 }
 
 /// Verify metagraph without --uid still works.
 #[test]
 fn parse_metagraph_full() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "metagraph", "1"]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "metagraph", "--netuid", "1"]);
     assert!(cli.is_ok(), "should parse full metagraph: {:?}", cli.err());
 }
 
@@ -350,7 +371,8 @@ fn parse_global_pretty_flag() {
 /// Verify wallet sign parses.
 #[test]
 fn parse_wallet_sign() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "sign", "hello world"]);
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "wallet", "sign", "--message", "hello world"]);
     assert!(cli.is_ok(), "should parse wallet sign: {:?}", cli.err());
 }
 
@@ -361,6 +383,7 @@ fn parse_wallet_verify() {
         "agcli",
         "wallet",
         "verify",
+        "--message",
         "hello world",
         "--signature",
         "0xaabbccdd",
@@ -377,6 +400,7 @@ fn parse_wallet_derive() {
         "agcli",
         "wallet",
         "derive",
+        "--input",
         "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
     ]);
     assert!(cli.is_ok(), "should parse wallet derive: {:?}", cli.err());
@@ -403,6 +427,7 @@ fn parse_subscribe_events_with_netuid() {
         "agcli",
         "subscribe",
         "events",
+        "--filter",
         "staking",
         "--netuid",
         "97",
@@ -421,6 +446,7 @@ fn parse_subscribe_events_with_account() {
         "agcli",
         "subscribe",
         "events",
+        "--filter",
         "weights",
         "--account",
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
@@ -454,14 +480,15 @@ fn parse_batch_and_yes_combined() {
 /// Verify batch command parses with file argument.
 #[test]
 fn parse_batch_command() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "batch", "calls.json"]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "batch", "--file", "calls.json"]);
     assert!(cli.is_ok(), "should parse batch command: {:?}", cli.err());
 }
 
 /// Verify batch --no-atomic flag parses.
 #[test]
 fn parse_batch_no_atomic() {
-    let cli = agcli::cli::Cli::try_parse_from(["agcli", "batch", "calls.json", "--no-atomic"]);
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "batch", "--file", "calls.json", "--no-atomic"]);
     assert!(
         cli.is_ok(),
         "should parse batch --no-atomic: {:?}",

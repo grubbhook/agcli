@@ -77,7 +77,16 @@ fn cli_flags_override_config() {
 #[test]
 fn live_interval_parsing() {
     // --live with explicit value
-    let cli = Cli::try_parse_from(["agcli", "--live", "5", "subnet", "metagraph", "1"]).unwrap();
+    let cli = Cli::try_parse_from([
+        "agcli",
+        "--live",
+        "5",
+        "subnet",
+        "metagraph",
+        "--netuid",
+        "1",
+    ])
+    .unwrap();
     assert_eq!(cli.live_interval(), Some(5));
 }
 
