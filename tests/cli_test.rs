@@ -495,3 +495,227 @@ fn parse_batch_no_atomic() {
         cli.err()
     );
 }
+
+// ──── Step 25: Wallet CSV, explain, and missing command tests ────
+
+/// Verify wallet list with --output csv parses.
+#[test]
+fn parse_wallet_list_csv() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "csv", "wallet", "list"]);
+    assert!(
+        cli.is_ok(),
+        "should parse wallet list --output csv: {:?}",
+        cli.err()
+    );
+    assert_eq!(cli.unwrap().output, "csv");
+}
+
+/// Verify wallet show --all with --output csv parses.
+#[test]
+fn parse_wallet_show_all_csv() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "--output", "csv", "wallet", "show", "--all"]);
+    assert!(
+        cli.is_ok(),
+        "should parse wallet show --all --output csv: {:?}",
+        cli.err()
+    );
+    let cli = cli.unwrap();
+    assert_eq!(cli.output, "csv");
+}
+
+/// Verify wallet show --all with --output json parses.
+#[test]
+fn parse_wallet_show_all_json() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "wallet", "show", "--all"]);
+    assert!(
+        cli.is_ok(),
+        "should parse wallet show --all --output json: {:?}",
+        cli.err()
+    );
+    assert_eq!(cli.unwrap().output, "json");
+}
+
+/// Verify explain without topic parses (lists all topics).
+#[test]
+fn parse_explain_no_topic() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain"]);
+    assert!(
+        cli.is_ok(),
+        "should parse explain without topic: {:?}",
+        cli.err()
+    );
+}
+
+/// Verify explain with --topic parses.
+#[test]
+fn parse_explain_with_topic() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "tempo"]);
+    assert!(cli.is_ok(), "should parse explain --topic: {:?}", cli.err());
+}
+
+/// Verify explain with --output json parses.
+#[test]
+fn parse_explain_json() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "explain", "--topic", "amm"]);
+    assert!(
+        cli.is_ok(),
+        "should parse explain --output json: {:?}",
+        cli.err()
+    );
+    assert_eq!(cli.unwrap().output, "json");
+}
+
+/// Verify subnet liquidity without netuid parses (all subnets).
+#[test]
+fn parse_subnet_liquidity_all() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "liquidity"]);
+    assert!(
+        cli.is_ok(),
+        "should parse subnet liquidity: {:?}",
+        cli.err()
+    );
+}
+
+/// Verify subnet liquidity with --netuid parses.
+#[test]
+fn parse_subnet_liquidity_single() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "liquidity", "--netuid", "1"]);
+    assert!(
+        cli.is_ok(),
+        "should parse subnet liquidity --netuid: {:?}",
+        cli.err()
+    );
+}
+
+/// Verify subnet watch parses with custom interval.
+#[test]
+fn parse_subnet_watch_custom_interval() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "subnet",
+        "watch",
+        "--netuid",
+        "1",
+        "--interval",
+        "30",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse subnet watch --interval: {:?}",
+        cli.err()
+    );
+}
+
+/// Verify stake add with --max-slippage parses.
+#[test]
+fn parse_stake_add_max_slippage() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "add",
+        "--amount",
+        "1.0",
+        "--netuid",
+        "1",
+        "--max-slippage",
+        "2.0",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse stake add --max-slippage: {:?}",
+        cli.err()
+    );
+}
+
+/// Verify stake list with --output csv parses.
+#[test]
+fn parse_stake_list_csv() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "csv", "stake", "list"]);
+    assert!(
+        cli.is_ok(),
+        "should parse stake list --output csv: {:?}",
+        cli.err()
+    );
+    assert_eq!(cli.unwrap().output, "csv");
+}
+
+/// Verify view portfolio with --output json parses.
+#[test]
+fn parse_view_portfolio_json() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "view", "portfolio"]);
+    assert!(
+        cli.is_ok(),
+        "should parse view portfolio --output json: {:?}",
+        cli.err()
+    );
+    assert_eq!(cli.unwrap().output, "json");
+}
+
+/// Verify view account parses.
+#[test]
+fn parse_view_account() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "account",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "should parse view account: {:?}", cli.err());
+}
+
+/// Verify view staking-analytics parses.
+#[test]
+fn parse_view_staking_analytics() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "staking-analytics"]);
+    assert!(
+        cli.is_ok(),
+        "should parse view staking-analytics: {:?}",
+        cli.err()
+    );
+}
+
+/// Verify all global flags can be combined with any subcommand.
+#[test]
+fn parse_all_global_flags_combined() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "--pretty",
+        "--yes",
+        "--batch",
+        "--password",
+        "pw",
+        "--network",
+        "test",
+        "balance",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse all global flags combined: {:?}",
+        cli.err()
+    );
+    let cli = cli.unwrap();
+    assert_eq!(cli.output, "json");
+    assert!(cli.pretty);
+    assert!(cli.yes);
+    assert!(cli.batch);
+    assert_eq!(cli.password, Some("pw".to_string()));
+    assert_eq!(cli.network, "test");
+}
+
+/// Verify wallet new-hotkey parses.
+#[test]
+fn parse_wallet_new_hotkey() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "wallet", "new-hotkey", "--name", "validator"]);
+    assert!(
+        cli.is_ok(),
+        "should parse wallet new-hotkey: {:?}",
+        cli.err()
+    );
+}

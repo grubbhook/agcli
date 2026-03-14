@@ -427,8 +427,6 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
 }
 
 async fn handle_account_explorer(client: &Client, address: &str, output: &str) -> Result<()> {
-    println!("Account: {}\n", address);
-
     let (balance, stakes, identity) = tokio::try_join!(
         client.get_balance_ss58(address),
         client.get_stake_for_coldkey(address),
@@ -469,6 +467,7 @@ async fn handle_account_explorer(client: &Client, address: &str, output: &str) -
         return Ok(());
     }
 
+    println!("Account: {}\n", address);
     let total_staked = stakes.iter().fold(Balance::ZERO, |acc, s| acc + s.stake);
     let total_value = balance + total_staked;
     println!("  Free balance:  {}", balance.display_tao());

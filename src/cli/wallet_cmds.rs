@@ -185,7 +185,6 @@ pub async fn handle_wallet(
             mnemonic: cmd_mnemonic,
             password: cmd_password,
         } => {
-            println!("Regenerating coldkey from mnemonic...");
             let mnemonic = crate::cli::helpers::require_mnemonic(cmd_mnemonic)?;
             let password =
                 crate::cli::helpers::require_password(cmd_password, global_password, true)?;
@@ -206,7 +205,6 @@ pub async fn handle_wallet(
             name,
             mnemonic: cmd_mnemonic,
         } => {
-            println!("Regenerating hotkey '{}' from mnemonic...", name);
             let mnemonic = crate::cli::helpers::require_mnemonic(cmd_mnemonic)?;
             let pair = crate::wallet::keypair::pair_from_mnemonic(&mnemonic)?;
             let ss58 = crate::wallet::keypair::to_ss58(&pair.public(), 42);
