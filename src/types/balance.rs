@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn display_tao_format() {
-        let b = Balance::from_tao(3.14);
+        let b = Balance::from_tao(3.15);
         let s = b.display_tao();
         assert!(s.contains("τ"));
         assert!(s.starts_with("3."));

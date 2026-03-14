@@ -161,7 +161,7 @@ async fn extended_chain_queries() {
     println!(
         "[ok] Delegate: {} take={:.2}%",
         &d.hotkey[..8],
-        d.take as f64 / 65535.0 * 100.0
+        d.take / 65535.0 * 100.0
     );
 
     // ── proxies ──

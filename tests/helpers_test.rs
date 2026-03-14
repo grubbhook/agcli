@@ -330,7 +330,7 @@ fn json_to_subxt_value_large_number() {
 fn json_to_subxt_value_float_as_string() {
     use agcli::cli::helpers::json_to_subxt_value;
     // JSON floats become strings since we can't represent them as u128/i128
-    let val = json_to_subxt_value(&serde_json::json!(3.14));
+    let val = json_to_subxt_value(&serde_json::json!(3.15));
     let _formatted = format!("{:?}", val);
 }
 

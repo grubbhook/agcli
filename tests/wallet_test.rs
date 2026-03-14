@@ -36,7 +36,7 @@ fn open_wallet_and_read_public_key() {
     let addr = wallet.coldkey_ss58().unwrap().to_string();
 
     // Open and verify the SS58 is the same
-    let opened = Wallet::open(&format!("{}/w1", dir.path().to_str().unwrap())).unwrap();
+    let opened = Wallet::open(format!("{}/w1", dir.path().to_str().unwrap())).unwrap();
     assert_eq!(opened.coldkey_ss58().unwrap(), addr);
 }
 
@@ -44,7 +44,7 @@ fn open_wallet_and_read_public_key() {
 fn unlock_coldkey_correct_password() {
     let dir = tempfile::tempdir().unwrap();
     Wallet::create(dir.path().to_str().unwrap(), "w2", "secret", "default").unwrap();
-    let mut opened = Wallet::open(&format!("{}/w2", dir.path().to_str().unwrap())).unwrap();
+    let mut opened = Wallet::open(format!("{}/w2", dir.path().to_str().unwrap())).unwrap();
     assert!(opened.unlock_coldkey("secret").is_ok());
     assert!(opened.coldkey().is_ok());
 }
@@ -53,7 +53,7 @@ fn unlock_coldkey_correct_password() {
 fn unlock_coldkey_wrong_password() {
     let dir = tempfile::tempdir().unwrap();
     Wallet::create(dir.path().to_str().unwrap(), "w3", "correct", "default").unwrap();
-    let mut opened = Wallet::open(&format!("{}/w3", dir.path().to_str().unwrap())).unwrap();
+    let mut opened = Wallet::open(format!("{}/w3", dir.path().to_str().unwrap())).unwrap();
     assert!(opened.unlock_coldkey("wrong").is_err());
 }
 
@@ -125,7 +125,7 @@ fn wrong_password_error_message_is_helpful() {
         "default",
     )
     .unwrap();
-    let mut wallet = Wallet::open(&format!("{}/err_test", dir.path().to_str().unwrap())).unwrap();
+    let mut wallet = Wallet::open(format!("{}/err_test", dir.path().to_str().unwrap())).unwrap();
     let err = wallet.unlock_coldkey("wrong").unwrap_err();
     // The error chain includes "Failed to decrypt coldkey" context and inner "wrong password" cause
     let full = format!("{:#}", err);

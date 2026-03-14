@@ -46,9 +46,11 @@ fn endpoint_overrides_network() {
 #[test]
 fn config_apply_defaults() {
     let mut cli = Cli::try_parse_from(["agcli", "balance"]).unwrap();
-    let mut cfg = agcli::Config::default();
-    cfg.network = Some("test".to_string());
-    cfg.wallet = Some("mywallet".to_string());
+    let cfg = agcli::Config {
+        network: Some("test".to_string()),
+        wallet: Some("mywallet".to_string()),
+        ..Default::default()
+    };
     cli.apply_config(&cfg);
     assert_eq!(cli.network, "test");
     assert_eq!(cli.wallet, "mywallet");
@@ -65,9 +67,11 @@ fn cli_flags_override_config() {
         "balance",
     ])
     .unwrap();
-    let mut cfg = agcli::Config::default();
-    cfg.network = Some("test".to_string());
-    cfg.wallet = Some("config_wallet".to_string());
+    let cfg = agcli::Config {
+        network: Some("test".to_string()),
+        wallet: Some("config_wallet".to_string()),
+        ..Default::default()
+    };
     cli.apply_config(&cfg);
     // CLI flags should take precedence
     assert_eq!(cli.network, "local");
@@ -93,8 +97,10 @@ fn live_interval_parsing() {
 #[test]
 fn config_batch_default_applies() {
     let mut cli = Cli::try_parse_from(["agcli", "balance"]).unwrap();
-    let mut cfg = agcli::Config::default();
-    cfg.batch = Some(true);
+    let cfg = agcli::Config {
+        batch: Some(true),
+        ..Default::default()
+    };
     cli.apply_config(&cfg);
     assert!(cli.batch);
 }
@@ -103,8 +109,10 @@ fn config_batch_default_applies() {
 fn config_batch_cli_overrides() {
     // --batch on CLI should stay true even if config says false
     let mut cli = Cli::try_parse_from(["agcli", "--batch", "balance"]).unwrap();
-    let mut cfg = agcli::Config::default();
-    cfg.batch = Some(false);
+    let cfg = agcli::Config {
+        batch: Some(false),
+        ..Default::default()
+    };
     cli.apply_config(&cfg);
     assert!(cli.batch);
 }
