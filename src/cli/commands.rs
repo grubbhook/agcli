@@ -36,9 +36,26 @@ pub async fn execute(cli: Cli) -> Result<()> {
             address,
             watch,
             threshold,
+            at_block,
         } => {
             let client = Client::connect(network.ws_url()).await?;
             let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
+
+            // Historical wayback mode
+            if let Some(block_num) = at_block {
+                let block_hash = client.get_block_hash(block_num).await?;
+                let balance = client.get_balance_at_block(&addr, block_hash).await?;
+                if output == "json" {
+                    print_json(
+                        &serde_json::json!({"address": addr, "block": block_num, "block_hash": format!("{:?}", block_hash), "balance_rao": balance.rao(), "balance_tao": balance.tao()}),
+                    );
+                } else {
+                    println!("Address: {}", addr);
+                    println!("Block:   {} ({:?})", block_num, block_hash);
+                    println!("Balance: {}", balance.display_tao());
+                }
+                return Ok(());
+            }
 
             // Watch mode
             if let Some(interval_opt) = watch {
@@ -289,6 +306,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::Explain { topic } => {
             handle_explain(topic.as_deref(), output);
             Ok(())
+        }
+        Commands::Audit { address } => {
+            let client = Client::connect(network.ws_url()).await?;
+            let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
+            view_cmds::handle_audit(&client, &addr, output).await
         }
         Commands::Batch { file, no_atomic } => {
             let client = Client::connect(network.ws_url()).await?;

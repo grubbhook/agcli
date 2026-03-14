@@ -6,6 +6,8 @@ pub mod storage;
 
 use anyhow::{Context, Result};
 use sp_core::{sr25519, Pair as _};
+use subxt::backend::legacy::rpc_methods::LegacyRpcMethods;
+use subxt::backend::rpc::RpcClient;
 use subxt::tx::PairSigner;
 use subxt::OnlineClient;
 
@@ -23,19 +25,24 @@ pub type Signer = PairSigner<SubtensorConfig, sr25519::Pair>;
 /// High-level client for the Bittensor (subtensor) chain.
 pub struct Client {
     inner: OnlineClient<SubtensorConfig>,
+    rpc: LegacyRpcMethods<SubtensorConfig>,
 }
 
 impl Client {
     /// Connect to a subtensor node.
     pub async fn connect(url: &str) -> Result<Self> {
         tracing::info!("Connecting to {}", url);
-        let inner = OnlineClient::from_url(url)
+        let rpc_client = RpcClient::from_url(url)
             .await
             .with_context(|| format!(
                 "Failed to connect to subtensor node at '{}'. Check your network connection and endpoint.\n  Finney:  wss://entrypoint-finney.opentensor.ai:443\n  Test:    wss://test.finney.opentensor.ai:443\n  Local:   ws://127.0.0.1:9944\n  Set with: --network finney|test|local  or  --endpoint <url>",
                 url
             ))?;
-        Ok(Self { inner })
+        let rpc = LegacyRpcMethods::new(rpc_client.clone());
+        let inner = OnlineClient::from_rpc_client(rpc_client)
+            .await
+            .with_context(|| "Failed to initialize subxt client from RPC connection")?;
+        Ok(Self { inner, rpc })
     }
 
     /// Connect to a well-known network.
@@ -105,6 +112,43 @@ impl Client {
     pub async fn get_balance_ss58(&self, ss58: &str) -> Result<Balance> {
         let pk = crate::wallet::keypair::from_ss58(ss58)?;
         self.get_balance(&pk).await
+    }
+
+    /// Resolve a block number to a block hash via RPC.
+    pub async fn get_block_hash(&self, block_number: u32) -> Result<subxt::utils::H256> {
+        use subxt::backend::legacy::rpc_methods::NumberOrHex;
+        let hash = self
+            .rpc
+            .chain_get_block_hash(Some(NumberOrHex::Number(block_number as u64)))
+            .await
+            .context("Failed to get block hash")?;
+        hash.ok_or_else(|| anyhow::anyhow!("Block {} not found", block_number))
+    }
+
+    /// Get TAO balance at a specific block hash.
+    pub async fn get_balance_at_block(
+        &self,
+        ss58: &str,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Balance> {
+        let pk = crate::wallet::keypair::from_ss58(ss58)?;
+        let account_id = Self::to_account_id(&pk);
+        let addr = api::storage().system().account(&account_id);
+        let info = self.inner.storage().at(block_hash).fetch(&addr).await?;
+        match info {
+            Some(info) => Ok(Balance::from_rao(info.data.free)),
+            None => Ok(Balance::ZERO),
+        }
+    }
+
+    /// Get total staked TAO at a specific block hash.
+    pub async fn get_total_stake_at_block(
+        &self,
+        block_hash: subxt::utils::H256,
+    ) -> Result<Balance> {
+        let addr = api::storage().subtensor_module().total_stake();
+        let val = self.inner.storage().at(block_hash).fetch(&addr).await?;
+        Ok(Balance::from_rao(val.unwrap_or(0)))
     }
 
     // ──────── Block Info ────────

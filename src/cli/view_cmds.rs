@@ -22,7 +22,7 @@ pub async fn handle_view(
             }
             handle_portfolio(client, &addr, output).await
         }
-        ViewCommands::Network => handle_network(client, output).await,
+        ViewCommands::Network { at_block } => handle_network(client, output, at_block).await,
         ViewCommands::Dynamic => {
             if let Some(interval) = live_interval {
                 return crate::live::live_dynamic(client, interval).await;
@@ -106,7 +106,42 @@ async fn handle_portfolio(client: &Client, addr: &str, output: &str) -> Result<(
     Ok(())
 }
 
-async fn handle_network(client: &Client, output: &str) -> Result<()> {
+async fn handle_network(client: &Client, output: &str, at_block: Option<u32>) -> Result<()> {
+    // Historical wayback mode
+    if let Some(block_num) = at_block {
+        let block_hash = client.get_block_hash(block_num).await?;
+        let (total_stake, total_issuance) =
+            tokio::try_join!(client.get_total_stake_at_block(block_hash), async {
+                // Total issuance at block
+                let addr = crate::api::storage().balances().total_issuance();
+                let val = client.subxt().storage().at(block_hash).fetch(&addr).await?;
+                Ok::<_, anyhow::Error>(Balance::from_rao(val.unwrap_or(0) as u64))
+            },)?;
+        let staking_ratio = if total_issuance.rao() > 0 {
+            total_stake.tao() / total_issuance.tao() * 100.0
+        } else {
+            0.0
+        };
+        if output == "json" {
+            print_json(&serde_json::json!({
+                "block": block_num,
+                "block_hash": format!("{:?}", block_hash),
+                "total_issuance_rao": total_issuance.rao(),
+                "total_issuance_tao": total_issuance.tao(),
+                "total_stake_rao": total_stake.rao(),
+                "total_stake_tao": total_stake.tao(),
+                "staking_ratio_pct": staking_ratio,
+            }));
+        } else {
+            println!("Network Overview (at block {})", block_num);
+            println!("  Block hash:   {:?}", block_hash);
+            println!("  Total issued: {}", total_issuance.display_tao());
+            println!("  Total staked: {}", total_stake.display_tao());
+            println!("  Staking ratio: {:.1}%", staking_ratio);
+        }
+        return Ok(());
+    }
+
     let (block, total_stake, total_networks, total_issuance, emission) = tokio::try_join!(
         client.get_block_number(),
         client.get_total_stake(),
@@ -989,5 +1024,232 @@ async fn handle_nominations(client: &Client, hotkey: &str, output: &str) -> Resu
             }
         }
     }
+    Ok(())
+}
+
+/// Full security audit of an account: proxies, delegates, stake exposure, permissions.
+pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Result<()> {
+    let (balance, stakes, identity, proxies, delegate, dynamic) = tokio::try_join!(
+        client.get_balance_ss58(address),
+        client.get_stake_for_coldkey(address),
+        client.get_identity(address),
+        client.list_proxies(address),
+        async { Ok::<_, anyhow::Error>(client.get_delegate(address).await.ok().flatten()) },
+        async { Ok::<_, anyhow::Error>(client.get_all_dynamic_info().await.unwrap_or_default()) },
+    )?;
+    let dynamic_map = build_dynamic_map(&dynamic);
+
+    // Compute risk findings
+    let mut findings: Vec<serde_json::Value> = Vec::new();
+
+    // Check proxies
+    let has_any_proxy = proxies.iter().any(|(_, pt, _)| pt == "Any");
+    if !proxies.is_empty() {
+        for (delegate_ss58, proxy_type, delay) in &proxies {
+            let severity = if proxy_type == "Any" && *delay == 0 {
+                "high"
+            } else if proxy_type == "Any" {
+                "medium"
+            } else {
+                "info"
+            };
+            findings.push(serde_json::json!({
+                "category": "proxy",
+                "severity": severity,
+                "message": format!("Proxy: {} type={} delay={}", crate::utils::short_ss58(delegate_ss58), proxy_type, delay),
+            }));
+        }
+    }
+    if has_any_proxy {
+        findings.push(serde_json::json!({
+            "category": "proxy",
+            "severity": "high",
+            "message": "Account has an 'Any' type proxy — this grants full control to another account.",
+        }));
+    }
+
+    // Check stake concentration
+    let total_staked: f64 = stakes.iter().map(|s| s.stake.tao()).sum();
+    let total_value = balance.tao() + total_staked;
+    if !stakes.is_empty() {
+        let top_stake = stakes.iter().map(|s| s.stake.tao()).fold(0.0_f64, f64::max);
+        let concentration = if total_staked > 0.0 {
+            top_stake / total_staked * 100.0
+        } else {
+            0.0
+        };
+        if concentration > 80.0 && stakes.len() > 1 {
+            findings.push(serde_json::json!({
+                "category": "stake",
+                "severity": "medium",
+                "message": format!("Stake concentration: {:.1}% of staked TAO is on a single subnet/hotkey", concentration),
+            }));
+        }
+    }
+
+    // Check low-liquidity exposure
+    for s in &stakes {
+        if let Some(di) = dynamic_map.get(&s.netuid.0) {
+            let tao_in = di.tao_in.tao();
+            if tao_in > 0.0 && s.stake.tao() > tao_in * 0.1 {
+                findings.push(serde_json::json!({
+                    "category": "liquidity",
+                    "severity": "medium",
+                    "message": format!("SN{} ({}): stake is >{:.0}% of pool depth ({:.2}τ in pool). Large unstake will have high slippage.",
+                        s.netuid.0, di.name, s.stake.tao() / tao_in * 100.0, tao_in),
+                }));
+            }
+        }
+    }
+
+    // Check if delegate with high take
+    if let Some(ref d) = delegate {
+        if d.take > 0.10 {
+            findings.push(serde_json::json!({
+                "category": "delegate",
+                "severity": "info",
+                "message": format!("Delegate take is {:.2}% (high — may deter nominators)", d.take * 100.0),
+            }));
+        }
+    }
+
+    // Check no identity set
+    if identity.is_none() {
+        findings.push(serde_json::json!({
+            "category": "identity",
+            "severity": "info",
+            "message": "No on-chain identity set. Consider setting one for discoverability.",
+        }));
+    }
+
+    // Check if balance is very low but has stakes
+    if total_staked > 0.0 && balance.tao() < 0.1 {
+        findings.push(serde_json::json!({
+            "category": "balance",
+            "severity": "low",
+            "message": format!("Very low free balance ({:.4}τ) with active stakes. May not be able to pay tx fees.", balance.tao()),
+        }));
+    }
+
+    if output == "json" {
+        let positions: Vec<serde_json::Value> = stakes
+            .iter()
+            .map(|s| {
+                let di = dynamic_map.get(&s.netuid.0);
+                serde_json::json!({
+                    "netuid": s.netuid.0,
+                    "hotkey": s.hotkey,
+                    "stake_tao": s.stake.tao(),
+                    "subnet_name": di.map(|d| d.name.clone()).unwrap_or_default(),
+                    "price": di.map(|d| d.price).unwrap_or(0.0),
+                    "tao_in_pool": di.map(|d| d.tao_in.tao()).unwrap_or(0.0),
+                })
+            })
+            .collect();
+        let proxy_json: Vec<serde_json::Value> = proxies
+            .iter()
+            .map(|(d, pt, delay)| serde_json::json!({"delegate": d, "proxy_type": pt, "delay": delay}))
+            .collect();
+        print_json(&serde_json::json!({
+            "address": address,
+            "balance_tao": balance.tao(),
+            "total_staked_tao": total_staked,
+            "total_value_tao": total_value,
+            "num_stakes": stakes.len(),
+            "num_proxies": proxies.len(),
+            "is_delegate": delegate.is_some(),
+            "has_identity": identity.is_some(),
+            "proxies": proxy_json,
+            "stakes": positions,
+            "findings": findings,
+        }));
+        return Ok(());
+    }
+
+    // Table output
+    println!("=== Security Audit: {} ===\n", address);
+    println!("  Free balance:  {}", balance.display_tao());
+    println!("  Total staked:  {:.4} τ", total_staked);
+    println!("  Total value:   {:.4} τ", total_value);
+    println!("  Stake positions: {}", stakes.len());
+    println!("  Proxies:       {}", proxies.len());
+    println!(
+        "  Is delegate:   {}",
+        if delegate.is_some() { "yes" } else { "no" }
+    );
+    println!(
+        "  Has identity:  {}",
+        if identity.is_some() { "yes" } else { "no" }
+    );
+
+    if !proxies.is_empty() {
+        println!("\n  Proxy Accounts:");
+        let mut table = comfy_table::Table::new();
+        table.set_header(vec!["Delegate", "Type", "Delay"]);
+        for (d, pt, delay) in &proxies {
+            table.add_row(vec![
+                crate::utils::short_ss58(d),
+                pt.clone(),
+                format!("{}", delay),
+            ]);
+        }
+        println!("{table}");
+    }
+
+    if !stakes.is_empty() {
+        println!("\n  Stake Exposure:");
+        let mut table = comfy_table::Table::new();
+        table.set_header(vec![
+            "Subnet",
+            "Name",
+            "Hotkey",
+            "Stake (τ)",
+            "% of Total",
+            "Pool Depth (τ)",
+        ]);
+        for s in &stakes {
+            let di = dynamic_map.get(&s.netuid.0);
+            let pct = if total_staked > 0.0 {
+                s.stake.tao() / total_staked * 100.0
+            } else {
+                0.0
+            };
+            table.add_row(vec![
+                format!("SN{}", s.netuid.0),
+                di.map(|d| d.name.clone())
+                    .unwrap_or_else(|| "?".to_string()),
+                crate::utils::short_ss58(&s.hotkey),
+                format!("{:.4}", s.stake.tao()),
+                format!("{:.1}%", pct),
+                di.map(|d| format!("{:.2}", d.tao_in.tao()))
+                    .unwrap_or_else(|| "?".to_string()),
+            ]);
+        }
+        println!("{table}");
+    }
+
+    if let Some(ref d) = delegate {
+        println!("\n  Delegate Info:");
+        println!("    Take:        {:.2}%", d.take * 100.0);
+        println!("    Nominators:  {}", d.nominators.len());
+        println!("    Subnets:     {:?}", d.registrations);
+    }
+
+    if !findings.is_empty() {
+        println!("\n  Findings:");
+        for f in &findings {
+            let severity = f["severity"].as_str().unwrap_or("info");
+            let marker = match severity {
+                "high" => "[!!]",
+                "medium" => "[!] ",
+                "low" => "[.] ",
+                _ => "[i] ",
+            };
+            println!("    {} {}", marker, f["message"].as_str().unwrap_or(""));
+        }
+    } else {
+        println!("\n  No findings — account looks clean.");
+    }
+
     Ok(())
 }

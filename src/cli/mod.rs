@@ -84,6 +84,9 @@ pub enum Commands {
         /// Alert threshold: warn when balance drops below this TAO amount
         #[arg(long)]
         threshold: Option<f64>,
+        /// Query balance at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
     },
 
     // ──── Transfer ────
@@ -196,6 +199,14 @@ pub enum Commands {
         /// Omit to list all available topics.
         #[arg(long)]
         topic: Option<String>,
+    },
+
+    // ──── Audit ────
+    /// Security audit of an account: proxies, delegates, stake exposure, permissions
+    Audit {
+        /// SS58 address to audit (defaults to wallet coldkey)
+        #[arg(long)]
+        address: Option<String>,
     },
 
     // ──── Batch ────
@@ -731,7 +742,11 @@ pub enum ViewCommands {
         uid: u16,
     },
     /// Show network overview
-    Network,
+    Network {
+        /// Query network stats at a specific block number (historical wayback)
+        #[arg(long)]
+        at_block: Option<u32>,
+    },
     /// Show Dynamic TAO info for all subnets (prices, pools, volumes)
     Dynamic,
     /// Show top validators by stake across subnets

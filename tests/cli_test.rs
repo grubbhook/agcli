@@ -1585,3 +1585,108 @@ fn parse_wallet_regen_hotkey() {
         cli.err()
     );
 }
+
+// ── Audit command tests ──
+
+#[test]
+fn parse_audit_default() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "audit"]);
+    assert!(cli.is_ok(), "should parse audit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_audit_with_address() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "audit",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse audit with address: {:?}",
+        cli.err()
+    );
+}
+
+#[test]
+fn parse_audit_json_output() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "audit",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse audit with json output: {:?}",
+        cli.err()
+    );
+}
+
+// ── At-block wayback tests ──
+
+#[test]
+fn parse_balance_at_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "balance",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--at-block",
+        "1000000",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse balance --at-block: {:?}",
+        cli.err()
+    );
+}
+
+#[test]
+fn parse_balance_at_block_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "balance",
+        "--at-block",
+        "5000000",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse balance --at-block json: {:?}",
+        cli.err()
+    );
+}
+
+#[test]
+fn parse_view_network_at_block() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "view", "network", "--at-block", "3000000"]);
+    assert!(
+        cli.is_ok(),
+        "should parse view network --at-block: {:?}",
+        cli.err()
+    );
+}
+
+#[test]
+fn parse_view_network_at_block_json() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "view",
+        "network",
+        "--at-block",
+        "1",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "should parse view network --at-block json: {:?}",
+        cli.err()
+    );
+}
