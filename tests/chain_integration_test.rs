@@ -378,3 +378,43 @@ async fn test_identity_at_block() {
     );
     // Query succeeds — main validation
 }
+
+/// Test pending child keys query — should return None for most addresses (no pending changes).
+#[tokio::test]
+async fn test_pending_child_keys_query() {
+    let client = Client::connect(FINNEY).await.expect("connect");
+    let result = client
+        .get_pending_child_keys(KNOWN_ADDRESS, NetUid(1))
+        .await
+        .expect("pending child keys query");
+    // Most addresses won't have pending childkey changes
+    println!(
+        "Pending child keys for {} on SN1: {:?}",
+        KNOWN_ADDRESS,
+        result.as_ref().map(|(c, b)| (c.len(), b))
+    );
+    // If there are pending changes, validate structure
+    if let Some((children, cooldown_block)) = result {
+        assert!(cooldown_block > 0, "cooldown block should be positive");
+        for (proportion, child_ss58) in &children {
+            assert!(
+                child_ss58.starts_with('5'),
+                "child ss58 should be valid: {}",
+                child_ss58
+            );
+            assert!(*proportion > 0, "proportion should be positive");
+        }
+    }
+}
+
+/// Test pending child keys on a different subnet — should also work.
+#[tokio::test]
+async fn test_pending_child_keys_query_sn0() {
+    let client = Client::connect(FINNEY).await.expect("connect");
+    let result = client
+        .get_pending_child_keys(KNOWN_ADDRESS, NetUid(0))
+        .await
+        .expect("pending child keys query SN0");
+    // Just verify the query succeeds
+    println!("Pending child keys SN0: {:?}", result.is_some());
+}

@@ -453,3 +453,37 @@ fn format_tao_zero() {
     let s = format_tao(Balance::ZERO);
     assert!(s.contains("0.0"), "Expected zero TAO display, got: {}", s);
 }
+
+#[test]
+fn explain_coldkey_swap_topic() {
+    let content = explain::explain("coldkey-swap");
+    assert!(content.is_some(), "coldkey-swap topic should exist");
+    let text = content.unwrap();
+    assert!(
+        text.len() > 200,
+        "coldkey-swap explanation should be substantial"
+    );
+    assert!(text.contains("schedule"), "should mention scheduling");
+    assert!(text.contains("security"), "should mention security");
+}
+
+#[test]
+fn explain_coldkey_swap_aliases() {
+    // All aliases should resolve
+    assert!(explain::explain("coldkey").is_some());
+    assert!(explain::explain("ckswap").is_some());
+    assert!(explain::explain("coldkeyswap").is_some());
+    assert!(explain::explain("COLDKEY-SWAP").is_some());
+}
+
+#[test]
+fn explain_topic_count_includes_coldkey_swap() {
+    let topics = explain::list_topics();
+    let has_ck = topics.iter().any(|(k, _)| *k == "coldkey-swap");
+    assert!(has_ck, "coldkey-swap should be in list_topics()");
+    assert!(
+        topics.len() >= 19,
+        "Expected at least 19 topics (was 18, now +coldkey-swap), got {}",
+        topics.len()
+    );
+}

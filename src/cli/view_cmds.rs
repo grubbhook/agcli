@@ -1122,18 +1122,29 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
     )?;
     let dynamic_map = build_dynamic_map(&dynamic);
 
-    // Query childkey delegations for each stake position (parallel)
+    // Query childkey delegations + pending childkey changes for each stake position (parallel)
     let child_key_futures: Vec<_> = stakes
         .iter()
         .map(|s| {
             let hotkey = s.hotkey.clone();
             let netuid = s.netuid;
             async move {
-                let children = client
-                    .get_child_keys(&hotkey, netuid)
-                    .await
-                    .unwrap_or_default();
-                (hotkey, netuid.0, children)
+                let (children, pending) = tokio::join!(
+                    async {
+                        client
+                            .get_child_keys(&hotkey, netuid)
+                            .await
+                            .unwrap_or_default()
+                    },
+                    async {
+                        client
+                            .get_pending_child_keys(&hotkey, netuid)
+                            .await
+                            .ok()
+                            .flatten()
+                    },
+                );
+                (hotkey, netuid.0, children, pending)
             }
         })
         .collect();
@@ -1212,7 +1223,7 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
     }
 
     // Check childkey delegations
-    for (hotkey, netuid, children) in &child_key_results {
+    for (hotkey, netuid, children, pending) in &child_key_results {
         if !children.is_empty() {
             let total_proportion: f64 = children
                 .iter()
@@ -1223,6 +1234,18 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
                 "severity": "info",
                 "message": format!("SN{}: hotkey {} has {} childkey delegation(s) ({:.1}% delegated)",
                     netuid, crate::utils::short_ss58(hotkey), children.len(), total_proportion),
+            }));
+        }
+        if let Some((pending_children, cooldown_block)) = pending {
+            let total_pending_pct: f64 = pending_children
+                .iter()
+                .map(|(p, _)| *p as f64 / u64::MAX as f64 * 100.0)
+                .sum();
+            findings.push(serde_json::json!({
+                "category": "pending_childkey",
+                "severity": "medium",
+                "message": format!("SN{}: hotkey {} has PENDING childkey change ({} children, {:.1}% delegated, cooldown block {})",
+                    netuid, crate::utils::short_ss58(hotkey), pending_children.len(), total_pending_pct, cooldown_block),
             }));
         }
     }
@@ -1277,9 +1300,9 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
             .collect();
         let childkey_json: Vec<serde_json::Value> = child_key_results
             .iter()
-            .filter(|(_, _, c)| !c.is_empty())
-            .map(|(hk, nuid, children)| {
-                serde_json::json!({
+            .filter(|(_, _, c, p)| !c.is_empty() || p.is_some())
+            .map(|(hk, nuid, children, pending)| {
+                let mut obj = serde_json::json!({
                     "hotkey": hk,
                     "netuid": nuid,
                     "children": children.iter().map(|(p, c)| serde_json::json!({
@@ -1287,7 +1310,18 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
                         "proportion_pct": *p as f64 / u64::MAX as f64 * 100.0,
                         "child": c,
                     })).collect::<Vec<_>>(),
-                })
+                });
+                if let Some((pending_children, cooldown_block)) = pending {
+                    obj["pending"] = serde_json::json!({
+                        "children": pending_children.iter().map(|(p, c)| serde_json::json!({
+                            "proportion_raw": p,
+                            "proportion_pct": *p as f64 / u64::MAX as f64 * 100.0,
+                            "child": c,
+                        })).collect::<Vec<_>>(),
+                        "cooldown_block": cooldown_block,
+                    });
+                }
+                obj
             })
             .collect();
         print_json(&serde_json::json!({
@@ -1388,12 +1422,12 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
     }
 
     // Show childkey delegations
-    let has_children = child_key_results.iter().any(|(_, _, c)| !c.is_empty());
+    let has_children = child_key_results.iter().any(|(_, _, c, _)| !c.is_empty());
     if has_children {
         println!("\n  Childkey Delegations:");
         let mut table = comfy_table::Table::new();
         table.set_header(vec!["Subnet", "Parent Hotkey", "Child", "Proportion"]);
-        for (hk, nuid, children) in &child_key_results {
+        for (hk, nuid, children, _) in &child_key_results {
             for (proportion, child) in children {
                 let pct = *proportion as f64 / u64::MAX as f64 * 100.0;
                 table.add_row(vec![
@@ -1402,6 +1436,35 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
                     crate::utils::short_ss58(child),
                     format!("{:.1}%", pct),
                 ]);
+            }
+        }
+        println!("{table}");
+    }
+
+    // Show pending childkey changes
+    let has_pending = child_key_results.iter().any(|(_, _, _, p)| p.is_some());
+    if has_pending {
+        println!("\n  Pending Childkey Changes:");
+        let mut table = comfy_table::Table::new();
+        table.set_header(vec![
+            "Subnet",
+            "Parent Hotkey",
+            "New Child",
+            "Proportion",
+            "Cooldown Block",
+        ]);
+        for (hk, nuid, _, pending) in &child_key_results {
+            if let Some((pending_children, cooldown_block)) = pending {
+                for (proportion, child) in pending_children {
+                    let pct = *proportion as f64 / u64::MAX as f64 * 100.0;
+                    table.add_row(vec![
+                        format!("SN{}", nuid),
+                        crate::utils::short_ss58(hk),
+                        crate::utils::short_ss58(child),
+                        format!("{:.1}%", pct),
+                        format!("{}", cooldown_block),
+                    ]);
+                }
             }
         }
         println!("{table}");

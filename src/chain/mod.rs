@@ -1274,6 +1274,32 @@ impl Client {
             .collect())
     }
 
+    // ──────── Pending Child Keys Query ────────
+
+    /// Get pending child key changes for a hotkey on a specific subnet.
+    /// Returns (Vec<(proportion, child_ss58)>, cooldown_block) if pending, or None.
+    pub async fn get_pending_child_keys(
+        &self,
+        hotkey_ss58: &str,
+        netuid: NetUid,
+    ) -> Result<Option<(Vec<(u64, String)>, u64)>> {
+        let account_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        let addr = api::storage()
+            .subtensor_module()
+            .pending_child_keys(netuid.0, &account_id);
+        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        Ok(result.map(|(children, cooldown_block)| {
+            let children_parsed: Vec<(u64, String)> = children
+                .into_iter()
+                .map(|(proportion, child)| {
+                    let child_ss58 = sp_core::crypto::AccountId32::from(child.0).to_string();
+                    (proportion, child_ss58)
+                })
+                .collect();
+            (children_parsed, cooldown_block)
+        }))
+    }
+
     // ──────── Historical Queries ────────
 
     /// Get stake info for a coldkey at a specific block hash (via runtime API at block).

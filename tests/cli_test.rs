@@ -1843,3 +1843,27 @@ fn parse_audit_with_json_output_checks_fields() {
         panic!("wrong command variant");
     }
 }
+
+// ──── Step 30 — explain coldkey-swap + pending childkeys ────
+
+#[test]
+fn parse_explain_coldkey_swap() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "coldkey-swap"]);
+    assert!(cli.is_ok());
+    if let agcli::cli::Commands::Explain { topic } = &cli.unwrap().command {
+        assert_eq!(topic.as_deref(), Some("coldkey-swap"));
+    } else {
+        panic!("wrong command variant (expected Explain)");
+    }
+}
+
+#[test]
+fn parse_explain_coldkey_alias_ckswap() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "ckswap"]);
+    assert!(cli.is_ok());
+    if let agcli::cli::Commands::Explain { topic } = &cli.unwrap().command {
+        assert_eq!(topic.as_deref(), Some("ckswap"));
+    } else {
+        panic!("wrong command variant (expected Explain for ckswap)");
+    }
+}

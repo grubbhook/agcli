@@ -21,6 +21,7 @@ pub fn explain(topic: &str) -> Option<&'static str> {
         "childkey" | "childkeys" => Some(CHILDKEYS),
         "root" | "rootnetwork" => Some(ROOT_NETWORK),
         "proxy" => Some(PROXY),
+        "coldkeyswap" | "coldkey" | "ckswap" => Some(COLDKEY_SWAP),
         topics => {
             // Fuzzy: check if the topic is a substring of any key
             let all = list_topics();
@@ -55,6 +56,7 @@ pub fn list_topics() -> Vec<(&'static str, &'static str)> {
         ("childkeys", "Childkey take and delegation within subnets"),
         ("root", "Root network (SN0) and root weights"),
         ("proxy", "Proxy accounts for delegated signing"),
+        ("coldkey-swap", "Coldkey swap scheduling and security"),
     ]
 }
 
@@ -492,3 +494,39 @@ Why use proxies:
 
 List proxies: `agcli proxy list`
 Remove proxy: `agcli proxy remove <delegate_ss58>`";
+
+const COLDKEY_SWAP: &str = "\
+COLDKEY SWAP
+============
+Coldkey swap allows you to migrate your account to a new coldkey. This is a
+scheduled operation — it does not execute immediately.
+
+How it works:
+1. SCHEDULE: Submit a swap request specifying the new coldkey.
+   agcli swap coldkey --new-coldkey <new_ss58>
+   The chain records the swap with an execution block (typically days away).
+
+2. WAITING PERIOD: The swap is pending for ColdkeySwapScheduleDuration blocks.
+   During this window, the original coldkey still controls the account.
+
+3. EXECUTION: At the execution block, the chain automatically transfers all
+   balances, stakes, and permissions from the old coldkey to the new one.
+
+Security implications:
+- If someone gains access to your coldkey, they can schedule a swap.
+- This is a CRITICAL security event — monitor with `agcli audit`.
+- The audit command checks for scheduled swaps and flags them as [!!] high severity.
+
+Detection:
+  agcli audit --address <your_coldkey>
+  # Shows: 'Coldkey swap scheduled! New coldkey: ... at block ...'
+
+Prevention:
+- Use proxy accounts with limited permissions for daily operations.
+- Keep your coldkey on an air-gapped or hardware-secured machine.
+- Monitor your account regularly with `agcli audit`.
+- Set up alerts: `agcli subscribe events --filter all --account <your_coldkey>`
+
+Note: The chain does NOT currently expose a cancel-swap extrinsic. Once scheduled,
+a coldkey swap will execute at the scheduled block unless chain governance intervenes.
+If you detect an unauthorized swap, contact the Bittensor community immediately.";
