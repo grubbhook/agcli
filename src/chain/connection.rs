@@ -1,4 +1,6 @@
-//! Low-level RPC connection utilities.
+//! Legacy RPC connection utilities.
+//! Most chain interaction now goes through subxt (see chain/mod.rs).
+//! These utilities remain for direct JSON-RPC calls if needed.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -51,23 +53,4 @@ pub async fn rpc_call(url: &str, method: &str, params: Vec<Value>) -> Result<Val
 
     resp.result
         .ok_or_else(|| anyhow::anyhow!("RPC returned null result"))
-}
-
-/// Get the latest block hash.
-pub async fn get_latest_block_hash(url: &str) -> Result<String> {
-    let result = rpc_call(url, "chain_getBlockHash", vec![]).await?;
-    result
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| anyhow::anyhow!("unexpected block hash format"))
-}
-
-/// Get chain properties (token symbol, decimals, SS58 prefix).
-pub async fn get_chain_properties(url: &str) -> Result<Value> {
-    rpc_call(url, "system_properties", vec![]).await
-}
-
-/// Get runtime version.
-pub async fn get_runtime_version(url: &str) -> Result<Value> {
-    rpc_call(url, "state_getRuntimeVersion", vec![]).await
 }

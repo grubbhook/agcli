@@ -13,7 +13,7 @@ categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
 subxt = { version = "0.38", features = ["substrate-compat"] }
 sp-core = { version = "34", default-features = false, features = ["std"] }
 sp-runtime = { version = "39", default-features = false, features = ["std"] }
-codec = { package = "parity-scale-codec", version = "3.7", features = ["derive"] }
+parity-scale-codec = { version = "3.7", features = ["derive"] }
 
 # Crypto
 bip39 = "2"
@@ -58,6 +58,13 @@ anyhow = "1"
 chrono = "0.4"
 dirs = "6"
 num-format = "0.4"
+
+[build-dependencies]
+tokio = { version = "1", features = ["full"] }
+subxt-codegen = "0.38"
+subxt-metadata = "0.38"
+subxt-utils-fetchmetadata = { version = "0.38", features = ["url"] }
+parity-scale-codec = "3.7"
 
 [profile.release]
 opt-level = "z"

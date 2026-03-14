@@ -152,14 +152,16 @@ async fn handle_stake(
                 println!("No stakes found for {}", crate::utils::short_ss58(&addr));
             } else {
                 println!("Stakes for {}:", crate::utils::short_ss58(&addr));
+                let mut table = comfy_table::Table::new();
+                table.set_header(vec!["Subnet", "Hotkey", "Stake (τ)"]);
                 for s in &stakes {
-                    println!(
-                        "  SN{}: {} staked on {}",
-                        s.netuid,
-                        s.stake,
-                        crate::utils::short_ss58(&s.hotkey)
-                    );
+                    table.add_row(vec![
+                        format!("SN{}", s.netuid),
+                        crate::utils::short_ss58(&s.hotkey),
+                        s.stake.display_tao(),
+                    ]);
                 }
+                println!("{table}");
             }
             Ok(())
         }
@@ -175,20 +177,43 @@ async fn handle_subnet(cmd: SubnetCommands, client: &Client) -> Result<()> {
         SubnetCommands::List => {
             let subnets = client.get_all_subnets().await?;
             if subnets.is_empty() {
-                println!("(no subnets found — chain query not yet connected)");
+                println!("No subnets found.");
             } else {
+                let mut table = comfy_table::Table::new();
+                table.set_header(vec!["NetUID", "N", "Max", "Tempo", "Emission", "Burn", "Owner"]);
                 for s in &subnets {
-                    println!(
-                        "SN{}: {} ({} neurons, tempo={})",
-                        s.netuid, s.name, s.n, s.tempo
-                    );
+                    table.add_row(vec![
+                        format!("{}", s.netuid),
+                        format!("{}", s.n),
+                        format!("{}", s.max_n),
+                        format!("{}", s.tempo),
+                        format!("{}", s.emission_value),
+                        s.burn.display_tao(),
+                        crate::utils::short_ss58(&s.owner),
+                    ]);
                 }
+                println!("{table}");
             }
             Ok(())
         }
         SubnetCommands::Metagraph { netuid } => {
             let mg = crate::queries::fetch_metagraph(client, netuid.into()).await?;
-            println!("Metagraph for SN{} ({} neurons, block {})", netuid, mg.n, mg.block);
+            println!("Metagraph SN{} — {} neurons, block {}", netuid, mg.n, mg.block);
+            let mut table = comfy_table::Table::new();
+            table.set_header(vec!["UID", "Hotkey", "Stake", "Rank", "Trust", "Incentive", "Emission", "VP"]);
+            for n in &mg.neurons {
+                table.add_row(vec![
+                    format!("{}", n.uid),
+                    crate::utils::short_ss58(&n.hotkey),
+                    format!("{:.4}τ", n.stake.tao()),
+                    format!("{:.4}", n.rank),
+                    format!("{:.4}", n.trust),
+                    format!("{:.4}", n.incentive),
+                    format!("{:.0}", n.emission),
+                    if n.validator_permit { "✓" } else { "" }.to_string(),
+                ]);
+            }
+            println!("{table}");
             Ok(())
         }
         _ => {
@@ -220,9 +245,30 @@ async fn handle_root(
     Ok(())
 }
 
-async fn handle_delegate(_cmd: DelegateCommands, _client: &Client) -> Result<()> {
-    println!("Delegate commands not yet fully implemented");
-    Ok(())
+async fn handle_delegate(cmd: DelegateCommands, client: &Client) -> Result<()> {
+    match cmd {
+        DelegateCommands::List => {
+            let delegates = client.get_delegates().await?;
+            println!("{} delegates", delegates.len());
+            let mut table = comfy_table::Table::new();
+            table.set_header(vec!["Hotkey", "Owner", "Take", "Total Stake", "Nominators"]);
+            for d in delegates.iter().take(20) {
+                table.add_row(vec![
+                    crate::utils::short_ss58(&d.hotkey),
+                    crate::utils::short_ss58(&d.owner),
+                    format!("{:.2}%", d.take * 100.0),
+                    d.total_stake.display_tao(),
+                    format!("{}", d.nominators.len()),
+                ]);
+            }
+            println!("{table}");
+            Ok(())
+        }
+        _ => {
+            println!("Delegate command not yet fully implemented");
+            Ok(())
+        }
+    }
 }
 
 async fn handle_view(
@@ -256,7 +302,22 @@ async fn handle_view(
         }
         ViewCommands::Network => {
             let block = client.get_block_number().await?;
-            println!("Block: {}", block);
+            let total_stake = client.get_total_stake().await?;
+            let total_networks = client.get_total_networks().await?;
+            let total_issuance = client.get_total_issuance().await?;
+            let emission = client.get_block_emission().await?;
+            println!("Network Overview");
+            println!("  Block:        {}", block);
+            println!("  Subnets:      {}", total_networks);
+            println!("  Total issued: {}", total_issuance.display_tao());
+            println!("  Total staked: {}", total_stake.display_tao());
+            println!("  Emission/blk: {}", emission.display_tao());
+            let staking_ratio = if total_issuance.rao() > 0 {
+                total_stake.tao() / total_issuance.tao() * 100.0
+            } else {
+                0.0
+            };
+            println!("  Staking ratio: {:.1}%", staking_ratio);
             Ok(())
         }
         _ => {

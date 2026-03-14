@@ -29,6 +29,23 @@ pub mod wallet;
 #[cfg(feature = "cli")]
 pub mod cli;
 
+/// Generated chain API from subtensor runtime metadata (build.rs).
+#[allow(
+    dead_code,
+    unused_imports,
+    non_camel_case_types,
+    clippy::all
+)]
+mod generated {
+    include!(concat!(env!("OUT_DIR"), "/metadata.rs"));
+}
+pub use generated::api;
+
+pub use subxt::config::SubstrateConfig as SubtensorConfig;
+
+pub type AccountId = <SubtensorConfig as subxt::Config>::AccountId;
+pub type Hash = <SubtensorConfig as subxt::Config>::Hash;
+
 // Re-exports for ergonomic SDK use
 pub use chain::Client;
 pub use types::balance::Balance;
