@@ -299,3 +299,96 @@ fn parse_metagraph_full() {
     ]);
     assert!(cli.is_ok(), "should parse full metagraph: {:?}", cli.err());
 }
+
+// ──── Step 18: Batch mode, wallet sign/derive, events, balance watch tests ────
+
+/// Verify --batch flag is parsed globally.
+#[test]
+fn parse_global_batch_flag() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--batch", "balance",
+    ]);
+    assert!(cli.is_ok(), "should parse --batch flag: {:?}", cli.err());
+    assert!(cli.unwrap().batch);
+}
+
+/// Verify --pretty flag is parsed globally.
+#[test]
+fn parse_global_pretty_flag() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--pretty", "--output", "json", "balance",
+    ]);
+    assert!(cli.is_ok());
+    let cli = cli.unwrap();
+    assert!(cli.pretty);
+    assert_eq!(cli.output, "json");
+}
+
+/// Verify wallet sign parses.
+#[test]
+fn parse_wallet_sign() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "wallet", "sign", "hello world",
+    ]);
+    assert!(cli.is_ok(), "should parse wallet sign: {:?}", cli.err());
+}
+
+/// Verify wallet verify parses.
+#[test]
+fn parse_wallet_verify() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "wallet", "verify", "hello world",
+        "--signature", "0xaabbccdd",
+        "--signer", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "should parse wallet verify: {:?}", cli.err());
+}
+
+/// Verify wallet derive parses.
+#[test]
+fn parse_wallet_derive() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "wallet", "derive", "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    ]);
+    assert!(cli.is_ok(), "should parse wallet derive: {:?}", cli.err());
+}
+
+/// Verify balance --watch parses.
+#[test]
+fn parse_balance_watch() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "balance", "--watch", "30", "--threshold", "10.0",
+    ]);
+    assert!(cli.is_ok(), "should parse balance watch: {:?}", cli.err());
+}
+
+/// Verify subscribe events --netuid filter parses.
+#[test]
+fn parse_subscribe_events_with_netuid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subscribe", "events", "staking", "--netuid", "97",
+    ]);
+    assert!(cli.is_ok(), "should parse subscribe events with netuid: {:?}", cli.err());
+}
+
+/// Verify subscribe events --account filter parses.
+#[test]
+fn parse_subscribe_events_with_account() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subscribe", "events", "weights",
+        "--account", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "should parse subscribe events with account: {:?}", cli.err());
+}
+
+/// Verify --batch and --yes can be combined.
+#[test]
+fn parse_batch_and_yes_combined() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--batch", "--yes", "--password", "pass", "balance",
+    ]);
+    assert!(cli.is_ok());
+    let cli = cli.unwrap();
+    assert!(cli.batch);
+    assert!(cli.yes);
+}

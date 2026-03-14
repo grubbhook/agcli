@@ -15,13 +15,18 @@ pub fn open_wallet(wallet_dir: &str, wallet_name: &str) -> Result<Wallet> {
 }
 
 /// Unlock the coldkey. If `password` is provided, use it directly (non-interactive).
-/// Otherwise, prompt interactively.
+/// Otherwise, prompt interactively (unless batch mode).
 pub fn unlock_coldkey(wallet: &mut Wallet, password: Option<&str>) -> Result<()> {
     let pw = match password {
         Some(p) => p.to_string(),
-        None => dialoguer::Password::new()
-            .with_prompt("Coldkey password")
-            .interact()?,
+        None => {
+            if is_batch_mode() {
+                anyhow::bail!("Password required in batch mode. Pass --password <pw> or set AGCLI_PASSWORD.");
+            }
+            dialoguer::Password::new()
+                .with_prompt("Coldkey password")
+                .interact()?
+        }
     };
     wallet.unlock_coldkey(&pw)
         .map_err(|e| {
@@ -32,6 +37,46 @@ pub fn unlock_coldkey(wallet: &mut Wallet, password: Option<&str>) -> Result<()>
                 e
             }
         })
+}
+
+/// Check per-subnet spending limit from config.
+/// Returns Ok if no limit set or amount is within limit, Err otherwise.
+pub fn check_spending_limit(netuid: u16, tao_amount: f64) -> Result<()> {
+    let cfg = crate::config::Config::load();
+    if let Some(ref limits) = cfg.spending_limits {
+        let key = netuid.to_string();
+        if let Some(&limit) = limits.get(&key) {
+            if tao_amount > limit {
+                anyhow::bail!(
+                    "Spending limit exceeded for SN{}: trying {:.4}τ but limit is {:.4}τ.\n  Adjust with: agcli config set spending_limit.{} {}",
+                    netuid, tao_amount, limit, netuid, tao_amount
+                );
+            }
+        }
+        // Also check wildcard "*" key for global limit
+        if let Some(&limit) = limits.get("*") {
+            if tao_amount > limit {
+                anyhow::bail!(
+                    "Global spending limit exceeded: trying {:.4}τ but limit is {:.4}τ.\n  Adjust with: agcli config set spending_limit.* {}",
+                    tao_amount, limit, tao_amount
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Thread-local batch mode flag (set by main before dispatch).
+static BATCH_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Set batch mode globally (called from execute()).
+pub fn set_batch_mode(batch: bool) {
+    BATCH_MODE.store(batch, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Check if batch mode is active.
+pub fn is_batch_mode() -> bool {
+    BATCH_MODE.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 pub fn resolve_coldkey_address(address: Option<String>, wallet_dir: &str, wallet_name: &str) -> String {

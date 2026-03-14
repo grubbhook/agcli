@@ -76,9 +76,25 @@ pub async fn subscribe_events(
     filter: EventFilter,
     json_output: bool,
 ) -> Result<()> {
+    subscribe_events_filtered(client, filter, json_output, None, None).await
+}
+
+/// Subscribe to events with optional netuid and account filters.
+pub async fn subscribe_events_filtered(
+    client: &OnlineClient<SubtensorConfig>,
+    filter: EventFilter,
+    json_output: bool,
+    netuid_filter: Option<u16>,
+    account_filter: Option<&str>,
+) -> Result<()> {
     let mut block_sub = client.blocks().subscribe_finalized().await?;
 
-    println!("Subscribed to finalized blocks (filter: {:?}). Ctrl+C to stop.\n", filter);
+    if !json_output {
+        let mut desc = format!("filter: {:?}", filter);
+        if let Some(n) = netuid_filter { desc.push_str(&format!(", netuid={}", n)); }
+        if let Some(a) = account_filter { desc.push_str(&format!(", account={}", crate::utils::short_ss58(a))); }
+        println!("Subscribed to finalized blocks ({}). Ctrl+C to stop.\n", desc);
+    }
 
     while let Some(block_result) = block_sub.next().await {
         let block = block_result?;
@@ -96,6 +112,25 @@ pub async fn subscribe_events(
             }
 
             let fields = format!("{:?}", event.field_values()?);
+
+            // Optional netuid filtering — check if event fields contain the netuid
+            if let Some(target_netuid) = netuid_filter {
+                let netuid_str = format!("{}", target_netuid);
+                // Look for netuid in the fields string (heuristic: works for SubtensorModule events)
+                if !fields.contains(&format!("netuid: Unnamed({})", target_netuid))
+                    && !fields.contains(&format!("\"netuid\": {}", netuid_str))
+                    && !fields.contains(&format!("netuid: {}", netuid_str))
+                {
+                    continue;
+                }
+            }
+
+            // Optional account filtering
+            if let Some(target_account) = account_filter {
+                if !fields.contains(target_account) {
+                    continue;
+                }
+            }
 
             let ce = ChainEvent {
                 block_number,

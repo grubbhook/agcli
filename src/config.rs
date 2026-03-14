@@ -26,6 +26,10 @@ pub struct Config {
     pub proxy: Option<String>,
     /// Default live polling interval in seconds.
     pub live_interval: Option<u64>,
+    /// Batch mode default (never prompt for input).
+    pub batch: Option<bool>,
+    /// Per-subnet spending limits in TAO (key = netuid as string).
+    pub spending_limits: Option<std::collections::HashMap<String, f64>>,
 }
 
 impl Config {

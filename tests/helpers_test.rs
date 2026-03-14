@@ -135,3 +135,21 @@ fn explain_aliases_work() {
     // "1000" should resolve to stake-weight
     assert!(explain::explain("1000").is_some());
 }
+
+// ──── Step 18: Batch mode & spending limits tests ────
+
+#[test]
+fn batch_mode_flag_sets_global() {
+    use agcli::cli::helpers::{set_batch_mode, is_batch_mode};
+    set_batch_mode(true);
+    assert!(is_batch_mode());
+    set_batch_mode(false);
+    assert!(!is_batch_mode());
+}
+
+#[test]
+fn spending_limit_no_config_passes() {
+    // No config file → should pass for any amount
+    let result = agcli::cli::helpers::check_spending_limit(97, 100.0);
+    assert!(result.is_ok(), "No config should always pass: {:?}", result.err());
+}

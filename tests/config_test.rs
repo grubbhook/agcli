@@ -68,3 +68,41 @@ fn live_interval_parsing() {
     let cli = Cli::try_parse_from(["agcli", "--live", "5", "subnet", "metagraph", "1"]).unwrap();
     assert_eq!(cli.live_interval(), Some(5));
 }
+
+#[test]
+fn config_batch_default_applies() {
+    let mut cli = Cli::try_parse_from(["agcli", "balance"]).unwrap();
+    let mut cfg = agcli::Config::default();
+    cfg.batch = Some(true);
+    cli.apply_config(&cfg);
+    assert!(cli.batch);
+}
+
+#[test]
+fn config_batch_cli_overrides() {
+    // --batch on CLI should stay true even if config says false
+    let mut cli = Cli::try_parse_from(["agcli", "--batch", "balance"]).unwrap();
+    let mut cfg = agcli::Config::default();
+    cfg.batch = Some(false);
+    cli.apply_config(&cfg);
+    assert!(cli.batch);
+}
+
+#[test]
+fn config_spending_limits_serialization() {
+    use std::collections::HashMap;
+    let mut limits = HashMap::new();
+    limits.insert("97".to_string(), 100.0);
+    limits.insert("*".to_string(), 500.0);
+    let cfg = agcli::Config {
+        spending_limits: Some(limits),
+        ..Default::default()
+    };
+    let s = toml::to_string_pretty(&cfg).unwrap();
+    assert!(s.contains("97"));
+    assert!(s.contains("100"));
+    let parsed: agcli::Config = toml::from_str(&s).unwrap();
+    let sl = parsed.spending_limits.unwrap();
+    assert_eq!(*sl.get("97").unwrap(), 100.0);
+    assert_eq!(*sl.get("*").unwrap(), 500.0);
+}

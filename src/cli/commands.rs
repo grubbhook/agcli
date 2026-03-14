@@ -14,12 +14,46 @@ pub async fn execute(cli: Cli) -> Result<()> {
     let live_interval = cli.live_interval();
     let password = cli.password.clone();
     let yes = cli.yes;
+    let batch = cli.batch;
+    let _pretty = cli.pretty;
+
+    // Set batch mode globally so helpers can check it
+    set_batch_mode(batch || yes);
 
     match cli.command {
         Commands::Wallet(cmd) => wallet_cmds::handle_wallet(cmd, &cli.wallet_dir, &cli.wallet, password.as_deref()).await,
-        Commands::Balance { address } => {
+        Commands::Balance { address, watch, threshold } => {
             let client = Client::connect(network.ws_url()).await?;
             let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
+
+            // Watch mode
+            if let Some(interval_opt) = watch {
+                let interval = interval_opt.unwrap_or(60);
+                let threshold_rao = threshold.map(|t| Balance::from_tao(t));
+                eprintln!("Watching balance for {} (every {}s{})",
+                    crate::utils::short_ss58(&addr), interval,
+                    threshold_rao.as_ref().map(|t| format!(", alert below {}", t.display_tao())).unwrap_or_default()
+                );
+                loop {
+                    let balance = client.get_balance_ss58(&addr).await?;
+                    let below = threshold_rao.as_ref().map(|t| balance.rao() < t.rao()).unwrap_or(false);
+                    if output == "json" {
+                        println!("{}", serde_json::json!({
+                            "address": addr,
+                            "balance_rao": balance.rao(),
+                            "balance_tao": balance.tao(),
+                            "below_threshold": below,
+                            "timestamp": chrono::Utc::now().to_rfc3339(),
+                        }));
+                    } else {
+                        let alert = if below { " *** BELOW THRESHOLD ***" } else { "" };
+                        println!("[{}] {} — {}{}", chrono::Local::now().format("%H:%M:%S"),
+                            crate::utils::short_ss58(&addr), balance.display_tao(), alert);
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+                }
+            }
+
             let balance = client.get_balance_ss58(&addr).await?;
             if output == "json" {
                 println!("{}", serde_json::json!({"address": addr, "balance_rao": balance.rao(), "balance_tao": balance.tao()}));
@@ -110,7 +144,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
         }
         Commands::Subscribe(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_subscribe(cmd, &client, output).await
+            handle_subscribe(cmd, &client, output, batch).await
         }
         Commands::Multisig(cmd) => {
             handle_multisig(cmd, &cli.wallet_dir, &cli.wallet, network.ws_url(), password.as_deref()).await
@@ -1417,15 +1451,18 @@ async fn handle_subscribe(
     cmd: SubscribeCommands,
     client: &Client,
     output: &str,
+    _batch: bool,
 ) -> Result<()> {
     let json = output == "json";
     match cmd {
         SubscribeCommands::Blocks => {
             crate::events::subscribe_blocks(client.inner_client(), json).await
         }
-        SubscribeCommands::Events { filter } => {
+        SubscribeCommands::Events { filter, netuid, account } => {
             let f = crate::events::EventFilter::from_str(&filter);
-            crate::events::subscribe_events(client.inner_client(), f, json).await
+            crate::events::subscribe_events_filtered(
+                client.inner_client(), f, json, netuid, account.as_deref(),
+            ).await
         }
     }
 }
@@ -1463,7 +1500,17 @@ async fn handle_config(cmd: ConfigCommands) -> Result<()> {
                     let v: u64 = value.parse().map_err(|_| anyhow::anyhow!("Invalid interval '{}'", value))?;
                     cfg.live_interval = Some(v);
                 }
-                _ => anyhow::bail!("Unknown config key '{}'. Valid keys: network, endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval", key),
+                "batch" => {
+                    let v: bool = value.parse().map_err(|_| anyhow::anyhow!("Invalid bool '{}'. Use: true, false", value))?;
+                    cfg.batch = Some(v);
+                }
+                k if k.starts_with("spending_limit.") => {
+                    let netuid = k.strip_prefix("spending_limit.").unwrap();
+                    let limit: f64 = value.parse().map_err(|_| anyhow::anyhow!("Invalid TAO amount '{}'", value))?;
+                    let limits = cfg.spending_limits.get_or_insert_with(Default::default);
+                    limits.insert(netuid.to_string(), limit);
+                }
+                _ => anyhow::bail!("Unknown config key '{}'. Valid keys: network, endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval, batch, spending_limit.<netuid>", key),
             }
             cfg.save()?;
             println!("Set {} = {}", key, cfg_value_display(&key, &cfg));
@@ -1480,6 +1527,13 @@ async fn handle_config(cmd: ConfigCommands) -> Result<()> {
                 "output" => cfg.output = None,
                 "proxy" => cfg.proxy = None,
                 "live_interval" => cfg.live_interval = None,
+                "batch" => cfg.batch = None,
+                k if k.starts_with("spending_limit.") => {
+                    let netuid = k.strip_prefix("spending_limit.").unwrap();
+                    if let Some(ref mut limits) = cfg.spending_limits {
+                        limits.remove(netuid);
+                    }
+                }
                 _ => anyhow::bail!("Unknown config key '{}'", key),
             }
             cfg.save()?;
@@ -1728,6 +1782,14 @@ fn cfg_value_display(key: &str, cfg: &crate::config::Config) -> String {
         "output" => cfg.output.clone().unwrap_or_default(),
         "proxy" => cfg.proxy.clone().unwrap_or_default(),
         "live_interval" => cfg.live_interval.map(|v| v.to_string()).unwrap_or_default(),
+        "batch" => cfg.batch.map(|v| v.to_string()).unwrap_or_default(),
+        k if k.starts_with("spending_limit.") => {
+            let netuid = k.strip_prefix("spending_limit.").unwrap();
+            cfg.spending_limits.as_ref()
+                .and_then(|m| m.get(netuid))
+                .map(|v| format!("{} TAO", v))
+                .unwrap_or_default()
+        }
         _ => String::new(),
     }
 }

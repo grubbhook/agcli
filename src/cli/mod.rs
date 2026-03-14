@@ -49,6 +49,14 @@ pub struct Cli {
     #[arg(long, short = 'y', global = true, env = "AGCLI_YES")]
     pub yes: bool,
 
+    /// Batch mode: all missing args are hard errors, never prompt for input
+    #[arg(long, global = true, env = "AGCLI_BATCH")]
+    pub batch: bool,
+
+    /// Pretty-print JSON output (when --output json)
+    #[arg(long, global = true)]
+    pub pretty: bool,
+
     /// Wallet password (avoids interactive prompt; prefer env var for security)
     #[arg(long, global = true, env = "AGCLI_PASSWORD", hide_env_values = true)]
     pub password: Option<String>,
@@ -65,11 +73,17 @@ pub enum Commands {
     Wallet(WalletCommands),
 
     // ──── Balance ────
-    /// Show account balance
+    /// Show account balance (or watch with --watch --threshold)
     Balance {
         /// SS58 address (defaults to wallet coldkey)
         #[arg(long)]
         address: Option<String>,
+        /// Watch mode: poll balance every N seconds (default 60)
+        #[arg(long)]
+        watch: Option<Option<u64>>,
+        /// Alert threshold: warn when balance drops below this TAO amount
+        #[arg(long)]
+        threshold: Option<f64>,
     },
 
     // ──── Transfer ────
@@ -190,6 +204,12 @@ pub enum SubscribeCommands {
         /// Event filter category
         #[arg(default_value = "all")]
         filter: String,
+        /// Filter by subnet UID (only show events mentioning this netuid)
+        #[arg(long)]
+        netuid: Option<u16>,
+        /// Filter by account SS58 (only show events involving this address)
+        #[arg(long)]
+        account: Option<String>,
     },
 }
 
@@ -246,6 +266,27 @@ pub enum WalletCommands {
     NewHotkey {
         /// Hotkey name
         name: String,
+    },
+    /// Sign an arbitrary message with the coldkey
+    Sign {
+        /// Message to sign (hex-encoded if prefixed with 0x, otherwise UTF-8)
+        message: String,
+    },
+    /// Verify a signature against the coldkey
+    Verify {
+        /// Message that was signed
+        message: String,
+        /// Signature (hex-encoded, 0x prefix optional)
+        #[arg(long)]
+        signature: String,
+        /// SS58 address of the signer (defaults to wallet coldkey)
+        #[arg(long)]
+        signer: Option<String>,
+    },
+    /// Derive SS58 address from a public key or mnemonic (no secrets printed)
+    Derive {
+        /// Public key (0x hex) or mnemonic phrase
+        input: String,
     },
 }
 
@@ -922,6 +963,11 @@ impl Cli {
         }
         if self.proxy.is_none() {
             self.proxy = cfg.proxy.clone();
+        }
+        if !self.batch {
+            if let Some(true) = cfg.batch {
+                self.batch = true;
+            }
         }
     }
 

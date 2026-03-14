@@ -46,6 +46,8 @@ pub async fn handle_stake(
             Ok(())
         }
         StakeCommands::Add { amount, netuid, hotkey, max_slippage } => {
+            // Spending limit check
+            check_spending_limit(netuid, amount)?;
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
             let bal = Balance::from_tao(amount);
             // Pre-flight balance check
