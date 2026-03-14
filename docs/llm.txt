@@ -21,7 +21,7 @@ Every command is fully scriptable with zero stdin blocking when all required arg
 | `--output json` | — | Machine-readable JSON output |
 | `--output csv` | — | CSV output for data commands |
 | `--pretty` | — | Pretty-print JSON output (when --output json) |
-| `--network NET` | `AGCLI_NETWORK=NET` | Network: finney, test, local, or URL |
+| `--network NET` | `AGCLI_NETWORK=NET` | Network: finney, test, local, archive, or URL |
 | `--endpoint URL` | `AGCLI_ENDPOINT=URL` | Custom chain endpoint (overrides --network) |
 | `--wallet-dir DIR` | `AGCLI_WALLET_DIR=DIR` | Wallet directory (default: ~/.bittensor/wallets) |
 | `-w NAME` / `--wallet NAME` | `AGCLI_WALLET=NAME` | Wallet name (default: "default") |
@@ -110,6 +110,15 @@ agcli explain --topic commit-reveal
 # Explain topics as JSON
 agcli --output json explain
 agcli --output json explain --topic tempo
+
+# Block explorer
+agcli --output json block latest
+agcli --output json block info --number 4000000
+
+# Historical queries via archive node
+agcli --network archive --output json subnet list --at-block 3500000
+agcli --network archive --output json view portfolio --at-block 3000000
+agcli --network archive --output json subnet metagraph --netuid 1 --at-block 3500000
 ```
 
 ## Core Commands
@@ -236,17 +245,36 @@ All commands use `--flag` syntax. No positional arguments.
 - `agcli --live 30 subnet metagraph --netuid 1` — track neuron changes every 30s
 - `agcli --live view portfolio` — watch portfolio in real-time
 
+### Block Explorer
+- `agcli block latest` — show latest finalized block (number, hash, timestamp, extrinsic count)
+- `agcli block info --number N` — show block details (hash, parent hash, state root, timestamp, extrinsics)
+
+### Historical Queries (--at-block)
+12 commands support `--at-block N` for querying historical state:
+- `agcli balance --at-block N`
+- `agcli stake list --at-block N`
+- `agcli subnet list --at-block N`
+- `agcli subnet show --netuid X --at-block N`
+- `agcli subnet metagraph --netuid X --at-block N`
+- `agcli view portfolio --at-block N`
+- `agcli view network --at-block N`
+- `agcli view dynamic --at-block N`
+- `agcli view neuron --netuid X --uid Y --at-block N`
+- `agcli view validators --at-block N`
+- `agcli view account --at-block N`
+- Use `--network archive` for blocks beyond the pruning window (~256 blocks on finney)
+
 ### Explain (Built-in Reference)
 - `agcli explain` — list all available topics (JSON: `[{"topic","description"}]`)
 - `agcli explain --topic TOPIC` — explain a Bittensor concept (JSON: `{"topic","content"}`)
-- Topics: tempo, commit-reveal, amm, yuma, rate-limits, stake-weight, bootstrap, alpha, emission, registration, subnets, validators, miners, immunity, delegation, childkeys, root, proxy
+- Topics (29): tempo, commit-reveal, yuma, rate-limits, stake-weight, amm, bootstrap, alpha, emission, registration, subnets, validators, miners, immunity, delegation, childkeys, root, proxy, coldkey-swap, governance, senate, mev-shield, limits, hyperparams, axon, take, recycle, pow, archive
 
 ### Configuration
 - `agcli config show` — show current config
 - `agcli config set --key KEY --value VALUE` — set persistent config
 - `agcli config unset --key KEY` — remove config value
 - `agcli config path` — show config file path (~/.agcli/config.toml)
-- Keys: network, endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval, batch, spending_limit.N, spending_limit.*
+- Keys: network (finney/test/local/archive), endpoint, wallet_dir, wallet, hotkey, output, proxy, live_interval, batch, spending_limit.N, spending_limit.*
 - Priority: CLI flags > env vars > config file > defaults
 
 ### Batch Extrinsics
@@ -340,6 +368,12 @@ client.proxy_call(pair, "5RealAccount...", "SubtensorModule", "add_stake", vec![
 client.submit_multisig_call(pair, &other_ids, 2, "Balances", "transfer_allow_death", vec![...]).await?;
 client.approve_multisig(pair, &other_ids, 2, call_hash).await?;
 
+// Historical queries (archive node)
+let block_hash = client.get_block_hash(3_500_000).await?;
+let subnets = client.get_all_subnets_at_block(block_hash).await?;
+let dynamic = client.get_all_dynamic_info_at_block(block_hash).await?;
+let neurons = client.get_neurons_lite_at_block(1.into(), block_hash).await?;
+
 // Event subscription
 agcli::events::subscribe_events(client.inner_client(), EventFilter::All, false).await?;
 
@@ -367,3 +401,4 @@ println!("Network: {:?}", cfg.network);
 | finney | wss://entrypoint-finney.opentensor.ai:443 | Mainnet |
 | test | wss://test.finney.opentensor.ai:443 | Testnet |
 | local | ws://127.0.0.1:9944 | Local dev node |
+| archive | wss://bittensor-finney.api.onfinality.io/public-ws | Full archive (OnFinality) |

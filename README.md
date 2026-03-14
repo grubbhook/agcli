@@ -22,7 +22,9 @@ Covers everything: wallet management, staking, transfers, subnet operations, wei
 | **Live Mode** | `--live` polling with delta tracking for dynamic, metagraph, portfolio |
 | **Events** | Real-time block/event subscription with filtering by category, **netuid**, **account** |
 | **Balance Watch** | `--watch N --threshold T` — low-balance monitoring with JSON alerts |
-| **Explain** | Built-in Bittensor concept reference (18 topics: tempo, commit-reveal, AMM, bootstrap, etc.) |
+| **Explain** | Built-in Bittensor concept reference (29 topics: tempo, commit-reveal, AMM, alpha, emission, registration, governance, archive, etc.) |
+| **Archive** | Historical queries via archive node (`--network archive`), `--at-block N` on 12 commands |
+| **Block** | Block explorer: `block info --number N`, `block latest` (hash, timestamp, extrinsics) |
 | **Key Swaps** | Hotkey swap, coldkey swap (scheduled) |
 | **Root** | Root registration, root weights |
 | **Raw Calls** | Submit to any pallet via dynamic dispatch (EVM, MEV Shield, Contracts) |
@@ -252,6 +254,16 @@ agcli completions --shell fish > ~/.config/fish/completions/agcli.fish
 agcli explain
 agcli explain --topic tempo
 agcli --output json explain --topic commit-reveal
+
+# Block explorer
+agcli block latest
+agcli block info --number 4000000
+
+# Historical queries (archive node)
+agcli --network archive view portfolio --at-block 3500000
+agcli --network archive subnet list --at-block 3000000
+agcli --network archive subnet metagraph --netuid 1 --at-block 3500000
+agcli --network archive view dynamic --at-block 4000000
 ```
 
 ### SDK Usage (as library)
@@ -420,7 +432,7 @@ agcli --output json --pretty view dynamic      # Pretty-printed JSON
 
 | Variable | Default | Description |
 |---|---|---|
-| `AGCLI_NETWORK` | `finney` | Network preset (finney/test/local) |
+| `AGCLI_NETWORK` | `finney` | Network preset (finney/test/local/archive) |
 | `AGCLI_ENDPOINT` | — | Custom WS endpoint (overrides network) |
 | `AGCLI_WALLET_DIR` | `~/.bittensor/wallets` | Wallet directory |
 | `AGCLI_WALLET` | `default` | Active wallet name |
