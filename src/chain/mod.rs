@@ -31,7 +31,10 @@ impl Client {
         tracing::info!("Connecting to {}", url);
         let inner = OnlineClient::from_url(url)
             .await
-            .context("Failed to connect to subtensor node")?;
+            .with_context(|| format!(
+                "Failed to connect to subtensor node at '{}'. Check your network connection and endpoint.\n  Finney:  wss://entrypoint-finney.opentensor.ai:443\n  Test:    wss://test.finney.opentensor.ai:443\n  Local:   ws://127.0.0.1:9944\n  Set with: --network finney|test|local  or  --endpoint <url>",
+                url
+            ))?;
         Ok(Self { inner })
     }
 
@@ -65,12 +68,14 @@ impl Client {
     }
 
     /// Sign, submit, and wait for finalization of a typed extrinsic.
-    /// Returns the extrinsic hash. Reduces boilerplate across all extrinsic methods.
+    /// Returns the extrinsic hash. Provides contextual error messages for common failures.
     async fn sign_submit<T: subxt::tx::Payload>(&self, tx: &T, pair: &sr25519::Pair) -> Result<String> {
         let signer = Self::signer(pair);
-        let result = self.inner.tx()
-            .sign_and_submit_then_watch_default(tx, &signer).await?
-            .wait_for_finalized_success().await?;
+        let progress = self.inner.tx()
+            .sign_and_submit_then_watch_default(tx, &signer).await
+            .map_err(|e| format_submit_error(e))?;
+        let result = progress.wait_for_finalized_success().await
+            .map_err(|e| format_dispatch_error(e))?;
         Ok(format!("{:?}", result.extrinsic_hash()))
     }
 
@@ -467,11 +472,7 @@ impl Client {
             hotkey_id,
             coldkey_id,
         );
-        let signer = Self::signer(signer_pair);
-        let result = self.inner.tx()
-            .sign_and_submit_then_watch_default(&tx, &signer).await?
-            .wait_for_finalized_success().await?;
-        Ok(format!("{:?}", result.extrinsic_hash()))
+        self.sign_submit(&tx, signer_pair).await
     }
 
     /// Get the current block number and hash for POW solving.
@@ -755,6 +756,61 @@ fn parse_proxy_type(s: &str) -> &'static str {
         "governance" | "Governance" => "Governance",
         "senate" | "Senate" => "Senate",
         _ => "Any",
+    }
+}
+
+/// Format submission errors (before tx reaches chain) with actionable hints.
+fn format_submit_error(e: subxt::Error) -> anyhow::Error {
+    let msg = e.to_string();
+    if msg.contains("connection") || msg.contains("Connection") || msg.contains("Ws") {
+        anyhow::anyhow!("Connection lost while submitting transaction. Check your network and endpoint.\n  Error: {}", msg)
+    } else if msg.contains("Priority is too low") || msg.contains("priority") {
+        anyhow::anyhow!("Transaction rejected: a conflicting transaction is already pending. Wait for it to finalize or use a different nonce.\n  Error: {}", msg)
+    } else if msg.contains("Inability to pay") || msg.contains("InsufficientBalance") {
+        anyhow::anyhow!("Insufficient balance to pay transaction fees. Check your free TAO balance with `agcli balance`.\n  Error: {}", msg)
+    } else {
+        anyhow::anyhow!("Transaction submission failed: {}", msg)
+    }
+}
+
+/// Format dispatch errors (tx reached chain but execution failed) with contextual hints.
+fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
+    let msg = e.to_string();
+    // Map common SubtensorModule errors to helpful messages
+    let hint = if msg.contains("NotEnoughBalanceToStake") || msg.contains("NotEnoughStake") {
+        "Insufficient balance or stake for this operation. Check `agcli balance` and `agcli stake list`."
+    } else if msg.contains("NotRegistered") || msg.contains("HotKeyNotRegisteredInSubNet") {
+        "Hotkey is not registered on this subnet. Register first with `agcli subnet register-neuron`."
+    } else if msg.contains("NotEnoughBalance") || msg.contains("InsufficientBalance") {
+        "Insufficient TAO balance. Check your balance with `agcli balance`."
+    } else if msg.contains("AlreadyRegistered") {
+        "This hotkey is already registered on the subnet."
+    } else if msg.contains("TooManyRegistrationsThisBlock") {
+        "Registration limit reached for this block. Try again in the next block (~12 seconds)."
+    } else if msg.contains("InvalidNetuid") || msg.contains("NetworkDoesNotExist") {
+        "Invalid subnet ID. List available subnets with `agcli subnet list`."
+    } else if msg.contains("BadOrigin") || msg.contains("NotOwner") {
+        "Permission denied — you are not the owner of this subnet or account."
+    } else if msg.contains("WeightsNotSettable") || msg.contains("SettingWeightsTooFast") {
+        "Cannot set weights: either rate-limited or commit-reveal is required. Check subnet hyperparams."
+    } else if msg.contains("TxRateLimitExceeded") {
+        "Rate limit exceeded. Wait before retrying this operation."
+    } else if msg.contains("StakeRateLimitExceeded") {
+        "Staking rate limit exceeded. Wait before staking/unstaking again."
+    } else if msg.contains("InvalidTake") || msg.contains("DelegateTakeTooHigh") {
+        "Invalid delegate take percentage. Take must be between 0% and 11.11%."
+    } else if msg.contains("NonAssociatedColdKey") {
+        "This coldkey is not associated with the specified hotkey."
+    } else if msg.contains("CommitRevealEnabled") {
+        "This subnet requires commit-reveal for weights. Use `agcli weights commit` then `agcli weights reveal`."
+    } else {
+        "" // no special hint
+    };
+
+    if hint.is_empty() {
+        anyhow::anyhow!("Transaction failed on chain: {}", msg)
+    } else {
+        anyhow::anyhow!("Transaction failed: {}\n  Hint: {}", msg, hint)
     }
 }
 

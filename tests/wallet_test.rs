@@ -89,3 +89,31 @@ fn open_nonexistent_wallet_has_no_keys() {
         }
     }
 }
+
+#[test]
+fn wrong_password_error_message_is_helpful() {
+    let dir = tempfile::tempdir().unwrap();
+    Wallet::create(dir.path().to_str().unwrap(), "err_test", "correct", "default").unwrap();
+    let mut wallet = Wallet::open(&format!("{}/err_test", dir.path().to_str().unwrap())).unwrap();
+    let err = wallet.unlock_coldkey("wrong").unwrap_err();
+    // The error chain includes "Failed to decrypt coldkey" context and inner "wrong password" cause
+    let full = format!("{:#}", err);
+    assert!(full.contains("decrypt") || full.contains("wrong password"),
+        "Error chain should mention decryption failure, got: {}", full);
+}
+
+#[test]
+fn ss58_validation_errors_are_helpful() {
+    use agcli::wallet::keypair::from_ss58;
+    // Empty address
+    let err = from_ss58("").unwrap_err();
+    assert!(err.to_string().contains("Empty address"), "Expected empty address hint, got: {}", err);
+
+    // Too short
+    let err = from_ss58("5abc").unwrap_err();
+    assert!(err.to_string().contains("too short"), "Expected short address hint, got: {}", err);
+
+    // Invalid characters
+    let err = from_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQYxxxxxxinvalid").unwrap_err();
+    assert!(err.to_string().contains("Invalid SS58"), "Expected invalid SS58 error, got: {}", err);
+}

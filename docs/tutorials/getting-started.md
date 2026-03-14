@@ -1,117 +1,182 @@
 # Getting Started with agcli
 
-## 1. Install
+agcli is a Rust CLI + SDK for the Bittensor network. It covers wallet management, staking, transfers, subnet operations, weight setting, delegation, and more.
+
+## Install
 
 ```bash
-# From source
+# From source (requires Rust toolchain)
 git clone https://github.com/unconst/agcli && cd agcli
 cargo install --path .
 
-# Or directly
+# Or install directly from GitHub
 cargo install --git https://github.com/unconst/agcli
+
+# Self-update an existing installation
+agcli update
 ```
 
-## 2. Create a Wallet
+**Requirements:** Rust 1.75+, a C compiler (gcc/clang), and network access (build fetches chain metadata).
+
+## Key Concepts
+
+- **TAO** — the native token of Bittensor (1 TAO = 1,000,000,000 rao)
+- **Coldkey** — your spending key (encrypted on disk, password-protected)
+- **Hotkey** — your operational key (used for mining/validating, stored in plaintext)
+- **Wallet** — a directory containing your coldkey + hotkey files
+- **Subnet** — an independent network within Bittensor, identified by a `netuid` (0–65535)
+- **Alpha** — each subnet has its own alpha token; staking TAO buys alpha at the current price
+- **Dynamic TAO** — the AMM mechanism that prices alpha tokens based on supply and demand
+
+## Create a Wallet
 
 ```bash
 agcli wallet create --name my_wallet
-# You'll be prompted for a password to encrypt the coldkey.
-# A 12-word mnemonic is generated — SAVE IT SECURELY.
+# Prompts for a password to encrypt the coldkey.
+# Generates a 12-word mnemonic — WRITE IT DOWN AND STORE IT SECURELY.
+
+# Non-interactive (for scripts/agents):
+agcli wallet create --name my_wallet --password mypass123
 ```
 
-## 3. Check Your Balance
+Create a hotkey for mining or validating:
+
+```bash
+agcli wallet create-hotkey --name my_wallet --hotkey default
+```
+
+List all wallets and check details:
+
+```bash
+agcli wallet list
+agcli wallet show -w my_wallet --password mypass123
+```
+
+## Check Your Balance
 
 ```bash
 agcli balance
-# Or for any address:
+# Uses your default wallet. Or specify an address:
 agcli balance --address 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+
+# JSON output for scripts:
+agcli balance --output json
 ```
 
-## 4. View Subnets
+## View the Network
 
 ```bash
+# Network overview (block height, issuance, staking ratio)
+agcli view network
+
 # List all subnets
 agcli subnet list
 
-# View a specific subnet's metagraph
+# Detailed subnet info
+agcli subnet show 1
+
+# Subnet hyperparameters
+agcli subnet hyperparams 1
+
+# Metagraph (all neurons on a subnet)
 agcli subnet metagraph 1
+
+# Dynamic TAO info (prices, pools, emissions)
+agcli view dynamic
 ```
 
-## 5. Stake TAO
+## Stake TAO
 
 ```bash
-# Stake 10 TAO on subnet 1
+# Interactive wizard — shows subnets, asks for your choice, confirms
+agcli stake wizard
+
+# Direct staking
 agcli stake add 10.0 --netuid 1
 
 # View your stakes
 agcli stake list
+
+# Staking analytics (APY estimates, yield projections)
+agcli view staking-analytics
 ```
 
-## 6. Transfer TAO
+## Transfer TAO
 
 ```bash
 agcli transfer 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY 1.5
 ```
 
-## 7. Interactive Staking Wizard
-
-```bash
-# Guided staking flow — shows subnets, lets you pick, confirms before submitting
-agcli stake wizard
-```
-
 ## Configuration
 
-### Persistent config file (recommended)
+Settings are resolved in priority order: CLI flags > env vars > config file > defaults.
+
+### Config file (persisted to `~/.agcli/config.toml`)
+
 ```bash
-# Set defaults once — persisted to ~/.agcli/config.toml
 agcli config set network finney
 agcli config set wallet my_wallet
-agcli config set output json
+agcli config set output json     # table, json, or csv
 
-# View current config
-agcli config show
-
-# Remove a setting
-agcli config unset output
+agcli config show                # view all settings
+agcli config unset output        # remove a setting
+agcli config path                # show config file location
 ```
 
 ### Environment variables
+
 ```bash
 export AGCLI_NETWORK=finney
 export AGCLI_WALLET=my_wallet
 export AGCLI_WALLET_DIR=~/.bittensor/wallets
+export AGCLI_PASSWORD=mypass     # skip password prompts
+export AGCLI_YES=1               # skip confirmation prompts
 ```
 
-### CLI flags (override everything)
+### CLI flags
+
 ```bash
-agcli --network test --wallet my_wallet subnet list
+agcli --network test --wallet my_wallet --output json subnet list
+agcli --yes --password mypass stake add 10.0 --netuid 1
 ```
-
-Priority: CLI flags > environment variables > config file > defaults
 
 ## Shell Completions
 
 ```bash
-# Bash
-agcli completions bash > /etc/bash_completion.d/agcli
-
-# Zsh
-agcli completions zsh > ~/.zfunc/_agcli
-
-# Fish
-agcli completions fish > ~/.config/fish/completions/agcli.fish
+agcli completions bash > /etc/bash_completion.d/agcli    # Bash
+agcli completions zsh > ~/.zfunc/_agcli                   # Zsh
+agcli completions fish > ~/.config/fish/completions/agcli.fish  # Fish
 ```
 
-## Advanced: Validators & History
+## Networks
 
-```bash
-# View top validators across the network
-agcli view validators --limit 20
+| Network | Flag | Endpoint |
+|---------|------|----------|
+| Finney (mainnet) | `--network finney` | `wss://entrypoint-finney.opentensor.ai:443` |
+| Testnet | `--network test` | `wss://test.finney.opentensor.ai:443` |
+| Local | `--network local` | `ws://127.0.0.1:9944` |
+| Custom | `--endpoint wss://...` | any WebSocket URL |
 
-# Validators on a specific subnet
-agcli view validators --netuid 1
+## Troubleshooting
 
-# Transaction history
-agcli view history --limit 10
-```
+**Connection refused / timeout:**
+- Check your network connection
+- Verify the endpoint: `agcli --network finney view network`
+- Finney nodes can be slow at peak times — retry after a moment
+
+**Wrong password:**
+- Error: "Decryption failed — wrong password"
+- If you forgot your password, restore from mnemonic: `agcli wallet regen-coldkey --name my_wallet`
+
+**Wallet not found:**
+- Error: "Wallet 'X' not found"
+- List available wallets: `agcli wallet list`
+- Check wallet directory: `agcli config show` (look at `wallet_dir`)
+
+**Invalid address:**
+- Bittensor SS58 addresses are 48 characters and start with `5`
+- Verify on taostats.io before sending funds
+
+**Transaction failed:**
+- Read the error hint carefully — agcli maps chain errors to suggestions
+- Common: insufficient balance, rate limits, wrong subnet, hotkey not registered

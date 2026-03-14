@@ -4,7 +4,14 @@ use crate::wallet::Wallet;
 use anyhow::Result;
 
 pub fn open_wallet(wallet_dir: &str, wallet_name: &str) -> Result<Wallet> {
-    Wallet::open(&format!("{}/{}", wallet_dir, wallet_name))
+    let path = format!("{}/{}", wallet_dir, wallet_name);
+    if !std::path::Path::new(&path).exists() {
+        anyhow::bail!(
+            "Wallet '{}' not found in {}.\n  Create one with: agcli wallet create --name {}\n  List existing:   agcli wallet list",
+            wallet_name, wallet_dir, wallet_name
+        );
+    }
+    Wallet::open(&path)
 }
 
 /// Unlock the coldkey. If `password` is provided, use it directly (non-interactive).
@@ -17,6 +24,14 @@ pub fn unlock_coldkey(wallet: &mut Wallet, password: Option<&str>) -> Result<()>
             .interact()?,
     };
     wallet.unlock_coldkey(&pw)
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("wrong password") || msg.contains("Decryption failed") {
+                anyhow::anyhow!("{}\n  Tip: pass --password <pw> or set AGCLI_PASSWORD env var for non-interactive use.", msg)
+            } else {
+                e
+            }
+        })
 }
 
 pub fn resolve_coldkey_address(address: Option<String>, wallet_dir: &str, wallet_name: &str) -> String {
@@ -40,7 +55,7 @@ pub fn resolve_hotkey_ss58(
     wallet
         .hotkey_ss58()
         .map(|s| s.to_string())
-        .ok_or_else(|| anyhow::anyhow!("Could not resolve hotkey SS58 address"))
+        .ok_or_else(|| anyhow::anyhow!("Could not resolve hotkey address.\n  Tip: pass --hotkey <ss58_address> or create a hotkey with `agcli wallet create-hotkey`."))
 }
 
 /// Shortcut: open wallet, unlock, resolve hotkey, return (pair, hotkey_ss58).
@@ -64,10 +79,12 @@ pub fn parse_weight_pairs(weights_str: &str) -> Result<(Vec<u16>, Vec<u16>)> {
     for pair in weights_str.split(',') {
         let parts: Vec<&str> = pair.trim().split(':').collect();
         if parts.len() != 2 {
-            anyhow::bail!("Invalid weight pair '{}', expected 'uid:weight'", pair);
+            anyhow::bail!("Invalid weight pair '{}'. Format: 'uid:weight' (e.g., '0:100,1:200,2:50')", pair);
         }
-        uids.push(parts[0].trim().parse::<u16>()?);
-        weights.push(parts[1].trim().parse::<u16>()?);
+        uids.push(parts[0].trim().parse::<u16>()
+            .map_err(|_| anyhow::anyhow!("Invalid UID '{}' — must be 0–65535", parts[0].trim()))?);
+        weights.push(parts[1].trim().parse::<u16>()
+            .map_err(|_| anyhow::anyhow!("Invalid weight '{}' — must be 0–65535", parts[1].trim()))?);
     }
     Ok((uids, weights))
 }
@@ -78,11 +95,12 @@ pub fn parse_children(children_str: &str) -> Result<Vec<(u64, String)>> {
         let parts: Vec<&str> = pair.trim().split(':').collect();
         if parts.len() != 2 {
             anyhow::bail!(
-                "Invalid child pair '{}', expected 'proportion:hotkey_ss58'",
+                "Invalid child pair '{}'. Format: 'proportion:hotkey_ss58' (e.g., '50000:5Cai...')",
                 pair
             );
         }
-        let proportion = parts[0].trim().parse::<u64>()?;
+        let proportion = parts[0].trim().parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("Invalid proportion '{}' — must be a positive integer (u64)", parts[0].trim()))?;
         let hotkey = parts[1].trim().to_string();
         result.push((proportion, hotkey));
     }

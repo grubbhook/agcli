@@ -52,3 +52,29 @@ fn parse_children_invalid() {
     assert!(parse_children("invalid").is_err());
     assert!(parse_children("").is_err());
 }
+
+#[test]
+fn parse_weight_pairs_overflow_uid() {
+    // UID > 65535 should fail
+    let result = parse_weight_pairs("70000:100");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("Invalid UID"), "Expected helpful UID error, got: {}", msg);
+}
+
+#[test]
+fn parse_weight_pairs_overflow_weight() {
+    // Weight > 65535 should fail
+    let result = parse_weight_pairs("0:70000");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("Invalid weight"), "Expected helpful weight error, got: {}", msg);
+}
+
+#[test]
+fn parse_children_bad_proportion() {
+    let result = parse_children("abc:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("Invalid proportion"), "Expected helpful proportion error, got: {}", msg);
+}

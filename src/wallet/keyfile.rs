@@ -48,9 +48,9 @@ pub fn write_encrypted_keyfile(path: &Path, mnemonic: &str, password: &str) -> R
 
 /// Read and decrypt an encrypted keyfile, returning the mnemonic.
 pub fn read_encrypted_keyfile(path: &Path, password: &str) -> Result<String> {
-    let data = fs::read(path).context("read keyfile")?;
+    let data = fs::read(path).with_context(|| format!("Cannot read keyfile at '{}'", path.display()))?;
     if data.len() < SALT_LEN + NONCE_LEN {
-        anyhow::bail!("keyfile too short");
+        anyhow::bail!("Keyfile '{}' is corrupted (too short). Re-create your wallet with `agcli wallet create`.", path.display());
     }
 
     let (salt, rest) = data.split_at(SALT_LEN);
@@ -62,7 +62,7 @@ pub fn read_encrypted_keyfile(path: &Path, password: &str) -> Result<String> {
     let nonce = Nonce::from_slice(nonce_bytes);
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| anyhow::anyhow!("Decryption failed — wrong password?"))?;
+        .map_err(|_| anyhow::anyhow!("Decryption failed — wrong password. If you forgot your password, restore from your mnemonic with `agcli wallet regen-coldkey`."))?;
 
     String::from_utf8(plaintext).context("mnemonic is not valid UTF-8")
 }
@@ -166,7 +166,7 @@ pub fn decrypt_nacl_keyfile_data(data: &[u8], password: &str) -> Result<String> 
         .map_err(|e| anyhow::anyhow!("cipher init: {}", e))?;
     let nonce = crypto_secretbox::Nonce::from_slice(nonce_bytes);
     let plaintext = cipher.decrypt(nonce, ciphertext)
-        .map_err(|_| anyhow::anyhow!("NaCl decryption failed — wrong password?"))?;
+        .map_err(|_| anyhow::anyhow!("Decryption failed — wrong password for Python wallet. If you forgot your password, restore from your mnemonic with `agcli wallet regen-coldkey`."))?;
 
     String::from_utf8(plaintext).context("decrypted data is not valid UTF-8")
 }

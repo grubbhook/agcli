@@ -42,7 +42,16 @@ pub fn to_ss58(public: &sr25519::Public, prefix: u16) -> String {
 /// Decode an SS58 address to an SR25519 public key.
 pub fn from_ss58(address: &str) -> Result<sr25519::Public> {
     sr25519::Public::from_ss58check(address)
-        .map_err(|e| anyhow::anyhow!("Invalid SS58 address: {:?}", e))
+        .map_err(|_| {
+            let trimmed = address.trim();
+            if trimmed.is_empty() {
+                anyhow::anyhow!("Empty address. Provide a valid Bittensor SS58 address (starts with '5').")
+            } else if trimmed.len() < 10 {
+                anyhow::anyhow!("Invalid SS58 address '{}' — too short. Bittensor addresses are 48 characters starting with '5'.", trimmed)
+            } else {
+                anyhow::anyhow!("Invalid SS58 address '{}'. Expected a 48-character Bittensor address starting with '5'.\n  Tip: verify the address on taostats.io or use `agcli wallet show` to get your address.", crate::utils::short_ss58(trimmed))
+            }
+        })
 }
 
 /// Verify that an SS58 address is valid.

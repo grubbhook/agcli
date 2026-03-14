@@ -34,6 +34,14 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let mut wallet = open_wallet(&cli.wallet_dir, &cli.wallet)?;
             unlock_coldkey(&mut wallet, password.as_deref())?;
             let balance = Balance::from_tao(amount);
+            // Pre-flight balance check
+            if let Some(ss58) = wallet.coldkey_ss58() {
+                let current = client.get_balance_ss58(ss58).await?;
+                if current.rao() < balance.rao() {
+                    anyhow::bail!("Insufficient balance: you have {} but trying to transfer {}.",
+                        current.display_tao(), balance.display_tao());
+                }
+            }
             println!("Transferring {} to {}", balance.display_tao(), dest);
             let hash = client.transfer(wallet.coldkey()?, &dest, balance).await?;
             if output == "json" {
@@ -713,12 +721,9 @@ async fn handle_multisig(
         MultisigCommands::Address { signatories, threshold } => {
             let addrs: Vec<&str> = signatories.split(',').map(|s| s.trim()).collect();
             if addrs.len() < 2 {
-                anyhow::bail!("Need at least 2 signatories for a multisig");
+                anyhow::bail!("Need at least 2 signatories for a multisig. Provide comma-separated SS58 addresses.");
             }
-            let mut account_ids: Vec<crate::AccountId> = addrs.iter()
-                .map(|s| Client::ss58_to_account_id_pub(s))
-                .collect::<Result<_>>()?;
-            account_ids.sort();
+            let account_ids = parse_sorted_signatories(&signatories)?;
 
             use blake2::digest::{Update, VariableOutput};
             let mut hasher = blake2::Blake2bVar::new(32)
@@ -742,21 +747,14 @@ async fn handle_multisig(
             let client = Client::connect(ws_url).await?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
-
-            let other_addrs: Vec<&str> = others.split(',').map(|s| s.trim()).collect();
-            let mut other_ids: Vec<crate::AccountId> = other_addrs.iter()
-                .map(|s| Client::ss58_to_account_id_pub(s))
-                .collect::<Result<_>>()?;
-            other_ids.sort();
-
+            let other_ids = parse_sorted_signatories(&others)?;
             let fields: Vec<subxt::dynamic::Value> = if let Some(ref args_json) = args {
                 let parsed: Vec<serde_json::Value> = serde_json::from_str(args_json)
-                    .map_err(|e| anyhow::anyhow!("Invalid JSON args: {}", e))?;
+                    .map_err(|e| anyhow::anyhow!("Invalid JSON args '{}'. Expected a JSON array, e.g. '[1, \"0x...\"]'", e))?;
                 parsed.iter().map(json_to_subxt_value).collect()
             } else {
                 vec![]
             };
-
             println!("Submitting multisig call: {}.{} (threshold {}/{})",
                 pallet, call, threshold, other_ids.len() + 1);
             let hash = client.submit_multisig_call(
@@ -769,18 +767,11 @@ async fn handle_multisig(
             let client = Client::connect(ws_url).await?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
-
-            let other_addrs: Vec<&str> = others.split(',').map(|s| s.trim()).collect();
-            let mut other_ids: Vec<crate::AccountId> = other_addrs.iter()
-                .map(|s| Client::ss58_to_account_id_pub(s))
-                .collect::<Result<_>>()?;
-            other_ids.sort();
-
+            let other_ids = parse_sorted_signatories(&others)?;
             let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);
             let hash_bytes: [u8; 32] = hex::decode(hash_hex)?
                 .try_into()
-                .map_err(|_| anyhow::anyhow!("Call hash must be 32 bytes"))?;
-
+                .map_err(|_| anyhow::anyhow!("Call hash must be exactly 32 bytes (64 hex chars)"))?;
             println!("Approving multisig call (threshold {}/{})", threshold, other_ids.len() + 1);
             let tx_hash = client.approve_multisig(
                 wallet.coldkey()?, &other_ids, threshold, hash_bytes,
@@ -931,6 +922,15 @@ fn generate_completions(shell: &str) {
         }
     };
     generate(shell_enum, &mut cmd, "agcli", &mut std::io::stdout());
+}
+
+/// Parse a comma-separated list of SS58 addresses into sorted AccountIds (for multisig).
+fn parse_sorted_signatories(csv: &str) -> Result<Vec<crate::AccountId>> {
+    let mut ids: Vec<crate::AccountId> = csv.split(',')
+        .map(|s| Client::ss58_to_account_id_pub(s.trim()))
+        .collect::<Result<_>>()?;
+    ids.sort();
+    Ok(ids)
 }
 
 fn cfg_value_display(key: &str, cfg: &crate::config::Config) -> String {

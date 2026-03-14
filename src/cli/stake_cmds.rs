@@ -47,7 +47,14 @@ pub async fn handle_stake(
         }
         StakeCommands::Add { amount, netuid, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
-            stake_op("Adding", "added", &hk, client.add_stake(&pair, &hk, NetUid(netuid), Balance::from_tao(amount)).await)
+            let bal = Balance::from_tao(amount);
+            // Pre-flight balance check
+            let current = client.get_balance(&sp_core::Pair::public(&pair)).await?;
+            if current.rao() < bal.rao() {
+                anyhow::bail!("Insufficient balance: you have {} but trying to stake {}.\n  Check: agcli balance",
+                    current.display_tao(), bal.display_tao());
+            }
+            stake_op("Adding", "added", &hk, client.add_stake(&pair, &hk, NetUid(netuid), bal).await)
         }
         StakeCommands::Remove { amount, netuid, hotkey } => {
             let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
@@ -222,8 +229,11 @@ async fn staking_wizard(
         }
     };
 
-    if amount <= 0.0 || amount > max_tao {
-        anyhow::bail!("Amount must be between 0 and {:.4}", max_tao);
+    if amount <= 0.0 {
+        anyhow::bail!("Amount must be greater than 0.");
+    }
+    if amount > max_tao {
+        anyhow::bail!("Amount {:.4} τ exceeds your balance of {:.4} τ. Use a smaller amount or transfer more TAO first.", amount, max_tao);
     }
 
     let hotkey_ss58 = resolve_hotkey_ss58(hotkey_arg, &mut wallet, hotkey_name)?;
