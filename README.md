@@ -1,4 +1,4 @@
-# agcli — Rust CLI + SDK for Bittensor
+# agcli — Agent optimized Rust CLI + SDK for Bittensor
 
 A fast, safe Rust toolkit for interacting with the [Bittensor](https://bittensor.com) network.
 Covers everything: wallet management, staking, transfers, subnet operations, weight setting, registration, metagraph queries, and more.
