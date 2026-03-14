@@ -146,8 +146,8 @@ impl Wallet {
         let pair = if data.trim().starts_with('{') {
             // Python bittensor-wallet stores JSON: {"secretSeed": "0x...", ...} or
             // {"ss58Address": "...", "secretPhrase": "...", ...}
-            let v: serde_json::Value = serde_json::from_str(data.trim())
-                .context("Failed to parse Python keyfile JSON")?;
+            let v: serde_json::Value =
+                serde_json::from_str(data.trim()).context("Failed to parse Python keyfile JSON")?;
             if let Some(seed) = v.get("secretSeed").and_then(|s| s.as_str()) {
                 keypair::pair_from_seed_hex(seed)?
             } else if let Some(phrase) = v.get("secretPhrase").and_then(|s| s.as_str()) {
@@ -168,8 +168,8 @@ impl Wallet {
     pub fn load_hotkey(&mut self, hotkey_name: &str) -> Result<()> {
         let data = keyfile::read_keyfile(&self.path.join("hotkeys").join(hotkey_name))?;
         let pair = if data.trim().starts_with('{') {
-            let v: serde_json::Value = serde_json::from_str(data.trim())
-                .context("Failed to parse hotkey JSON")?;
+            let v: serde_json::Value =
+                serde_json::from_str(data.trim()).context("Failed to parse hotkey JSON")?;
             if let Some(seed) = v.get("secretSeed").and_then(|s| s.as_str()) {
                 keypair::pair_from_seed_hex(seed)?
             } else if let Some(phrase) = v.get("secretPhrase").and_then(|s| s.as_str()) {

@@ -6,13 +6,27 @@ use agcli::Wallet;
 #[test]
 fn create_wallet_and_read_keys() {
     let dir = tempfile::tempdir().unwrap();
-    let wallet = Wallet::create(dir.path().to_str().unwrap(), "test_wallet", "password123", "default").unwrap();
+    let wallet = Wallet::create(
+        dir.path().to_str().unwrap(),
+        "test_wallet",
+        "password123",
+        "default",
+    )
+    .unwrap();
     assert!(wallet.coldkey_ss58().is_some());
     assert!(wallet.hotkey_ss58().is_some());
     // Address should be valid SS58
     let addr = wallet.coldkey_ss58().unwrap();
-    assert!(addr.starts_with("5"), "should be a substrate SS58 address: {}", addr);
-    assert!(addr.len() > 40, "SS58 address should be ~48 chars: {}", addr);
+    assert!(
+        addr.starts_with("5"),
+        "should be a substrate SS58 address: {}",
+        addr
+    );
+    assert!(
+        addr.len() > 40,
+        "SS58 address should be ~48 chars: {}",
+        addr
+    );
 }
 
 #[test]
@@ -47,12 +61,20 @@ fn unlock_coldkey_wrong_password() {
 fn import_from_mnemonic_and_verify() {
     let dir = tempfile::tempdir().unwrap();
     let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-    let wallet = Wallet::import_from_mnemonic(dir.path().to_str().unwrap(), "imported", mnemonic, "pass").unwrap();
+    let wallet =
+        Wallet::import_from_mnemonic(dir.path().to_str().unwrap(), "imported", mnemonic, "pass")
+            .unwrap();
     let addr = wallet.coldkey_ss58().unwrap().to_string();
 
     // Reimporting the same mnemonic should produce the same address
     let dir2 = tempfile::tempdir().unwrap();
-    let wallet2 = Wallet::import_from_mnemonic(dir2.path().to_str().unwrap(), "imported2", mnemonic, "other_pass").unwrap();
+    let wallet2 = Wallet::import_from_mnemonic(
+        dir2.path().to_str().unwrap(),
+        "imported2",
+        mnemonic,
+        "other_pass",
+    )
+    .unwrap();
     assert_eq!(wallet2.coldkey_ss58().unwrap(), addr);
 }
 
@@ -85,7 +107,10 @@ fn open_nonexistent_wallet_has_no_keys() {
         Err(_) => {} // expected on strict implementations
         Ok(w) => {
             // If it opens, it should have no coldkey SS58
-            assert!(w.coldkey_ss58().is_none(), "nonexistent wallet should have no coldkey");
+            assert!(
+                w.coldkey_ss58().is_none(),
+                "nonexistent wallet should have no coldkey"
+            );
         }
     }
 }
@@ -93,13 +118,22 @@ fn open_nonexistent_wallet_has_no_keys() {
 #[test]
 fn wrong_password_error_message_is_helpful() {
     let dir = tempfile::tempdir().unwrap();
-    Wallet::create(dir.path().to_str().unwrap(), "err_test", "correct", "default").unwrap();
+    Wallet::create(
+        dir.path().to_str().unwrap(),
+        "err_test",
+        "correct",
+        "default",
+    )
+    .unwrap();
     let mut wallet = Wallet::open(&format!("{}/err_test", dir.path().to_str().unwrap())).unwrap();
     let err = wallet.unlock_coldkey("wrong").unwrap_err();
     // The error chain includes "Failed to decrypt coldkey" context and inner "wrong password" cause
     let full = format!("{:#}", err);
-    assert!(full.contains("decrypt") || full.contains("wrong password"),
-        "Error chain should mention decryption failure, got: {}", full);
+    assert!(
+        full.contains("decrypt") || full.contains("wrong password"),
+        "Error chain should mention decryption failure, got: {}",
+        full
+    );
 }
 
 #[test]
@@ -107,13 +141,26 @@ fn ss58_validation_errors_are_helpful() {
     use agcli::wallet::keypair::from_ss58;
     // Empty address
     let err = from_ss58("").unwrap_err();
-    assert!(err.to_string().contains("Empty address"), "Expected empty address hint, got: {}", err);
+    assert!(
+        err.to_string().contains("Empty address"),
+        "Expected empty address hint, got: {}",
+        err
+    );
 
     // Too short
     let err = from_ss58("5abc").unwrap_err();
-    assert!(err.to_string().contains("too short"), "Expected short address hint, got: {}", err);
+    assert!(
+        err.to_string().contains("too short"),
+        "Expected short address hint, got: {}",
+        err
+    );
 
     // Invalid characters
-    let err = from_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQYxxxxxxinvalid").unwrap_err();
-    assert!(err.to_string().contains("Invalid SS58"), "Expected invalid SS58 error, got: {}", err);
+    let err =
+        from_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQYxxxxxxinvalid").unwrap_err();
+    assert!(
+        err.to_string().contains("Invalid SS58"),
+        "Expected invalid SS58 error, got: {}",
+        err
+    );
 }

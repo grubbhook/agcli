@@ -50,7 +50,9 @@ pub async fn fetch_portfolio(client: &Client, coldkey_ss58: &str) -> Result<Port
         })
         .collect();
 
-    let total_staked = positions.iter().fold(Balance::ZERO, |acc, p| acc + p.tao_equivalent);
+    let total_staked = positions
+        .iter()
+        .fold(Balance::ZERO, |acc, p| acc + p.tao_equivalent);
 
     Ok(Portfolio {
         coldkey_ss58: coldkey_ss58.to_string(),

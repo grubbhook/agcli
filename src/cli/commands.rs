@@ -1,8 +1,8 @@
 //! CLI command execution — thin dispatcher to focused handler modules.
 
-use crate::cli::*;
-use crate::cli::helpers::*;
 use crate::chain::Client;
+use crate::cli::helpers::*;
+use crate::cli::*;
 use crate::types::{Balance, NetUid};
 use anyhow::Result;
 use clap::CommandFactory;
@@ -22,22 +22,36 @@ pub async fn execute(cli: Cli) -> Result<()> {
     set_pretty_mode(pretty);
 
     match cli.command {
-        Commands::Wallet(cmd) => wallet_cmds::handle_wallet(cmd, &cli.wallet_dir, &cli.wallet, password.as_deref()).await,
-        Commands::Balance { address, watch, threshold } => {
+        Commands::Wallet(cmd) => {
+            wallet_cmds::handle_wallet(cmd, &cli.wallet_dir, &cli.wallet, password.as_deref()).await
+        }
+        Commands::Balance {
+            address,
+            watch,
+            threshold,
+        } => {
             let client = Client::connect(network.ws_url()).await?;
             let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
 
             // Watch mode
             if let Some(interval_opt) = watch {
                 let interval = interval_opt.unwrap_or(60);
-                let threshold_rao = threshold.map(|t| Balance::from_tao(t));
-                eprintln!("Watching balance for {} (every {}s{})",
-                    crate::utils::short_ss58(&addr), interval,
-                    threshold_rao.as_ref().map(|t| format!(", alert below {}", t.display_tao())).unwrap_or_default()
+                let threshold_rao = threshold.map(Balance::from_tao);
+                eprintln!(
+                    "Watching balance for {} (every {}s{})",
+                    crate::utils::short_ss58(&addr),
+                    interval,
+                    threshold_rao
+                        .as_ref()
+                        .map(|t| format!(", alert below {}", t.display_tao()))
+                        .unwrap_or_default()
                 );
                 loop {
                     let balance = client.get_balance_ss58(&addr).await?;
-                    let below = threshold_rao.as_ref().map(|t| balance.rao() < t.rao()).unwrap_or(false);
+                    let below = threshold_rao
+                        .as_ref()
+                        .map(|t| balance.rao() < t.rao())
+                        .unwrap_or(false);
                     if output == "json" {
                         print_json(&serde_json::json!({
                             "address": addr,
@@ -47,9 +61,18 @@ pub async fn execute(cli: Cli) -> Result<()> {
                             "timestamp": chrono::Utc::now().to_rfc3339(),
                         }));
                     } else {
-                        let alert = if below { " *** BELOW THRESHOLD ***" } else { "" };
-                        println!("[{}] {} — {}{}", chrono::Local::now().format("%H:%M:%S"),
-                            crate::utils::short_ss58(&addr), balance.display_tao(), alert);
+                        let alert = if below {
+                            " *** BELOW THRESHOLD ***"
+                        } else {
+                            ""
+                        };
+                        println!(
+                            "[{}] {} — {}{}",
+                            chrono::Local::now().format("%H:%M:%S"),
+                            crate::utils::short_ss58(&addr),
+                            balance.display_tao(),
+                            alert
+                        );
                     }
                     tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
                 }
@@ -57,7 +80,9 @@ pub async fn execute(cli: Cli) -> Result<()> {
 
             let balance = client.get_balance_ss58(&addr).await?;
             if output == "json" {
-                print_json(&serde_json::json!({"address": addr, "balance_rao": balance.rao(), "balance_tao": balance.tao()}));
+                print_json(
+                    &serde_json::json!({"address": addr, "balance_rao": balance.rao(), "balance_tao": balance.tao()}),
+                );
             } else {
                 println!("Address: {}", addr);
                 println!("Balance: {}", balance.display_tao());
@@ -73,8 +98,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
             if let Some(ss58) = wallet.coldkey_ss58() {
                 let current = client.get_balance_ss58(ss58).await?;
                 if current.rao() < balance.rao() {
-                    anyhow::bail!("Insufficient balance: you have {} but trying to transfer {}.",
-                        current.display_tao(), balance.display_tao());
+                    anyhow::bail!(
+                        "Insufficient balance: you have {} but trying to transfer {}.",
+                        current.display_tao(),
+                        balance.display_tao()
+                    );
                 }
             }
             println!("Transferring {} to {}", balance.display_tao(), dest);
@@ -86,70 +114,171 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let client = Client::connect(network.ws_url()).await?;
             let mut wallet = open_wallet(&cli.wallet_dir, &cli.wallet)?;
             unlock_coldkey(&mut wallet, password.as_deref())?;
-            println!("Transferring all balance to {} (keep_alive={})", dest, keep_alive);
-            let hash = client.transfer_all(wallet.coldkey()?, &dest, keep_alive).await?;
+            println!(
+                "Transferring all balance to {} (keep_alive={})",
+                dest, keep_alive
+            );
+            let hash = client
+                .transfer_all(wallet.coldkey()?, &dest, keep_alive)
+                .await?;
             print_tx_result(output, &hash, "All balance transferred.");
             Ok(())
         }
         Commands::Stake(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            stake_cmds::handle_stake(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output, password.as_deref(), yes).await
+            stake_cmds::handle_stake(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                &cli.hotkey,
+                output,
+                password.as_deref(),
+                yes,
+            )
+            .await
         }
         Commands::Subnet(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_subnet(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output, live_interval, password.as_deref()).await
+            handle_subnet(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                &cli.hotkey,
+                output,
+                live_interval,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Weights(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_weights(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, password.as_deref()).await
+            handle_weights(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                &cli.hotkey,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Root(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_root(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, password.as_deref()).await
+            handle_root(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                &cli.hotkey,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Delegate(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_delegate(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output, password.as_deref()).await
+            handle_delegate(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                &cli.hotkey,
+                output,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::View(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            view_cmds::handle_view(cmd, &client, &cli.wallet_dir, &cli.wallet, output, live_interval).await
+            view_cmds::handle_view(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                output,
+                live_interval,
+            )
+            .await
         }
         Commands::Identity(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_identity(cmd, &client, &cli.wallet_dir, &cli.wallet, password.as_deref()).await
+            handle_identity(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Serve(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_serve(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, password.as_deref()).await
+            handle_serve(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                &cli.hotkey,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Proxy(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_proxy(cmd, &client, &cli.wallet_dir, &cli.wallet, output, password.as_deref()).await
+            handle_proxy(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                output,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Crowdloan(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_crowdloan(cmd, &client, &cli.wallet_dir, &cli.wallet, output, password.as_deref()).await
+            handle_crowdloan(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                output,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Swap(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_swap(cmd, &client, &cli.wallet_dir, &cli.wallet, password.as_deref()).await
+            handle_swap(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Subscribe(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
             handle_subscribe(cmd, &client, output, batch).await
         }
         Commands::Multisig(cmd) => {
-            handle_multisig(cmd, &cli.wallet_dir, &cli.wallet, network.ws_url(), password.as_deref()).await
+            handle_multisig(
+                cmd,
+                &cli.wallet_dir,
+                &cli.wallet,
+                network.ws_url(),
+                password.as_deref(),
+            )
+            .await
         }
         Commands::Config(cmd) => handle_config(cmd).await,
         Commands::Completions { shell } => {
             generate_completions(&shell);
             Ok(())
         }
-        Commands::Update => {
-            handle_update().await
-        }
+        Commands::Update => handle_update().await,
         Commands::Explain { topic } => {
             handle_explain(topic.as_deref());
             Ok(())
@@ -165,6 +294,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
 
 // ──────── Subnet ────────
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_subnet(
     cmd: SubnetCommands,
     client: &Client,
@@ -183,7 +313,17 @@ async fn handle_subnet(
             } else if output == "csv" {
                 println!("netuid,name,n,max_n,tempo,emission,burn_rao,owner");
                 for s in &subnets {
-                    println!("{},{},{},{},{},{},{},{}", s.netuid, s.name, s.n, s.max_n, s.tempo, s.emission_value, s.burn.rao(), s.owner);
+                    println!(
+                        "{},{},{},{},{},{},{},{}",
+                        s.netuid,
+                        s.name,
+                        s.n,
+                        s.max_n,
+                        s.tempo,
+                        s.emission_value,
+                        s.burn.rao(),
+                        s.owner
+                    );
                 }
             } else if subnets.is_empty() {
                 println!("No subnets found.");
@@ -214,9 +354,14 @@ async fn handle_subnet(
             match info {
                 Some(mut s) => {
                     if let Some(ref di) = dynamic {
-                        if !di.name.is_empty() { s.name = di.name.clone(); }
+                        if !di.name.is_empty() {
+                            s.name = di.name.clone();
+                        }
                     }
-                    let emission_rao = dynamic.as_ref().map(|d| d.total_emission()).unwrap_or(s.emission_value);
+                    let emission_rao = dynamic
+                        .as_ref()
+                        .map(|d| d.total_emission())
+                        .unwrap_or(s.emission_value);
                     s.emission_value = emission_rao;
                     if output == "json" {
                         print_json_ser(&s);
@@ -230,7 +375,14 @@ async fn handle_subnet(
                         println!("  Difficulty:    {}", s.difficulty);
                         println!("  Immunity:      {} blocks", s.immunity_period);
                         println!("  Owner:         {}", s.owner);
-                        println!("  Registration:  {}", if s.registration_allowed { "open" } else { "closed" });
+                        println!(
+                            "  Registration:  {}",
+                            if s.registration_allowed {
+                                "open"
+                            } else {
+                                "closed"
+                            }
+                        );
                         if let Some(ref di) = dynamic {
                             println!("  Price:         {:.6} τ/α", di.price);
                             println!("  TAO in pool:   {}", di.tao_in.display_tao());
@@ -264,8 +416,14 @@ async fn handle_subnet(
                         ("weights_rate_limit", format!("{}", h.weights_rate_limit)),
                         ("adjustment_interval", format!("{}", h.adjustment_interval)),
                         ("activity_cutoff", format!("{}", h.activity_cutoff)),
-                        ("registration_allowed", format!("{}", h.registration_allowed)),
-                        ("target_regs_per_interval", format!("{}", h.target_regs_per_interval)),
+                        (
+                            "registration_allowed",
+                            format!("{}", h.registration_allowed),
+                        ),
+                        (
+                            "target_regs_per_interval",
+                            format!("{}", h.target_regs_per_interval),
+                        ),
                         ("min_burn", h.min_burn.display_tao()),
                         ("max_burn", h.max_burn.display_tao()),
                         ("bonds_moving_avg", format!("{}", h.bonds_moving_avg)),
@@ -274,11 +432,22 @@ async fn handle_subnet(
                         ("max_validators", format!("{}", h.max_validators)),
                         ("adjustment_alpha", format!("{}", h.adjustment_alpha)),
                         ("difficulty", format!("{}", h.difficulty)),
-                        ("commit_reveal_weights", format!("{}", h.commit_reveal_weights_enabled)),
-                        ("commit_reveal_interval", format!("{}", h.commit_reveal_weights_interval)),
-                        ("liquid_alpha_enabled", format!("{}", h.liquid_alpha_enabled)),
+                        (
+                            "commit_reveal_weights",
+                            format!("{}", h.commit_reveal_weights_enabled),
+                        ),
+                        (
+                            "commit_reveal_interval",
+                            format!("{}", h.commit_reveal_weights_interval),
+                        ),
+                        (
+                            "liquid_alpha_enabled",
+                            format!("{}", h.liquid_alpha_enabled),
+                        ),
                     ];
-                    for (k, v) in &rows { table.add_row(vec![k, v.as_str()]); }
+                    for (k, v) in &rows {
+                        table.add_row(vec![k, v.as_str()]);
+                    }
                     println!("{table}");
                 }
                 None => println!("Hyperparameters not found for SN{}.", netuid),
@@ -309,13 +478,18 @@ async fn handle_subnet(
                             println!("  Val. Permit: {}", n.validator_permit);
                             println!("  Last Update: block {}", n.last_update);
                             if let Some(axon) = &n.axon_info {
-                                println!("  Axon:        {}:{} (v{}, proto {})", axon.ip, axon.port, axon.version, axon.protocol);
+                                println!(
+                                    "  Axon:        {}:{} (v{}, proto {})",
+                                    axon.ip, axon.port, axon.version, axon.protocol
+                                );
                             }
                         }
                     }
                     None => {
                         if output == "json" {
-                            print_json(&serde_json::json!({"error": format!("UID {} not found on SN{}", target_uid, netuid)}));
+                            print_json(
+                                &serde_json::json!({"error": format!("UID {} not found on SN{}", target_uid, netuid)}),
+                            );
                         } else {
                             println!("UID {} not found on SN{}", target_uid, netuid);
                         }
@@ -333,13 +507,38 @@ async fn handle_subnet(
             } else if output == "csv" {
                 println!("uid,hotkey,coldkey,stake_rao,rank,trust,consensus,incentive,dividends,emission,validator_permit,last_update");
                 for n in &mg.neurons {
-                    println!("{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.0},{},{}", n.uid, n.hotkey, n.coldkey, n.stake.rao(), n.rank, n.trust, n.consensus, n.incentive, n.dividends, n.emission, n.validator_permit, n.last_update);
+                    println!(
+                        "{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.0},{},{}",
+                        n.uid,
+                        n.hotkey,
+                        n.coldkey,
+                        n.stake.rao(),
+                        n.rank,
+                        n.trust,
+                        n.consensus,
+                        n.incentive,
+                        n.dividends,
+                        n.emission,
+                        n.validator_permit,
+                        n.last_update
+                    );
                 }
             } else {
-                println!("Metagraph SN{} — {} neurons, block {}", netuid, mg.n, mg.block);
+                println!(
+                    "Metagraph SN{} — {} neurons, block {}",
+                    netuid, mg.n, mg.block
+                );
                 let mut table = comfy_table::Table::new();
                 table.set_header(vec![
-                    "UID", "Hotkey", "Stake", "Rank", "Trust", "Incentive", "Emission", "Updated", "VP",
+                    "UID",
+                    "Hotkey",
+                    "Stake",
+                    "Rank",
+                    "Trust",
+                    "Incentive",
+                    "Emission",
+                    "Updated",
+                    "VP",
                 ]);
                 for n in &mg.neurons {
                     table.add_row(vec![
@@ -359,21 +558,28 @@ async fn handle_subnet(
             Ok(())
         }
         SubnetCommands::Register => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
+            let (pair, hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             println!("Registering new subnet...");
             let hash = client.register_network(&pair, &hk).await?;
             println!("Subnet registered. Tx: {}", hash);
             Ok(())
         }
         SubnetCommands::RegisterNeuron { netuid } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
-            println!("Burn-registering on SN{} with hotkey {}", netuid, crate::utils::short_ss58(&hk));
+            let (pair, hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
+            println!(
+                "Burn-registering on SN{} with hotkey {}",
+                netuid,
+                crate::utils::short_ss58(&hk)
+            );
             let hash = client.burned_register(&pair, NetUid(netuid), &hk).await?;
             println!("Neuron registered. Tx: {}", hash);
             Ok(())
         }
         SubnetCommands::Pow { netuid, threads } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
+            let (pair, hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             let hotkey_pk = crate::wallet::keypair::from_ss58(&hk)?;
             println!("POW registration on SN{} with {} threads", netuid, threads);
             let (block_number, block_hash) = client.get_block_info_for_pow().await?;
@@ -386,18 +592,28 @@ async fn handle_subnet(
                 let (bh, hk_bytes, diff) = (block_hash, hotkey_pk.0, difficulty);
                 let offset = t as u64 * attempts_per_thread;
                 handles.push(std::thread::spawn(move || {
-                    crate::utils::pow::solve_pow_range(&bh, &hk_bytes, diff, offset, attempts_per_thread)
+                    crate::utils::pow::solve_pow_range(
+                        &bh,
+                        &hk_bytes,
+                        diff,
+                        offset,
+                        attempts_per_thread,
+                    )
                 }));
             }
-            let result = handles.into_iter()
-                .find_map(|h| h.join().ok().flatten());
+            let result = handles.into_iter().find_map(|h| h.join().ok().flatten());
             match result {
                 Some((nonce, work)) => {
                     println!("POW solved! Nonce: {}", nonce);
-                    let hash = client.pow_register(&pair, NetUid(netuid), &hk, block_number, nonce, work).await?;
+                    let hash = client
+                        .pow_register(&pair, NetUid(netuid), &hk, block_number, nonce, work)
+                        .await?;
                     println!("POW registered. Tx: {}", hash);
                 }
-                None => println!("POW not found after {} attempts/thread. Try burn registration.", attempts_per_thread),
+                None => println!(
+                    "POW not found after {} attempts/thread. Try burn registration.",
+                    attempts_per_thread
+                ),
             }
             Ok(())
         }
@@ -405,7 +621,9 @@ async fn handle_subnet(
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             println!("Dissolving subnet SN{} (owner only)", netuid);
-            let hash = client.dissolve_network(wallet.coldkey()?, NetUid(netuid)).await?;
+            let hash = client
+                .dissolve_network(wallet.coldkey()?, NetUid(netuid))
+                .await?;
             println!("Subnet dissolved. Tx: {}", hash);
             Ok(())
         }
@@ -415,18 +633,16 @@ async fn handle_subnet(
         SubnetCommands::Liquidity { netuid } => {
             handle_subnet_liquidity(client, output, netuid).await
         }
-        SubnetCommands::Monitor { netuid, interval, json } => {
-            handle_subnet_monitor(client, netuid, interval, json).await
-        }
-        SubnetCommands::Health { netuid } => {
-            handle_subnet_health(client, netuid, output).await
-        }
+        SubnetCommands::Monitor {
+            netuid,
+            interval,
+            json,
+        } => handle_subnet_monitor(client, netuid, interval, json).await,
+        SubnetCommands::Health { netuid } => handle_subnet_health(client, netuid, output).await,
         SubnetCommands::Emissions { netuid } => {
             handle_subnet_emissions(client, netuid, output).await
         }
-        SubnetCommands::Cost { netuid } => {
-            handle_subnet_cost(client, netuid, output).await
-        }
+        SubnetCommands::Cost { netuid } => handle_subnet_cost(client, netuid, output).await,
     }
 }
 
@@ -435,7 +651,10 @@ async fn handle_subnet(
 async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Result<()> {
     use std::io::Write;
     let nuid = NetUid(netuid);
-    println!("Watching SN{} (Ctrl+C to stop, poll every {}s)\n", netuid, interval);
+    println!(
+        "Watching SN{} (Ctrl+C to stop, poll every {}s)\n",
+        netuid, interval
+    );
 
     loop {
         let block = client.get_block_number().await?;
@@ -457,7 +676,12 @@ async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Res
                 // Tempo countdown
                 println!("  Tempo:             {} blocks", tempo);
                 println!("  Blocks into tempo: {}/{}", blocks_into_tempo, tempo);
-                println!("  Blocks until next: {} (~{}m {}s)", blocks_until_tempo, secs_until / 60, secs_until % 60);
+                println!(
+                    "  Blocks until next: {} (~{}m {}s)",
+                    blocks_until_tempo,
+                    secs_until / 60,
+                    secs_until % 60
+                );
 
                 // Progress bar
                 let progress = blocks_into_tempo as f64 / tempo as f64;
@@ -467,11 +691,18 @@ async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Res
                 println!("  Progress:          [{}] {:.0}%", bar, progress * 100.0);
 
                 // Weights rate limit
-                println!("\n  Weights rate limit: {} blocks (~{}m)", h.weights_rate_limit, h.weights_rate_limit * 12 / 60);
+                println!(
+                    "\n  Weights rate limit: {} blocks (~{}m)",
+                    h.weights_rate_limit,
+                    h.weights_rate_limit * 12 / 60
+                );
 
                 // Commit-reveal status
                 if h.commit_reveal_weights_enabled {
-                    println!("  Commit-reveal:     ENABLED (interval={} tempos)", h.commit_reveal_weights_interval);
+                    println!(
+                        "  Commit-reveal:     ENABLED (interval={} tempos)",
+                        h.commit_reveal_weights_interval
+                    );
                 } else {
                     println!("  Commit-reveal:     disabled (direct set_weights)");
                 }
@@ -487,10 +718,16 @@ async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Res
                     println!("  TAO in pool:       {}", d.tao_in.display_tao());
                     let emission_tao = d.total_emission() as f64 / 1e9;
                     println!("  Emission/tempo:    {:.4} τ", emission_tao);
-                    println!("  Daily emission:    {:.2} τ", emission_tao * 7200.0 / tempo as f64);
+                    println!(
+                        "  Daily emission:    {:.2} τ",
+                        emission_tao * 7200.0 / tempo as f64
+                    );
                 }
 
-                println!("\n  Last refresh: {}", chrono::Local::now().format("%H:%M:%S"));
+                println!(
+                    "\n  Last refresh: {}",
+                    chrono::Local::now().format("%H:%M:%S")
+                );
             }
             None => {
                 println!("Subnet SN{} not found or hyperparams unavailable.", netuid);
@@ -507,12 +744,10 @@ async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Res
 
 async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u16>) -> Result<()> {
     let dynamic = match netuid {
-        Some(n) => {
-            match client.get_dynamic_info(NetUid(n)).await? {
-                Some(d) => vec![d],
-                None => anyhow::bail!("Subnet SN{} not found", n),
-            }
-        }
+        Some(n) => match client.get_dynamic_info(NetUid(n)).await? {
+            Some(d) => vec![d],
+            None => anyhow::bail!("Subnet SN{} not found", n),
+        },
         None => client.get_all_dynamic_info().await?,
     };
 
@@ -522,7 +757,9 @@ async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u
     if output == "json" {
         let mut results = Vec::new();
         for d in &dynamic {
-            if d.tao_in.rao() == 0 { continue; }
+            if d.tao_in.rao() == 0 {
+                continue;
+            }
             let tao_in = d.tao_in.tao();
             let alpha_in_raw = d.alpha_in.raw() as f64 / 1e9;
             let price = d.price;
@@ -552,8 +789,15 @@ async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u
     println!("AMM Liquidity Dashboard\n");
     let mut table = comfy_table::Table::new();
     table.set_header(vec![
-        "Subnet", "Name", "Price (τ/α)", "TAO Pool", "Alpha Pool",
-        "0.1τ slip", "1τ slip", "10τ slip", "100τ slip",
+        "Subnet",
+        "Name",
+        "Price (τ/α)",
+        "TAO Pool",
+        "Alpha Pool",
+        "0.1τ slip",
+        "1τ slip",
+        "10τ slip",
+        "100τ slip",
     ]);
 
     let mut sorted: Vec<_> = dynamic.iter().filter(|d| d.tao_in.rao() > 0).collect();
@@ -630,12 +874,20 @@ fn format_slippage(pct: f64) -> String {
 
 // ──────── Subnet Monitor ────────
 
-async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json_mode: bool) -> Result<()> {
+async fn handle_subnet_monitor(
+    client: &Client,
+    netuid: u16,
+    interval: u64,
+    json_mode: bool,
+) -> Result<()> {
     use std::collections::HashMap;
     let nuid = NetUid(netuid);
 
     if !json_mode {
-        eprintln!("Monitoring SN{} (poll every {}s, Ctrl+C to stop)", netuid, interval);
+        eprintln!(
+            "Monitoring SN{} (poll every {}s, Ctrl+C to stop)",
+            netuid, interval
+        );
         eprintln!("Tracking: registrations, deregistrations, emission shifts, stake changes\n");
     }
 
@@ -665,17 +917,20 @@ async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json
 
         for n in &neurons {
             cur_uids.insert(n.uid);
-            cur_map.insert(n.uid, NeuronSnapshot {
-                hotkey: n.hotkey.clone(),
-                coldkey: n.coldkey.clone(),
-                stake: n.stake.rao(),
-                incentive: n.incentive,
-                emission: n.emission,
-                trust: n.trust,
-                rank: n.rank,
-                active: n.active,
-                last_update: n.last_update,
-            });
+            cur_map.insert(
+                n.uid,
+                NeuronSnapshot {
+                    hotkey: n.hotkey.clone(),
+                    coldkey: n.coldkey.clone(),
+                    stake: n.stake.rao(),
+                    incentive: n.incentive,
+                    emission: n.emission,
+                    trust: n.trust,
+                    rank: n.rank,
+                    active: n.active,
+                    last_update: n.last_update,
+                },
+            );
         }
 
         if !first {
@@ -694,8 +949,13 @@ async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json
                     if json_mode {
                         println!("{}", event);
                     } else {
-                        println!("[{}] NEW UID {} registered — hotkey {} coldkey {}",
-                            block, uid, crate::utils::short_ss58(&snap.hotkey), crate::utils::short_ss58(&snap.coldkey));
+                        println!(
+                            "[{}] NEW UID {} registered — hotkey {} coldkey {}",
+                            block,
+                            uid,
+                            crate::utils::short_ss58(&snap.hotkey),
+                            crate::utils::short_ss58(&snap.coldkey)
+                        );
                     }
                 }
             }
@@ -714,15 +974,21 @@ async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json
                     if json_mode {
                         println!("{}", event);
                     } else {
-                        println!("[{}] UID {} deregistered (was {})",
-                            block, uid, crate::utils::short_ss58(&snap.hotkey));
+                        println!(
+                            "[{}] UID {} deregistered (was {})",
+                            block,
+                            uid,
+                            crate::utils::short_ss58(&snap.hotkey)
+                        );
                     }
                 }
             }
 
             // Detect significant changes for existing UIDs
             for &uid in &cur_uids {
-                if !prev_uids.contains(&uid) { continue; }
+                if !prev_uids.contains(&uid) {
+                    continue;
+                }
                 let cur = &cur_map[&uid];
                 let prev = &prev_map[&uid];
 
@@ -739,8 +1005,13 @@ async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json
                     if json_mode {
                         println!("{}", event);
                     } else {
-                        println!("[{}] UID {} hotkey changed: {} → {}",
-                            block, uid, crate::utils::short_ss58(&prev.hotkey), crate::utils::short_ss58(&cur.hotkey));
+                        println!(
+                            "[{}] UID {} hotkey changed: {} → {}",
+                            block,
+                            uid,
+                            crate::utils::short_ss58(&prev.hotkey),
+                            crate::utils::short_ss58(&cur.hotkey)
+                        );
                     }
                 }
 
@@ -761,10 +1032,21 @@ async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json
                         if json_mode {
                             println!("{}", event);
                         } else {
-                            let dir = if cur.emission > prev.emission { "↑" } else { "↓" };
-                            println!("[{}] UID {} emission {}{:.0}% ({:.4}τ → {:.4}τ) — {}",
-                                block, uid, dir, change_pct, prev.emission / 1e9, cur.emission / 1e9,
-                                crate::utils::short_ss58(&cur.hotkey));
+                            let dir = if cur.emission > prev.emission {
+                                "↑"
+                            } else {
+                                "↓"
+                            };
+                            println!(
+                                "[{}] UID {} emission {}{:.0}% ({:.4}τ → {:.4}τ) — {}",
+                                block,
+                                uid,
+                                dir,
+                                change_pct,
+                                prev.emission / 1e9,
+                                cur.emission / 1e9,
+                                crate::utils::short_ss58(&cur.hotkey)
+                            );
                         }
                     }
                 }
@@ -784,10 +1066,20 @@ async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json
                     if json_mode {
                         println!("{}", event);
                     } else {
-                        let dir = if cur.incentive > prev.incentive { "↑" } else { "↓" };
-                        println!("[{}] UID {} incentive {} {:.4} → {:.4} — {}",
-                            block, uid, dir, prev.incentive, cur.incentive,
-                            crate::utils::short_ss58(&cur.hotkey));
+                        let dir = if cur.incentive > prev.incentive {
+                            "↑"
+                        } else {
+                            "↓"
+                        };
+                        println!(
+                            "[{}] UID {} incentive {} {:.4} → {:.4} — {}",
+                            block,
+                            uid,
+                            dir,
+                            prev.incentive,
+                            cur.incentive,
+                            crate::utils::short_ss58(&cur.hotkey)
+                        );
                     }
                 }
 
@@ -803,13 +1095,22 @@ async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json
                     if json_mode {
                         println!("{}", event);
                     } else {
-                        println!("[{}] UID {} became INACTIVE — {}",
-                            block, uid, crate::utils::short_ss58(&cur.hotkey));
+                        println!(
+                            "[{}] UID {} became INACTIVE — {}",
+                            block,
+                            uid,
+                            crate::utils::short_ss58(&cur.hotkey)
+                        );
                     }
                 }
             }
         } else if !json_mode {
-            println!("[{}] Initial snapshot: {} neurons on SN{}", block, neurons.len(), netuid);
+            println!(
+                "[{}] Initial snapshot: {} neurons on SN{}",
+                block,
+                neurons.len(),
+                netuid
+            );
         }
 
         first = false;
@@ -835,20 +1136,26 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
     let validators: Vec<_> = neurons.iter().filter(|n| n.validator_permit).collect();
     let miners: Vec<_> = neurons.iter().filter(|n| !n.validator_permit).collect();
     let zero_emission = neurons.iter().filter(|n| n.emission == 0.0).count();
-    let stale_count = neurons.iter().filter(|n| block.saturating_sub(n.last_update) > 1000).count();
+    let stale_count = neurons
+        .iter()
+        .filter(|n| block.saturating_sub(n.last_update) > 1000)
+        .count();
 
     if output == "json" {
-        let neuron_json: Vec<serde_json::Value> = neurons.iter().map(|n| {
-            serde_json::json!({
-                "uid": n.uid, "hotkey": n.hotkey, "coldkey": n.coldkey,
-                "active": n.active, "stake_rao": n.stake.rao(),
-                "rank": n.rank, "trust": n.trust, "consensus": n.consensus,
-                "incentive": n.incentive, "dividends": n.dividends,
-                "emission": n.emission, "validator_permit": n.validator_permit,
-                "last_update": n.last_update,
-                "blocks_since_update": block.saturating_sub(n.last_update),
+        let neuron_json: Vec<serde_json::Value> = neurons
+            .iter()
+            .map(|n| {
+                serde_json::json!({
+                    "uid": n.uid, "hotkey": n.hotkey, "coldkey": n.coldkey,
+                    "active": n.active, "stake_rao": n.stake.rao(),
+                    "rank": n.rank, "trust": n.trust, "consensus": n.consensus,
+                    "incentive": n.incentive, "dividends": n.dividends,
+                    "emission": n.emission, "validator_permit": n.validator_permit,
+                    "last_update": n.last_update,
+                    "blocks_since_update": block.saturating_sub(n.last_update),
+                })
             })
-        }).collect();
+            .collect();
         print_json(&serde_json::json!({
             "netuid": netuid, "block": block, "total_neurons": n,
             "active": active_count, "validators": validators.len(),
@@ -866,7 +1173,15 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
     println!("  Neurons:       {}/{}", active_count, n);
     println!("  Validators:    {}", validators.len());
     println!("  Miners:        {}", miners.len());
-    println!("  Zero emission: {} ({:.0}%)", zero_emission, if n > 0 { zero_emission as f64 / n as f64 * 100.0 } else { 0.0 });
+    println!(
+        "  Zero emission: {} ({:.0}%)",
+        zero_emission,
+        if n > 0 {
+            zero_emission as f64 / n as f64 * 100.0
+        } else {
+            0.0
+        }
+    );
     println!("  Stale (>1000 blocks): {}", stale_count);
 
     if let Some(ref d) = dynamic {
@@ -875,13 +1190,30 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
     }
     if let Some(ref h) = hyperparams {
         println!("  Tempo:         {} blocks", h.tempo);
-        println!("  Commit-reveal: {}", if h.commit_reveal_weights_enabled { "enabled" } else { "disabled" });
+        println!(
+            "  Commit-reveal: {}",
+            if h.commit_reveal_weights_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
         println!("  Rate limit:    {} blocks", h.weights_rate_limit);
     }
 
     println!("\n  All Neurons:");
     let mut table = comfy_table::Table::new();
-    table.set_header(vec!["UID", "Hotkey", "Active", "Stake", "Incentive", "Emission", "Trust", "Updated", "VP"]);
+    table.set_header(vec![
+        "UID",
+        "Hotkey",
+        "Active",
+        "Stake",
+        "Incentive",
+        "Emission",
+        "Trust",
+        "Updated",
+        "VP",
+    ]);
     for n in &neurons {
         let staleness = block.saturating_sub(n.last_update);
         let stale_mark = if staleness > 1000 { " !" } else { "" };
@@ -909,24 +1241,38 @@ async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> 
     let dynamic = client.get_dynamic_info(nuid).await.ok().flatten();
 
     let total_emission: f64 = neurons.iter().map(|n| n.emission).sum();
-    let emission_per_block = dynamic.as_ref().map(|d| d.total_emission() as f64 / 1e9).unwrap_or(0.0);
+    let emission_per_block = dynamic
+        .as_ref()
+        .map(|d| d.total_emission() as f64 / 1e9)
+        .unwrap_or(0.0);
     let tempo = dynamic.as_ref().map(|d| d.tempo as f64).unwrap_or(360.0);
     let daily_emission = emission_per_block * 7200.0;
 
     let mut sorted = neurons.clone();
-    sorted.sort_by(|a, b| b.emission.partial_cmp(&a.emission).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.sort_by(|a, b| {
+        b.emission
+            .partial_cmp(&a.emission)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     if output == "json" {
-        let entries: Vec<serde_json::Value> = sorted.iter().map(|n| {
-            let share = if total_emission > 0.0 { n.emission / total_emission * 100.0 } else { 0.0 };
-            serde_json::json!({
-                "uid": n.uid, "hotkey": n.hotkey,
-                "emission_raw": n.emission,
-                "emission_tao": n.emission / 1e9,
-                "share_pct": share,
-                "is_validator": n.validator_permit,
+        let entries: Vec<serde_json::Value> = sorted
+            .iter()
+            .map(|n| {
+                let share = if total_emission > 0.0 {
+                    n.emission / total_emission * 100.0
+                } else {
+                    0.0
+                };
+                serde_json::json!({
+                    "uid": n.uid, "hotkey": n.hotkey,
+                    "emission_raw": n.emission,
+                    "emission_tao": n.emission / 1e9,
+                    "share_pct": share,
+                    "is_validator": n.validator_permit,
+                })
             })
-        }).collect();
+            .collect();
         print_json(&serde_json::json!({
             "netuid": netuid,
             "total_emission_per_block_tao": emission_per_block,
@@ -944,9 +1290,20 @@ async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> 
     println!("  Tempo:          {:.0} blocks\n", tempo);
 
     let mut table = comfy_table::Table::new();
-    table.set_header(vec!["UID", "Hotkey", "Role", "Emission (τ)", "Share %", "Daily Est."]);
+    table.set_header(vec![
+        "UID",
+        "Hotkey",
+        "Role",
+        "Emission (τ)",
+        "Share %",
+        "Daily Est.",
+    ]);
     for n in sorted.iter().take(50) {
-        let share = if total_emission > 0.0 { n.emission / total_emission * 100.0 } else { 0.0 };
+        let share = if total_emission > 0.0 {
+            n.emission / total_emission * 100.0
+        } else {
+            0.0
+        };
         let daily_est = share / 100.0 * daily_emission;
         table.add_row(vec![
             format!("{}", n.uid),
@@ -991,9 +1348,15 @@ async fn handle_subnet_cost(client: &Client, netuid: u16, output: &str) -> Resul
     }
 
     let name = dynamic.as_ref().map(|d| d.name.as_str()).unwrap_or("?");
-    let allowed = info.as_ref().map(|i| i.registration_allowed).unwrap_or(false);
+    let allowed = info
+        .as_ref()
+        .map(|i| i.registration_allowed)
+        .unwrap_or(false);
     println!("=== SN{} ({}) Registration Cost ===\n", netuid, name);
-    println!("  Registration: {}", if allowed { "OPEN" } else { "CLOSED" });
+    println!(
+        "  Registration: {}",
+        if allowed { "OPEN" } else { "CLOSED" }
+    );
     println!("  Current burn: {}", burn.display_tao());
     println!("  POW difficulty: {}", difficulty);
     println!("  Capacity:     {}/{}", n, max_n);
@@ -1021,11 +1384,20 @@ async fn handle_weights(
     password: Option<&str>,
 ) -> Result<()> {
     match cmd {
-        WeightCommands::Set { netuid, weights, version_key, dry_run } => {
+        WeightCommands::Set {
+            netuid,
+            weights,
+            version_key,
+            dry_run,
+        } => {
             let (uids, wts) = parse_weight_pairs(&weights)?;
 
             // Pre-flight checks (always run these)
-            let hyperparams = client.get_subnet_hyperparams(NetUid(netuid)).await.ok().flatten();
+            let hyperparams = client
+                .get_subnet_hyperparams(NetUid(netuid))
+                .await
+                .ok()
+                .flatten();
 
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
@@ -1033,7 +1405,10 @@ async fn handle_weights(
 
             // Check stake-weight
             let stake_ok = if let Some(hk_ss58) = wallet.hotkey_ss58().map(|s| s.to_string()) {
-                let alpha = client.get_total_hotkey_alpha(&hk_ss58, NetUid(netuid)).await.unwrap_or(Balance::ZERO);
+                let alpha = client
+                    .get_total_hotkey_alpha(&hk_ss58, NetUid(netuid))
+                    .await
+                    .unwrap_or(Balance::ZERO);
                 if alpha.tao() < 1000.0 {
                     eprintln!("Warning: hotkey {} has {:.2}τ stake-weight on SN{} (minimum ~1000τ required).",
                         crate::utils::short_ss58(&hk_ss58), alpha.tao(), netuid);
@@ -1046,13 +1421,19 @@ async fn handle_weights(
             };
 
             // Check commit-reveal
-            let cr_enabled = hyperparams.as_ref().map(|h| h.commit_reveal_weights_enabled).unwrap_or(false);
+            let cr_enabled = hyperparams
+                .as_ref()
+                .map(|h| h.commit_reveal_weights_enabled)
+                .unwrap_or(false);
             if cr_enabled {
                 eprintln!("Warning: SN{} has commit-reveal enabled. Use `agcli weights commit-reveal` instead.", netuid);
             }
 
             // Check rate limit
-            let rate_limit = hyperparams.as_ref().map(|h| h.weights_rate_limit).unwrap_or(0);
+            let rate_limit = hyperparams
+                .as_ref()
+                .map(|h| h.weights_rate_limit)
+                .unwrap_or(0);
 
             if dry_run {
                 print_json(&serde_json::json!({
@@ -1068,12 +1449,23 @@ async fn handle_weights(
                 return Ok(());
             }
 
-            println!("Setting {} weights on SN{} (version_key={})", uids.len(), netuid, version_key);
-            let hash = client.set_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, version_key).await?;
+            println!(
+                "Setting {} weights on SN{} (version_key={})",
+                uids.len(),
+                netuid,
+                version_key
+            );
+            let hash = client
+                .set_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, version_key)
+                .await?;
             println!("Weights set. Tx: {}", hash);
             Ok(())
         }
-        WeightCommands::Commit { netuid, weights, salt } => {
+        WeightCommands::Commit {
+            netuid,
+            weights,
+            salt,
+        } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
@@ -1091,20 +1483,32 @@ async fn handle_weights(
             use blake2::digest::{Update, VariableOutput};
             let mut hasher = blake2::Blake2bVar::new(32)
                 .map_err(|e| anyhow::anyhow!("blake2 init error: {:?}", e))?;
-            for u in &uids { hasher.update(&u.to_le_bytes()); }
-            for w in &wts { hasher.update(&w.to_le_bytes()); }
+            for u in &uids {
+                hasher.update(&u.to_le_bytes());
+            }
+            for w in &wts {
+                hasher.update(&w.to_le_bytes());
+            }
             hasher.update(salt_str.as_bytes());
             let mut hash_out = [0u8; 32];
-            hasher.finalize_variable(&mut hash_out)
+            hasher
+                .finalize_variable(&mut hash_out)
                 .map_err(|e| anyhow::anyhow!("blake2 finalize error: {:?}", e))?;
             println!("Committing weights on SN{}", netuid);
             println!("  Commit hash: 0x{}", hex::encode(hash_out));
             println!("  Save this salt for reveal: {}", salt_str);
-            let hash = client.commit_weights(wallet.hotkey()?, NetUid(netuid), hash_out).await?;
+            let hash = client
+                .commit_weights(wallet.hotkey()?, NetUid(netuid), hash_out)
+                .await?;
             println!("Weights committed. Tx: {}", hash);
             Ok(())
         }
-        WeightCommands::Reveal { netuid, weights, salt, version_key } => {
+        WeightCommands::Reveal {
+            netuid,
+            weights,
+            salt,
+            version_key,
+        } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
@@ -1118,12 +1522,31 @@ async fn handle_weights(
                     (b1 << 8) | b0
                 })
                 .collect();
-            println!("Revealing {} weights on SN{} (version_key={})", uids.len(), netuid, version_key);
-            let hash = client.reveal_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, &salt_u16, version_key).await?;
+            println!(
+                "Revealing {} weights on SN{} (version_key={})",
+                uids.len(),
+                netuid,
+                version_key
+            );
+            let hash = client
+                .reveal_weights(
+                    wallet.hotkey()?,
+                    NetUid(netuid),
+                    &uids,
+                    &wts,
+                    &salt_u16,
+                    version_key,
+                )
+                .await?;
             println!("Weights revealed. Tx: {}", hash);
             Ok(())
         }
-        WeightCommands::CommitReveal { netuid, weights, version_key, wait } => {
+        WeightCommands::CommitReveal {
+            netuid,
+            weights,
+            version_key,
+            wait,
+        } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
@@ -1132,13 +1555,19 @@ async fn handle_weights(
             // Pre-flight: check commit-reveal is enabled
             let hyperparams = client.get_subnet_hyperparams(NetUid(netuid)).await?;
             let (cr_enabled, cr_interval, tempo) = match &hyperparams {
-                Some(h) => (h.commit_reveal_weights_enabled, h.commit_reveal_weights_interval, h.tempo as u64),
+                Some(h) => (
+                    h.commit_reveal_weights_enabled,
+                    h.commit_reveal_weights_interval,
+                    h.tempo as u64,
+                ),
                 None => anyhow::bail!("Subnet SN{} not found or hyperparams unavailable", netuid),
             };
 
             if !cr_enabled {
                 eprintln!("Warning: SN{} does NOT have commit-reveal enabled. Using direct set_weights instead.", netuid);
-                let hash = client.set_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, version_key).await?;
+                let hash = client
+                    .set_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, version_key)
+                    .await?;
                 println!("Weights set (direct). Tx: {}", hash);
                 return Ok(());
             }
@@ -1158,11 +1587,16 @@ async fn handle_weights(
                 use blake2::digest::{Update, VariableOutput};
                 let mut hasher = blake2::Blake2bVar::new(32)
                     .map_err(|e| anyhow::anyhow!("blake2 init error: {:?}", e))?;
-                for u in &uids { hasher.update(&u.to_le_bytes()); }
-                for w in &wts { hasher.update(&w.to_le_bytes()); }
+                for u in &uids {
+                    hasher.update(&u.to_le_bytes());
+                }
+                for w in &wts {
+                    hasher.update(&w.to_le_bytes());
+                }
                 hasher.update(salt_str.as_bytes());
                 let mut hash_out = [0u8; 32];
-                hasher.finalize_variable(&mut hash_out)
+                hasher
+                    .finalize_variable(&mut hash_out)
                     .map_err(|e| anyhow::anyhow!("blake2 finalize error: {:?}", e))?;
                 hash_out
             };
@@ -1172,15 +1606,20 @@ async fn handle_weights(
             // Step 1: Commit
             println!("Committing {} weights on SN{}", uids.len(), netuid);
             println!("  Commit hash: 0x{}", hex::encode(commit_hash));
-            let commit_tx = client.commit_weights(wallet.hotkey()?, NetUid(netuid), commit_hash).await?;
+            let commit_tx = client
+                .commit_weights(wallet.hotkey()?, NetUid(netuid), commit_hash)
+                .await?;
             println!("  Committed. Tx: {}", commit_tx);
 
             // Step 2: Wait for reveal window
             // Reveal window opens after cr_interval tempos from the commit
             let reveal_after_blocks = cr_interval * tempo;
             let reveal_target = block_at_commit + reveal_after_blocks;
-            println!("\n  Waiting for reveal window (~{} blocks, ~{}m)...",
-                reveal_after_blocks, reveal_after_blocks * 12 / 60);
+            println!(
+                "\n  Waiting for reveal window (~{} blocks, ~{}m)...",
+                reveal_after_blocks,
+                reveal_after_blocks * 12 / 60
+            );
 
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_secs(12)).await;
@@ -1190,8 +1629,13 @@ async fn handle_weights(
                     break;
                 }
                 let remaining = reveal_target.saturating_sub(current_block);
-                eprint!("\r  Block {} — {} blocks remaining (~{}m {}s)   ",
-                    current_block, remaining, remaining * 12 / 60, (remaining * 12) % 60);
+                eprint!(
+                    "\r  Block {} — {} blocks remaining (~{}m {}s)   ",
+                    current_block,
+                    remaining,
+                    remaining * 12 / 60,
+                    (remaining * 12) % 60
+                );
             }
 
             // Step 3: Reveal
@@ -1205,13 +1649,25 @@ async fn handle_weights(
                 })
                 .collect();
             println!("\n  Revealing weights...");
-            let reveal_tx = client.reveal_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, &salt_u16, version_key).await?;
+            let reveal_tx = client
+                .reveal_weights(
+                    wallet.hotkey()?,
+                    NetUid(netuid),
+                    &uids,
+                    &wts,
+                    &salt_u16,
+                    version_key,
+                )
+                .await?;
             println!("  Revealed. Tx: {}", reveal_tx);
 
             if wait {
                 // Verify reveal was included
                 let final_block = client.get_block_number().await?;
-                println!("\n  Confirmed at block {}. Commit-reveal complete.", final_block);
+                println!(
+                    "\n  Confirmed at block {}. Commit-reveal complete.",
+                    final_block
+                );
                 print_json(&serde_json::json!({
                     "status": "complete",
                     "netuid": netuid,
@@ -1240,8 +1696,12 @@ async fn handle_root(
 ) -> Result<()> {
     match cmd {
         RootCommands::Register => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
-            println!("Registering on root network with hotkey {}", crate::utils::short_ss58(&hk));
+            let (pair, hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
+            println!(
+                "Registering on root network with hotkey {}",
+                crate::utils::short_ss58(&hk)
+            );
             let hash = client.root_register(&pair, &hk).await?;
             println!("Root registered. Tx: {}", hash);
             Ok(())
@@ -1252,7 +1712,9 @@ async fn handle_root(
             wallet.load_hotkey(hotkey_name)?;
             let (uids, wts) = parse_weight_pairs(&weights)?;
             println!("Setting {} root weights", uids.len());
-            let hash = client.set_weights(wallet.hotkey()?, NetUid::ROOT, &uids, &wts, 0).await?;
+            let hash = client
+                .set_weights(wallet.hotkey()?, NetUid::ROOT, &uids, &wts, 0)
+                .await?;
             println!("Root weights set. Tx: {}", hash);
             Ok(())
         }
@@ -1278,7 +1740,14 @@ async fn handle_delegate(
             } else if output == "csv" {
                 println!("hotkey,owner,take_pct,total_stake_rao,nominators");
                 for d in &delegates {
-                    println!("{},{},{:.4},{},{}", d.hotkey, d.owner, d.take * 100.0, d.total_stake.rao(), d.nominators.len());
+                    println!(
+                        "{},{},{:.4},{},{}",
+                        d.hotkey,
+                        d.owner,
+                        d.take * 100.0,
+                        d.total_stake.rao(),
+                        d.nominators.len()
+                    );
                 }
             } else {
                 println!("{} delegates", delegates.len());
@@ -1320,7 +1789,11 @@ async fn handle_delegate(
                         let mut sorted = d.nominators.clone();
                         sorted.sort_by(|a, b| b.1.rao().cmp(&a.1.rao()));
                         for (addr, stake) in sorted.iter().take(10) {
-                            println!("    {} — {}", crate::utils::short_ss58(addr), stake.display_tao());
+                            println!(
+                                "    {} — {}",
+                                crate::utils::short_ss58(addr),
+                                stake.display_tao()
+                            );
                         }
                     }
                 }
@@ -1329,26 +1802,64 @@ async fn handle_delegate(
             Ok(())
         }
         DelegateCommands::DecreaseTake { take, hotkey } => {
-            change_take(client, wallet_dir, wallet_name, hotkey_name, hotkey, password, take, false).await
+            change_take(
+                client,
+                wallet_dir,
+                wallet_name,
+                hotkey_name,
+                hotkey,
+                password,
+                take,
+                false,
+            )
+            .await
         }
         DelegateCommands::IncreaseTake { take, hotkey } => {
-            change_take(client, wallet_dir, wallet_name, hotkey_name, hotkey, password, take, true).await
+            change_take(
+                client,
+                wallet_dir,
+                wallet_name,
+                hotkey_name,
+                hotkey,
+                password,
+                take,
+                true,
+            )
+            .await
         }
     }
 }
 
-async fn change_take(client: &Client, wallet_dir: &str, wallet_name: &str, hotkey_name: &str,
-    hotkey: Option<String>, password: Option<&str>, take: f64, increase: bool) -> Result<()> {
+#[allow(clippy::too_many_arguments)]
+async fn change_take(
+    client: &Client,
+    wallet_dir: &str,
+    wallet_name: &str,
+    hotkey_name: &str,
+    hotkey: Option<String>,
+    password: Option<&str>,
+    take: f64,
+    increase: bool,
+) -> Result<()> {
     let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
     let take_u16 = (take / 100.0 * 65535.0).min(65535.0) as u16;
     let dir = if increase { "Increasing" } else { "Decreasing" };
-    println!("{} take to {:.2}% for {}", dir, take, crate::utils::short_ss58(&hk));
+    println!(
+        "{} take to {:.2}% for {}",
+        dir,
+        take,
+        crate::utils::short_ss58(&hk)
+    );
     let hash = if increase {
         client.increase_take(&pair, &hk, take_u16).await?
     } else {
         client.decrease_take(&pair, &hk, take_u16).await?
     };
-    println!("Take {}. Tx: {}", if increase { "increased" } else { "decreased" }, hash);
+    println!(
+        "Take {}. Tx: {}",
+        if increase { "increased" } else { "decreased" },
+        hash
+    );
     Ok(())
 }
 
@@ -1380,14 +1891,24 @@ async fn handle_identity(
             }
             Ok(())
         }
-        IdentityCommands::Set { name, url, github, description } => {
+        IdentityCommands::Set {
+            name,
+            url,
+            github,
+            description,
+        } => {
             println!("Note: Account-level identity uses the Registry pallet.");
             println!("Use 'agcli identity set-subnet' for subnet identity.");
             println!("Name: {}, URL: {:?}, GitHub: {:?}", name, url, github);
             let _ = description;
             Ok(())
         }
-        IdentityCommands::SetSubnet { netuid, name, github, url } => {
+        IdentityCommands::SetSubnet {
+            netuid,
+            name,
+            github,
+            url,
+        } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let identity = crate::types::chain_data::SubnetIdentity {
@@ -1400,7 +1921,9 @@ async fn handle_identity(
                 additional: String::new(),
             };
             println!("Setting subnet identity for SN{}: {}", netuid, name);
-            let hash = client.set_subnet_identity(wallet.coldkey()?, NetUid(netuid), &identity).await?;
+            let hash = client
+                .set_subnet_identity(wallet.coldkey()?, NetUid(netuid), &identity)
+                .await?;
             println!("Subnet identity set. Tx: {}", hash);
             Ok(())
         }
@@ -1424,20 +1947,33 @@ async fn handle_swap(
                 Some(hk) => hk,
                 None => {
                     wallet.load_hotkey("default")?;
-                    wallet.hotkey_ss58().map(|s| s.to_string())
+                    wallet
+                        .hotkey_ss58()
+                        .map(|s| s.to_string())
                         .ok_or_else(|| anyhow::anyhow!("Could not resolve current hotkey"))?
                 }
             };
-            println!("Swapping hotkey {} -> {}", crate::utils::short_ss58(&old_hotkey), crate::utils::short_ss58(&new_hotkey));
-            let hash = client.swap_hotkey(wallet.coldkey()?, &old_hotkey, &new_hotkey).await?;
+            println!(
+                "Swapping hotkey {} -> {}",
+                crate::utils::short_ss58(&old_hotkey),
+                crate::utils::short_ss58(&new_hotkey)
+            );
+            let hash = client
+                .swap_hotkey(wallet.coldkey()?, &old_hotkey, &new_hotkey)
+                .await?;
             println!("Hotkey swapped. Tx: {}", hash);
             Ok(())
         }
         SwapCommands::Coldkey { new_coldkey } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
-            println!("Scheduling coldkey swap to {}", crate::utils::short_ss58(&new_coldkey));
-            let hash = client.schedule_swap_coldkey(wallet.coldkey()?, &new_coldkey).await?;
+            println!(
+                "Scheduling coldkey swap to {}",
+                crate::utils::short_ss58(&new_coldkey)
+            );
+            let hash = client
+                .schedule_swap_coldkey(wallet.coldkey()?, &new_coldkey)
+                .await?;
             println!("Coldkey swap scheduled. Tx: {}", hash);
             Ok(())
         }
@@ -1457,11 +1993,20 @@ async fn handle_subscribe(
         SubscribeCommands::Blocks => {
             crate::events::subscribe_blocks(client.inner_client(), json).await
         }
-        SubscribeCommands::Events { filter, netuid, account } => {
-            let f = crate::events::EventFilter::from_str(&filter);
+        SubscribeCommands::Events {
+            filter,
+            netuid,
+            account,
+        } => {
+            let f: crate::events::EventFilter = filter.parse().unwrap();
             crate::events::subscribe_events_filtered(
-                client.inner_client(), f, json, netuid, account.as_deref(),
-            ).await
+                client.inner_client(),
+                f,
+                json,
+                netuid,
+                account.as_deref(),
+            )
+            .await
         }
     }
 }
@@ -1474,7 +2019,9 @@ async fn handle_config(cmd: ConfigCommands) -> Result<()> {
             let cfg = crate::config::Config::load();
             let s = toml::to_string_pretty(&cfg)?;
             if s.trim().is_empty() {
-                println!("No configuration set. Use 'agcli config set <key> <value>' to configure.");
+                println!(
+                    "No configuration set. Use 'agcli config set <key> <value>' to configure."
+                );
             } else {
                 println!("{}", s);
             }
@@ -1556,7 +2103,10 @@ async fn handle_multisig(
     password: Option<&str>,
 ) -> Result<()> {
     match cmd {
-        MultisigCommands::Address { signatories, threshold } => {
+        MultisigCommands::Address {
+            signatories,
+            threshold,
+        } => {
             let addrs: Vec<&str> = signatories.split(',').map(|s| s.trim()).collect();
             if addrs.len() < 2 {
                 anyhow::bail!("Need at least 2 signatories for a multisig. Provide comma-separated SS58 addresses.");
@@ -1567,10 +2117,13 @@ async fn handle_multisig(
             let mut hasher = blake2::Blake2bVar::new(32)
                 .map_err(|e| anyhow::anyhow!("blake2 error: {:?}", e))?;
             hasher.update(b"modlpy/teleport");
-            hasher.update(&(threshold as u16).to_le_bytes());
-            for id in &account_ids { hasher.update(id.as_ref()); }
+            hasher.update(&threshold.to_le_bytes());
+            for id in &account_ids {
+                hasher.update(id.as_ref());
+            }
             let mut hash = [0u8; 32];
-            hasher.finalize_variable(&mut hash)
+            hasher
+                .finalize_variable(&mut hash)
                 .map_err(|e| anyhow::anyhow!("blake2 finalize error: {:?}", e))?;
 
             let multisig_account = sp_core::crypto::AccountId32::from(hash);
@@ -1578,42 +2131,75 @@ async fn handle_multisig(
             println!("Multisig address: {}", ms_ss58);
             println!("  Threshold: {}/{}", threshold, addrs.len());
             println!("  Signatories:");
-            for addr in &addrs { println!("    {}", addr); }
+            for addr in &addrs {
+                println!("    {}", addr);
+            }
             Ok(())
         }
-        MultisigCommands::Submit { others, threshold, pallet, call, args } => {
+        MultisigCommands::Submit {
+            others,
+            threshold,
+            pallet,
+            call,
+            args,
+        } => {
             let client = Client::connect(ws_url).await?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let other_ids = parse_sorted_signatories(&others)?;
             let fields: Vec<subxt::dynamic::Value> = if let Some(ref args_json) = args {
-                let parsed: Vec<serde_json::Value> = serde_json::from_str(args_json)
-                    .map_err(|e| anyhow::anyhow!("Invalid JSON args '{}'. Expected a JSON array, e.g. '[1, \"0x...\"]'", e))?;
+                let parsed: Vec<serde_json::Value> =
+                    serde_json::from_str(args_json).map_err(|e| {
+                        anyhow::anyhow!(
+                            "Invalid JSON args '{}'. Expected a JSON array, e.g. '[1, \"0x...\"]'",
+                            e
+                        )
+                    })?;
                 parsed.iter().map(json_to_subxt_value).collect()
             } else {
                 vec![]
             };
-            println!("Submitting multisig call: {}.{} (threshold {}/{})",
-                pallet, call, threshold, other_ids.len() + 1);
-            let hash = client.submit_multisig_call(
-                wallet.coldkey()?, &other_ids, threshold, &pallet, &call, fields,
-            ).await?;
+            println!(
+                "Submitting multisig call: {}.{} (threshold {}/{})",
+                pallet,
+                call,
+                threshold,
+                other_ids.len() + 1
+            );
+            let hash = client
+                .submit_multisig_call(
+                    wallet.coldkey()?,
+                    &other_ids,
+                    threshold,
+                    &pallet,
+                    &call,
+                    fields,
+                )
+                .await?;
             println!("Multisig call submitted. Tx: {}", hash);
             Ok(())
         }
-        MultisigCommands::Approve { others, threshold, call_hash } => {
+        MultisigCommands::Approve {
+            others,
+            threshold,
+            call_hash,
+        } => {
             let client = Client::connect(ws_url).await?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let other_ids = parse_sorted_signatories(&others)?;
             let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);
-            let hash_bytes: [u8; 32] = hex::decode(hash_hex)?
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Call hash must be exactly 32 bytes (64 hex chars)"))?;
-            println!("Approving multisig call (threshold {}/{})", threshold, other_ids.len() + 1);
-            let tx_hash = client.approve_multisig(
-                wallet.coldkey()?, &other_ids, threshold, hash_bytes,
-            ).await?;
+            let hash_bytes: [u8; 32] = hex::decode(hash_hex)?.try_into().map_err(|_| {
+                anyhow::anyhow!("Call hash must be exactly 32 bytes (64 hex chars)")
+            })?;
+            println!(
+                "Approving multisig call (threshold {}/{})",
+                threshold,
+                other_ids.len() + 1
+            );
+            let tx_hash = client
+                .approve_multisig(wallet.coldkey()?, &other_ids, threshold, hash_bytes)
+                .await?;
             println!("Multisig approval submitted. Tx: {}", tx_hash);
             Ok(())
         }
@@ -1631,13 +2217,22 @@ async fn handle_serve(
     password: Option<&str>,
 ) -> Result<()> {
     match cmd {
-        ServeCommands::Axon { netuid, ip, port, protocol, version } => {
-            let (pair, _hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
+        ServeCommands::Axon {
+            netuid,
+            ip,
+            port,
+            protocol,
+            version,
+        } => {
+            let (pair, _hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             let ip_u128: u128 = {
                 let parts: Vec<u8> = ip.split('.').filter_map(|p| p.parse().ok()).collect();
                 if parts.len() == 4 {
-                    ((parts[0] as u128) << 24) | ((parts[1] as u128) << 16)
-                        | ((parts[2] as u128) << 8) | (parts[3] as u128)
+                    ((parts[0] as u128) << 24)
+                        | ((parts[1] as u128) << 16)
+                        | ((parts[2] as u128) << 8)
+                        | (parts[3] as u128)
                 } else {
                     anyhow::bail!("Invalid IPv4 address: {}", ip);
                 }
@@ -1650,7 +2245,10 @@ async fn handle_serve(
                 ip_type: 4,
                 protocol,
             };
-            println!("Serving axon on SN{}: {}:{} (proto={}, ver={})", netuid, ip, port, protocol, version);
+            println!(
+                "Serving axon on SN{}: {}:{} (proto={}, ver={})",
+                netuid, ip, port, protocol, version
+            );
             let hash = client.serve_axon(&pair, NetUid(netuid), &axon).await?;
             println!("Axon served. Tx: {}", hash);
             Ok(())
@@ -1670,18 +2268,40 @@ async fn handle_proxy(
 ) -> Result<()> {
     let adding = matches!(cmd, ProxyCommands::Add { .. });
     match cmd {
-        ProxyCommands::Add { delegate, proxy_type, delay } |
-        ProxyCommands::Remove { delegate, proxy_type, delay } => {
+        ProxyCommands::Add {
+            delegate,
+            proxy_type,
+            delay,
+        }
+        | ProxyCommands::Remove {
+            delegate,
+            proxy_type,
+            delay,
+        } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let verb = if adding { "Adding" } else { "Removing" };
-            println!("{} proxy: {} (type={}, delay={})", verb, crate::utils::short_ss58(&delegate), proxy_type, delay);
+            println!(
+                "{} proxy: {} (type={}, delay={})",
+                verb,
+                crate::utils::short_ss58(&delegate),
+                proxy_type,
+                delay
+            );
             let hash = if adding {
-                client.add_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?
+                client
+                    .add_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay)
+                    .await?
             } else {
-                client.remove_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?
+                client
+                    .remove_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay)
+                    .await?
             };
-            println!("Proxy {}. Tx: {}", if adding { "added" } else { "removed" }, hash);
+            println!(
+                "Proxy {}. Tx: {}",
+                if adding { "added" } else { "removed" },
+                hash
+            );
             Ok(())
         }
         ProxyCommands::List { address } => {
@@ -1693,7 +2313,10 @@ async fn handle_proxy(
                 }).collect();
                 print_json_ser(&json);
             } else if proxies.is_empty() {
-                println!("No proxy accounts found for {}", crate::utils::short_ss58(&addr));
+                println!(
+                    "No proxy accounts found for {}",
+                    crate::utils::short_ss58(&addr)
+                );
             } else {
                 println!("Proxy accounts for {}:", crate::utils::short_ss58(&addr));
                 let mut table = comfy_table::Table::new();
@@ -1726,18 +2349,34 @@ async fn handle_crowdloan(
     unlock_coldkey(&mut wallet, password)?;
     let pair = wallet.coldkey()?;
     let (action, hash) = match cmd {
-        CrowdloanCommands::Contribute { crowdloan_id, amount } => {
+        CrowdloanCommands::Contribute {
+            crowdloan_id,
+            amount,
+        } => {
             let bal = Balance::from_tao(amount);
-            println!("Contributing {} to crowdloan #{}", bal.display_tao(), crowdloan_id);
-            ("Contribution submitted", client.crowdloan_contribute(pair, crowdloan_id, bal).await?)
+            println!(
+                "Contributing {} to crowdloan #{}",
+                bal.display_tao(),
+                crowdloan_id
+            );
+            (
+                "Contribution submitted",
+                client.crowdloan_contribute(pair, crowdloan_id, bal).await?,
+            )
         }
         CrowdloanCommands::Withdraw { crowdloan_id } => {
             println!("Withdrawing from crowdloan #{}", crowdloan_id);
-            ("Withdrawal submitted", client.crowdloan_withdraw(pair, crowdloan_id).await?)
+            (
+                "Withdrawal submitted",
+                client.crowdloan_withdraw(pair, crowdloan_id).await?,
+            )
         }
         CrowdloanCommands::Finalize { crowdloan_id } => {
             println!("Finalizing crowdloan #{}", crowdloan_id);
-            ("Crowdloan finalized", client.crowdloan_finalize(pair, crowdloan_id).await?)
+            (
+                "Crowdloan finalized",
+                client.crowdloan_finalize(pair, crowdloan_id).await?,
+            )
         }
     };
     println!("{}. Tx: {}", action, hash);
@@ -1755,7 +2394,10 @@ fn generate_completions(shell: &str) {
         "fish" => Shell::Fish,
         "powershell" => Shell::PowerShell,
         _ => {
-            eprintln!("Unsupported shell: {}. Use: bash, zsh, fish, powershell", shell);
+            eprintln!(
+                "Unsupported shell: {}. Use: bash, zsh, fish, powershell",
+                shell
+            );
             return;
         }
     };
@@ -1764,7 +2406,8 @@ fn generate_completions(shell: &str) {
 
 /// Parse a comma-separated list of SS58 addresses into sorted AccountIds (for multisig).
 fn parse_sorted_signatories(csv: &str) -> Result<Vec<crate::AccountId>> {
-    let mut ids: Vec<crate::AccountId> = csv.split(',')
+    let mut ids: Vec<crate::AccountId> = csv
+        .split(',')
         .map(|s| Client::ss58_to_account_id_pub(s.trim()))
         .collect::<Result<_>>()?;
     ids.sort();
@@ -1784,7 +2427,8 @@ fn cfg_value_display(key: &str, cfg: &crate::config::Config) -> String {
         "batch" => cfg.batch.map(|v| v.to_string()).unwrap_or_default(),
         k if k.starts_with("spending_limit.") => {
             let netuid = k.strip_prefix("spending_limit.").unwrap();
-            cfg.spending_limits.as_ref()
+            cfg.spending_limits
+                .as_ref()
                 .and_then(|m| m.get(netuid))
                 .map(|v| format!("{} TAO", v))
                 .unwrap_or_default()
@@ -1797,18 +2441,16 @@ fn cfg_value_display(key: &str, cfg: &crate::config::Config) -> String {
 
 fn handle_explain(topic: Option<&str>) {
     match topic {
-        Some(t) => {
-            match crate::utils::explain::explain(t) {
-                Some(text) => println!("{}", text),
-                None => {
-                    eprintln!("Unknown topic '{}'. Available topics:\n", t);
-                    for (key, desc) in crate::utils::explain::list_topics() {
-                        eprintln!("  {:<16} {}", key, desc);
-                    }
-                    eprintln!("\nUsage: agcli explain <topic>");
+        Some(t) => match crate::utils::explain::explain(t) {
+            Some(text) => println!("{}", text),
+            None => {
+                eprintln!("Unknown topic '{}'. Available topics:\n", t);
+                for (key, desc) in crate::utils::explain::list_topics() {
+                    eprintln!("  {:<16} {}", key, desc);
                 }
+                eprintln!("\nUsage: agcli explain <topic>");
             }
-        }
+        },
         None => {
             println!("Available topics:\n");
             for (key, desc) in crate::utils::explain::list_topics() {
@@ -1824,7 +2466,12 @@ fn handle_explain(topic: Option<&str>) {
 async fn handle_update() -> Result<()> {
     println!("Updating agcli from GitHub...");
     let status = std::process::Command::new("cargo")
-        .args(["install", "--git", "https://github.com/unconst/agcli", "--force"])
+        .args([
+            "install",
+            "--git",
+            "https://github.com/unconst/agcli",
+            "--force",
+        ])
         .status();
     match status {
         Ok(s) if s.success() => {
@@ -1832,7 +2479,10 @@ async fn handle_update() -> Result<()> {
             Ok(())
         }
         Ok(s) => anyhow::bail!("Update failed with exit code: {}", s),
-        Err(e) => anyhow::bail!("Failed to run cargo install: {}. Make sure cargo is installed.", e),
+        Err(e) => anyhow::bail!(
+            "Failed to run cargo install: {}. Make sure cargo is installed.",
+            e
+        ),
     }
 }
 
@@ -1854,31 +2504,57 @@ async fn handle_batch(
         anyhow::bail!("Batch file is empty (no calls to submit).");
     }
 
-    eprintln!("Batch: {} calls, mode={}", calls.len(), if no_atomic { "batch (non-atomic)" } else { "batch_all (atomic)" });
+    eprintln!(
+        "Batch: {} calls, mode={}",
+        calls.len(),
+        if no_atomic {
+            "batch (non-atomic)"
+        } else {
+            "batch_all (atomic)"
+        }
+    );
 
     let mut encoded_calls: Vec<Vec<u8>> = Vec::with_capacity(calls.len());
     for (i, call_json) in calls.iter().enumerate() {
-        let pallet = call_json.get("pallet").and_then(|v| v.as_str())
+        let pallet = call_json
+            .get("pallet")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Call #{}: missing \"pallet\" field", i))?;
-        let call_name = call_json.get("call").and_then(|v| v.as_str())
+        let call_name = call_json
+            .get("call")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Call #{}: missing \"call\" field", i))?;
-        let args = call_json.get("args").and_then(|v| v.as_array())
+        let args = call_json
+            .get("args")
+            .and_then(|v| v.as_array())
             .ok_or_else(|| anyhow::anyhow!("Call #{}: missing \"args\" array", i))?;
 
-        let fields: Vec<subxt::dynamic::Value> = args.iter()
-            .map(json_to_subxt_value)
-            .collect();
+        let fields: Vec<subxt::dynamic::Value> = args.iter().map(json_to_subxt_value).collect();
 
         let tx = subxt::dynamic::tx(pallet, call_name, fields);
-        let encoded = client.inner_client().tx().call_data(&tx)
-            .map_err(|e| anyhow::anyhow!("Call #{} ({}.{}): encoding failed: {}", i, pallet, call_name, e))?;
-        eprintln!("  #{}: {}.{} ({} bytes)", i, pallet, call_name, encoded.len());
+        let encoded = client.inner_client().tx().call_data(&tx).map_err(|e| {
+            anyhow::anyhow!(
+                "Call #{} ({}.{}): encoding failed: {}",
+                i,
+                pallet,
+                call_name,
+                e
+            )
+        })?;
+        eprintln!(
+            "  #{}: {}.{} ({} bytes)",
+            i,
+            pallet,
+            call_name,
+            encoded.len()
+        );
         encoded_calls.push(encoded);
     }
 
     // Build Utility.batch_all or Utility.batch
     let batch_call_name = if no_atomic { "batch" } else { "batch_all" };
-    let call_values: Vec<subxt::dynamic::Value> = encoded_calls.iter()
+    let call_values: Vec<subxt::dynamic::Value> = encoded_calls
+        .iter()
         .map(|c| subxt::dynamic::Value::from_bytes(c.clone()))
         .collect();
 
@@ -1889,6 +2565,10 @@ async fn handle_batch(
     );
 
     let hash = client.sign_submit_dyn(&batch_tx, pair).await?;
-    print_tx_result(output, &hash, &format!("Batch ({} calls) submitted.", calls.len()));
+    print_tx_result(
+        output,
+        &hash,
+        &format!("Batch ({} calls) submitted.", calls.len()),
+    );
     Ok(())
 }

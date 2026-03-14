@@ -25,23 +25,30 @@ pub enum EventFilter {
     Subnet,
 }
 
-impl EventFilter {
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+impl std::str::FromStr for EventFilter {
+    type Err = std::convert::Infallible;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
             "staking" | "stake" => Self::Staking,
             "registration" | "register" | "reg" => Self::Registration,
             "transfer" | "transfers" => Self::Transfer,
             "weights" | "weight" => Self::Weights,
             "subnet" | "subnets" => Self::Subnet,
             _ => Self::All,
-        }
+        })
     }
+}
 
+impl EventFilter {
     fn matches_pallet(&self, pallet: &str) -> bool {
         match self {
             Self::All => true,
-            Self::Staking => pallet == "SubtensorModule"
-                && ["StakeAdded", "StakeRemoved", "StakeMoved"].iter().any(|_| true),
+            Self::Staking => {
+                pallet == "SubtensorModule"
+                    && ["StakeAdded", "StakeRemoved", "StakeMoved"]
+                        .iter()
+                        .any(|_| true)
+            }
             Self::Registration => pallet == "SubtensorModule",
             Self::Transfer => pallet == "Balances",
             Self::Weights => pallet == "SubtensorModule",
@@ -91,9 +98,16 @@ pub async fn subscribe_events_filtered(
 
     if !json_output {
         let mut desc = format!("filter: {:?}", filter);
-        if let Some(n) = netuid_filter { desc.push_str(&format!(", netuid={}", n)); }
-        if let Some(a) = account_filter { desc.push_str(&format!(", account={}", crate::utils::short_ss58(a))); }
-        println!("Subscribed to finalized blocks ({}). Ctrl+C to stop.\n", desc);
+        if let Some(n) = netuid_filter {
+            desc.push_str(&format!(", netuid={}", n));
+        }
+        if let Some(a) = account_filter {
+            desc.push_str(&format!(", account={}", crate::utils::short_ss58(a)));
+        }
+        println!(
+            "Subscribed to finalized blocks ({}). Ctrl+C to stop.\n",
+            desc
+        );
     }
 
     while let Some(block_result) = block_sub.next().await {
@@ -184,7 +198,10 @@ pub async fn subscribe_blocks(
                 })
             );
         } else {
-            println!("Block #{} hash={} extrinsics={}", number, hash, extrinsic_count);
+            println!(
+                "Block #{} hash={} extrinsics={}",
+                number, hash, extrinsic_count
+            );
         }
     }
     Ok(())

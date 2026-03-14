@@ -1,7 +1,7 @@
 //! Tests for CLI helper functions.
 //! Run with: cargo test --test helpers_test
 
-use agcli::cli::helpers::{parse_weight_pairs, parse_children};
+use agcli::cli::helpers::{parse_children, parse_weight_pairs};
 use agcli::utils::explain;
 
 #[test]
@@ -37,7 +37,10 @@ fn parse_children_basic() {
     let result = parse_children("1000:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY").unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].0, 1000);
-    assert_eq!(result[0].1, "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+    assert_eq!(
+        result[0].1,
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    );
 }
 
 #[test]
@@ -60,7 +63,11 @@ fn parse_weight_pairs_overflow_uid() {
     let result = parse_weight_pairs("70000:100");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
-    assert!(msg.contains("Invalid UID"), "Expected helpful UID error, got: {}", msg);
+    assert!(
+        msg.contains("Invalid UID"),
+        "Expected helpful UID error, got: {}",
+        msg
+    );
 }
 
 #[test]
@@ -69,7 +76,11 @@ fn parse_weight_pairs_overflow_weight() {
     let result = parse_weight_pairs("0:70000");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
-    assert!(msg.contains("Invalid weight"), "Expected helpful weight error, got: {}", msg);
+    assert!(
+        msg.contains("Invalid weight"),
+        "Expected helpful weight error, got: {}",
+        msg
+    );
 }
 
 #[test]
@@ -77,7 +88,11 @@ fn parse_children_bad_proportion() {
     let result = parse_children("abc:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
-    assert!(msg.contains("Invalid proportion"), "Expected helpful proportion error, got: {}", msg);
+    assert!(
+        msg.contains("Invalid proportion"),
+        "Expected helpful proportion error, got: {}",
+        msg
+    );
 }
 
 // ──── Explain tests ────
@@ -111,7 +126,11 @@ fn explain_unknown_topic() {
 #[test]
 fn explain_list_topics_not_empty() {
     let topics = explain::list_topics();
-    assert!(topics.len() >= 10, "Expected at least 10 topics, got {}", topics.len());
+    assert!(
+        topics.len() >= 10,
+        "Expected at least 10 topics, got {}",
+        topics.len()
+    );
     for (key, desc) in &topics {
         assert!(!key.is_empty());
         assert!(!desc.is_empty());
@@ -122,8 +141,15 @@ fn explain_list_topics_not_empty() {
 fn explain_content_has_substance() {
     // Each explanation should be non-trivial
     let text = explain::explain("tempo").unwrap();
-    assert!(text.len() > 100, "Explanation too short: {} chars", text.len());
-    assert!(text.contains("blocks"), "Tempo explanation should mention blocks");
+    assert!(
+        text.len() > 100,
+        "Explanation too short: {} chars",
+        text.len()
+    );
+    assert!(
+        text.contains("blocks"),
+        "Tempo explanation should mention blocks"
+    );
 }
 
 #[test]
@@ -143,21 +169,30 @@ fn json_to_subxt_value_number() {
     use agcli::cli::helpers::json_to_subxt_value;
     let val = json_to_subxt_value(&serde_json::json!(42));
     // Should produce a u128 value
-    assert_eq!(format!("{:?}", val), format!("{:?}", subxt::dynamic::Value::u128(42)));
+    assert_eq!(
+        format!("{:?}", val),
+        format!("{:?}", subxt::dynamic::Value::u128(42))
+    );
 }
 
 #[test]
 fn json_to_subxt_value_string() {
     use agcli::cli::helpers::json_to_subxt_value;
     let val = json_to_subxt_value(&serde_json::json!("hello"));
-    assert_eq!(format!("{:?}", val), format!("{:?}", subxt::dynamic::Value::string("hello".to_string())));
+    assert_eq!(
+        format!("{:?}", val),
+        format!("{:?}", subxt::dynamic::Value::string("hello".to_string()))
+    );
 }
 
 #[test]
 fn json_to_subxt_value_bool() {
     use agcli::cli::helpers::json_to_subxt_value;
     let val = json_to_subxt_value(&serde_json::json!(true));
-    assert_eq!(format!("{:?}", val), format!("{:?}", subxt::dynamic::Value::bool(true)));
+    assert_eq!(
+        format!("{:?}", val),
+        format!("{:?}", subxt::dynamic::Value::bool(true))
+    );
 }
 
 #[test]
@@ -181,7 +216,7 @@ fn json_to_subxt_value_array() {
 
 #[test]
 fn pretty_mode_flag_toggles() {
-    use agcli::cli::helpers::{set_pretty_mode, is_pretty_mode};
+    use agcli::cli::helpers::{is_pretty_mode, set_pretty_mode};
     set_pretty_mode(true);
     assert!(is_pretty_mode());
     set_pretty_mode(false);
@@ -192,7 +227,7 @@ fn pretty_mode_flag_toggles() {
 
 #[test]
 fn batch_mode_flag_sets_global() {
-    use agcli::cli::helpers::{set_batch_mode, is_batch_mode};
+    use agcli::cli::helpers::{is_batch_mode, set_batch_mode};
     set_batch_mode(true);
     assert!(is_batch_mode());
     set_batch_mode(false);
@@ -203,5 +238,9 @@ fn batch_mode_flag_sets_global() {
 fn spending_limit_no_config_passes() {
     // No config file → should pass for any amount
     let result = agcli::cli::helpers::check_spending_limit(97, 100.0);
-    assert!(result.is_ok(), "No config should always pass: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "No config should always pass: {:?}",
+        result.err()
+    );
 }

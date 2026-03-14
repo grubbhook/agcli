@@ -29,8 +29,9 @@ impl From<u16> for NetUid {
 }
 
 /// Well-known Bittensor networks.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum Network {
+    #[default]
     Finney,
     Test,
     Local,
@@ -51,12 +52,6 @@ impl Network {
     /// SS58 address prefix for this network.
     pub fn ss58_prefix(&self) -> u16 {
         42 // Bittensor uses prefix 42
-    }
-}
-
-impl Default for Network {
-    fn default() -> Self {
-        Network::Finney
     }
 }
 

@@ -10,7 +10,10 @@ const FINNEY: &str = "wss://entrypoint-finney.opentensor.ai:443";
 async fn test_connect_and_block_number() {
     let client = Client::connect(FINNEY).await.expect("connect");
     let block = client.get_block_number().await.expect("block number");
-    assert!(block > 1_000_000, "finney should be past block 1M, got {block}");
+    assert!(
+        block > 1_000_000,
+        "finney should be past block 1M, got {block}"
+    );
     println!("Current block: {block}");
 }
 
@@ -48,7 +51,13 @@ async fn test_get_all_subnets() {
     println!("Got {} subnets", subnets.len());
     assert!(!subnets.is_empty(), "should have subnets");
     for s in subnets.iter().take(5) {
-        println!("  {} n={} tempo={} owner={}", s.name, s.n, s.tempo, &s.owner[..8]);
+        println!(
+            "  {} n={} tempo={} owner={}",
+            s.name,
+            s.n,
+            s.tempo,
+            &s.owner[..8]
+        );
     }
 }
 
@@ -59,7 +68,13 @@ async fn test_get_neurons_lite() {
     println!("SN1 neurons: {}", neurons.len());
     assert!(!neurons.is_empty(), "SN1 should have neurons");
     let first = &neurons[0];
-    println!("  UID={} hotkey={} stake={} rank={:.4}", first.uid, &first.hotkey[..8], first.stake, first.rank);
+    println!(
+        "  UID={} hotkey={} stake={} rank={:.4}",
+        first.uid,
+        &first.hotkey[..8],
+        first.stake,
+        first.rank
+    );
 }
 
 #[tokio::test]
@@ -87,17 +102,25 @@ async fn test_get_all_dynamic_info() {
     println!("Got {} dynamic subnet infos", dynamic.len());
     assert!(!dynamic.is_empty(), "should have dynamic info");
     for d in dynamic.iter().take(5) {
-        println!("  SN{} \"{}\" price={:.6} tao_in={} alpha_in={} alpha_out={}",
-            d.netuid, d.name, d.price, d.tao_in, d.alpha_in, d.alpha_out);
+        println!(
+            "  SN{} \"{}\" price={:.6} tao_in={} alpha_in={} alpha_out={}",
+            d.netuid, d.name, d.price, d.tao_in, d.alpha_in, d.alpha_out
+        );
     }
 }
 
 #[tokio::test]
 async fn test_get_dynamic_info_single() {
     let client = Client::connect(FINNEY).await.expect("connect");
-    let dynamic = client.get_dynamic_info(NetUid(1)).await.expect("dynamic info");
+    let dynamic = client
+        .get_dynamic_info(NetUid(1))
+        .await
+        .expect("dynamic info");
     assert!(dynamic.is_some(), "SN1 should have dynamic info");
     let d = dynamic.unwrap();
-    println!("SN1: \"{}\" symbol={} price={:.6}", d.name, d.symbol, d.price);
+    println!(
+        "SN1: \"{}\" symbol={} price={:.6}",
+        d.name, d.symbol, d.price
+    );
     assert!(d.price > 0.0, "SN1 price should be positive");
 }

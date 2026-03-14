@@ -1,8 +1,8 @@
 //! View command handlers (portfolio, network, dynamic, neuron, validators, history, account, analytics).
 
-use crate::cli::ViewCommands;
-use crate::cli::helpers::*;
 use crate::chain::Client;
+use crate::cli::helpers::*;
+use crate::cli::ViewCommands;
 use crate::types::{Balance, NetUid};
 use anyhow::Result;
 
@@ -51,9 +51,7 @@ pub async fn handle_view(
         ViewCommands::SwapSim { netuid, tao, alpha } => {
             handle_swap_sim(client, netuid, tao, alpha, output).await
         }
-        ViewCommands::Nominations { hotkey } => {
-            handle_nominations(client, &hotkey, output).await
-        }
+        ViewCommands::Nominations { hotkey } => handle_nominations(client, &hotkey, output).await,
     }
 }
 
@@ -64,7 +62,15 @@ async fn handle_portfolio(client: &Client, addr: &str, output: &str) -> Result<(
     } else if output == "csv" {
         println!("netuid,subnet_name,hotkey,alpha_stake,tao_equiv_rao,price");
         for p in &portfolio.positions {
-            println!("{},{},{},{},{},{:.6}", p.netuid, p.subnet_name, p.hotkey_ss58, p.alpha_stake, p.tao_equivalent.rao(), p.price);
+            println!(
+                "{},{},{},{},{},{:.6}",
+                p.netuid,
+                p.subnet_name,
+                p.hotkey_ss58,
+                p.alpha_stake,
+                p.tao_equivalent.rao(),
+                p.price
+            );
         }
     } else {
         println!("Portfolio for {}", crate::utils::short_ss58(addr));
@@ -76,7 +82,14 @@ async fn handle_portfolio(client: &Client, addr: &str, output: &str) -> Result<(
         );
         if !portfolio.positions.is_empty() {
             let mut table = comfy_table::Table::new();
-            table.set_header(vec!["Subnet", "Name", "Hotkey", "Alpha", "TAO Equiv", "Price"]);
+            table.set_header(vec![
+                "Subnet",
+                "Name",
+                "Hotkey",
+                "Alpha",
+                "TAO Equiv",
+                "Price",
+            ]);
             for p in &portfolio.positions {
                 table.add_row(vec![
                     format!("SN{}", p.netuid),
@@ -134,13 +147,33 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
     } else if output == "csv" {
         println!("netuid,name,symbol,tempo,price,tao_in_rao,alpha_in,alpha_out,emission,volume");
         for d in &dynamic {
-            println!("{},{},{},{},{:.6},{},{},{},{},{}", d.netuid, d.name, d.symbol, d.tempo, d.price, d.tao_in.rao(), d.alpha_in.raw(), d.alpha_out.raw(), d.total_emission(), d.subnet_volume);
+            println!(
+                "{},{},{},{},{:.6},{},{},{},{},{}",
+                d.netuid,
+                d.name,
+                d.symbol,
+                d.tempo,
+                d.price,
+                d.tao_in.rao(),
+                d.alpha_in.raw(),
+                d.alpha_out.raw(),
+                d.total_emission(),
+                d.subnet_volume
+            );
         }
     } else {
         println!("Dynamic TAO — {} subnets", dynamic.len());
         let mut table = comfy_table::Table::new();
         table.set_header(vec![
-            "NetUID", "Name", "Symbol", "Price (τ/α)", "TAO In", "Alpha In", "Alpha Out", "Emission", "Tempo",
+            "NetUID",
+            "Name",
+            "Symbol",
+            "Price (τ/α)",
+            "TAO In",
+            "Alpha In",
+            "Alpha Out",
+            "Emission",
+            "Tempo",
         ]);
         for d in &dynamic {
             table.add_row(vec![
@@ -180,12 +213,16 @@ async fn handle_neuron(client: &Client, netuid: u16, uid: u16) -> Result<()> {
             println!("  Pruning Score:   {:.6}", n.pruning_score);
             println!("  Last Update:     {}", n.last_update);
             if let Some(axon) = &n.axon_info {
-                println!("  Axon:            {}:{} (v{}, proto {})",
-                    axon.ip, axon.port, axon.version, axon.protocol);
+                println!(
+                    "  Axon:            {}:{} (v{}, proto {})",
+                    axon.ip, axon.port, axon.version, axon.protocol
+                );
             }
             if let Some(prom) = &n.prometheus_info {
-                println!("  Prometheus:      {}:{} (v{})",
-                    prom.ip, prom.port, prom.version);
+                println!(
+                    "  Prometheus:      {}:{} (v{})",
+                    prom.ip, prom.port, prom.version
+                );
             }
         }
         None => println!("Neuron UID {} not found on SN{}", uid, netuid),
@@ -201,9 +238,7 @@ async fn handle_validators(
 ) -> Result<()> {
     if let Some(nuid) = netuid {
         let neurons = client.get_neurons_lite(NetUid(nuid)).await?;
-        let mut validators: Vec<_> = neurons.into_iter()
-            .filter(|n| n.validator_permit)
-            .collect();
+        let mut validators: Vec<_> = neurons.into_iter().filter(|n| n.validator_permit).collect();
         validators.sort_by(|a, b| b.stake.rao().cmp(&a.stake.rao()));
         validators.truncate(limit);
 
@@ -212,12 +247,33 @@ async fn handle_validators(
         } else if output == "csv" {
             println!("uid,hotkey,coldkey,stake_rao,trust,vtrust,dividends,emission");
             for v in &validators {
-                println!("{},{},{},{},{:.6},{:.6},{:.6},{:.0}", v.uid, v.hotkey, v.coldkey, v.stake.rao(), v.trust, v.validator_trust, v.dividends, v.emission);
+                println!(
+                    "{},{},{},{},{:.6},{:.6},{:.6},{:.0}",
+                    v.uid,
+                    v.hotkey,
+                    v.coldkey,
+                    v.stake.rao(),
+                    v.trust,
+                    v.validator_trust,
+                    v.dividends,
+                    v.emission
+                );
             }
         } else {
-            println!("Validators on SN{} ({} with permits)", nuid, validators.len());
+            println!(
+                "Validators on SN{} ({} with permits)",
+                nuid,
+                validators.len()
+            );
             let mut table = comfy_table::Table::new();
-            table.set_header(vec!["UID", "Hotkey", "Stake", "VTrust", "Dividends", "Emission"]);
+            table.set_header(vec![
+                "UID",
+                "Hotkey",
+                "Stake",
+                "VTrust",
+                "Dividends",
+                "Emission",
+            ]);
             for v in &validators {
                 table.add_row(vec![
                     format!("{}", v.uid),
@@ -241,12 +297,28 @@ async fn handle_validators(
         } else if output == "csv" {
             println!("hotkey,owner,take_pct,total_stake_rao,nominators,registrations");
             for d in &sorted {
-                println!("{},{},{:.2},{},{},{:?}", d.hotkey, d.owner, d.take * 100.0, d.total_stake.rao(), d.nominators.len(), d.registrations);
+                println!(
+                    "{},{},{:.2},{},{},{:?}",
+                    d.hotkey,
+                    d.owner,
+                    d.take * 100.0,
+                    d.total_stake.rao(),
+                    d.nominators.len(),
+                    d.registrations
+                );
             }
         } else {
             println!("Top {} validators by total stake", sorted.len());
             let mut table = comfy_table::Table::new();
-            table.set_header(vec!["#", "Hotkey", "Owner", "Take", "Total Stake", "Nominators", "Subnets"]);
+            table.set_header(vec![
+                "#",
+                "Hotkey",
+                "Owner",
+                "Take",
+                "Total Stake",
+                "Nominators",
+                "Subnets",
+            ]);
             for (i, d) in sorted.iter().enumerate() {
                 table.add_row(vec![
                     format!("{}", i + 1),
@@ -265,7 +337,10 @@ async fn handle_validators(
 }
 
 async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()> {
-    println!("Fetching transaction history for {}...", crate::utils::short_ss58(address));
+    println!(
+        "Fetching transaction history for {}...",
+        crate::utils::short_ss58(address)
+    );
     let url = "https://bittensor.api.subscan.io/api/v2/scan/extrinsics";
     let body = serde_json::json!({
         "address": address,
@@ -273,7 +348,8 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
         "page": 0,
     });
     let http = reqwest::Client::new();
-    let resp = http.post(url)
+    let resp = http
+        .post(url)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -292,13 +368,20 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
             } else if output == "csv" {
                 println!("block,hash,module,call,success,timestamp");
                 for tx in txs {
-                    println!("{},{},{},{},{},{}",
+                    println!(
+                        "{},{},{},{},{},{}",
                         tx.get("block_num").and_then(|v| v.as_u64()).unwrap_or(0),
-                        tx.get("extrinsic_hash").and_then(|v| v.as_str()).unwrap_or(""),
+                        tx.get("extrinsic_hash")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(""),
                         tx.get("call_module").and_then(|v| v.as_str()).unwrap_or(""),
-                        tx.get("call_module_function").and_then(|v| v.as_str()).unwrap_or(""),
+                        tx.get("call_module_function")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(""),
                         tx.get("success").and_then(|v| v.as_bool()).unwrap_or(false),
-                        tx.get("block_timestamp").and_then(|v| v.as_u64()).unwrap_or(0),
+                        tx.get("block_timestamp")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
                     );
                 }
             } else {
@@ -307,10 +390,19 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
                 table.set_header(vec!["Block", "Module", "Call", "Success", "Hash"]);
                 for tx in txs {
                     let block = tx.get("block_num").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let module = tx.get("call_module").and_then(|v| v.as_str()).unwrap_or("?");
-                    let call = tx.get("call_module_function").and_then(|v| v.as_str()).unwrap_or("?");
+                    let module = tx
+                        .get("call_module")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let call = tx
+                        .get("call_module_function")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
                     let success = tx.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
-                    let hash = tx.get("extrinsic_hash").and_then(|v| v.as_str()).unwrap_or("?");
+                    let hash = tx
+                        .get("extrinsic_hash")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
                     let hash_short = if hash.len() > 18 { &hash[..18] } else { hash };
                     table.add_row(vec![
                         format!("{}", block),
@@ -324,7 +416,10 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
             }
         }
         _ => {
-            println!("No transactions found for {}", crate::utils::short_ss58(address));
+            println!(
+                "No transactions found for {}",
+                crate::utils::short_ss58(address)
+            );
             println!("Note: Subscan API may have rate limits or the address may have no activity.");
         }
     }
@@ -347,17 +442,20 @@ async fn handle_account_explorer(client: &Client, address: &str, output: &str) -
 
     if output == "json" {
         let total_staked: u64 = stakes.iter().map(|s| s.stake.rao()).sum();
-        let positions: Vec<serde_json::Value> = stakes.iter().map(|s| {
-            let di = dynamic_map.get(&s.netuid.0);
-            serde_json::json!({
-                "netuid": s.netuid.0,
-                "hotkey": s.hotkey,
-                "stake_rao": s.stake.rao(),
-                "alpha_raw": s.alpha_stake.raw(),
-                "subnet_name": di.map(|d| d.name.clone()).unwrap_or_default(),
-                "price": di.map(|d| d.price).unwrap_or(0.0),
+        let positions: Vec<serde_json::Value> = stakes
+            .iter()
+            .map(|s| {
+                let di = dynamic_map.get(&s.netuid.0);
+                serde_json::json!({
+                    "netuid": s.netuid.0,
+                    "hotkey": s.hotkey,
+                    "stake_rao": s.stake.rao(),
+                    "alpha_raw": s.alpha_stake.raw(),
+                    "subnet_name": di.map(|d| d.name.clone()).unwrap_or_default(),
+                    "price": di.map(|d| d.price).unwrap_or(0.0),
+                })
             })
-        }).collect();
+            .collect();
         print_json(&serde_json::json!({
             "address": address,
             "balance_rao": balance.rao(),
@@ -380,10 +478,18 @@ async fn handle_account_explorer(client: &Client, address: &str, output: &str) -
 
     if let Some(id) = &identity {
         println!("\n  Identity:");
-        if !id.name.is_empty() { println!("    Name:    {}", id.name); }
-        if !id.url.is_empty() { println!("    URL:     {}", id.url); }
-        if !id.discord.is_empty() { println!("    Discord: {}", id.discord); }
-        if !id.github.is_empty() { println!("    GitHub:  {}", id.github); }
+        if !id.name.is_empty() {
+            println!("    Name:    {}", id.name);
+        }
+        if !id.url.is_empty() {
+            println!("    URL:     {}", id.url);
+        }
+        if !id.discord.is_empty() {
+            println!("    Discord: {}", id.discord);
+        }
+        if !id.github.is_empty() {
+            println!("    GitHub:  {}", id.github);
+        }
     }
 
     if let Some(d) = &delegate {
@@ -397,12 +503,20 @@ async fn handle_account_explorer(client: &Client, address: &str, output: &str) -
     if !stakes.is_empty() {
         println!("\n  Stake Positions ({}):", stakes.len());
         let mut table = comfy_table::Table::new();
-        table.set_header(vec!["Subnet", "Name", "Hotkey", "Stake (τ)", "Alpha", "Price"]);
+        table.set_header(vec![
+            "Subnet",
+            "Name",
+            "Hotkey",
+            "Stake (τ)",
+            "Alpha",
+            "Price",
+        ]);
         for s in &stakes {
             let di = dynamic_map.get(&s.netuid.0);
             table.add_row(vec![
                 format!("SN{}", s.netuid.0),
-                di.map(|d| d.name.clone()).unwrap_or_else(|| "?".to_string()),
+                di.map(|d| d.name.clone())
+                    .unwrap_or_else(|| "?".to_string()),
                 crate::utils::short_ss58(&s.hotkey),
                 s.stake.display_tao(),
                 format!("{}", s.alpha_stake),
@@ -425,7 +539,9 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     let hyperparams = client.get_subnet_hyperparams(nuid).await.ok().flatten();
     let subnet_identity = client.get_subnet_identity(nuid).await.ok().flatten();
 
-    let name = dynamic.as_ref().map(|d| d.name.clone())
+    let name = dynamic
+        .as_ref()
+        .map(|d| d.name.clone())
         .or_else(|| subnet_identity.as_ref().map(|i| i.subnet_name.clone()))
         .or_else(|| info.as_ref().map(|i| i.name.clone()))
         .unwrap_or_else(|| format!("SN{}", netuid));
@@ -436,16 +552,37 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
 
     let total_stake: f64 = neurons.iter().map(|n| n.stake.tao()).sum();
     let total_emission: f64 = neurons.iter().map(|n| n.emission).sum();
-    let avg_trust: f64 = if n > 0 { neurons.iter().map(|n| n.trust).sum::<f64>() / n as f64 } else { 0.0 };
-    let avg_incentive: f64 = if !miners.is_empty() { miners.iter().map(|n| n.incentive).sum::<f64>() / miners.len() as f64 } else { 0.0 };
-    let avg_dividends: f64 = if !validators.is_empty() { validators.iter().map(|n| n.dividends).sum::<f64>() / validators.len() as f64 } else { 0.0 };
+    let avg_trust: f64 = if n > 0 {
+        neurons.iter().map(|n| n.trust).sum::<f64>() / n as f64
+    } else {
+        0.0
+    };
+    let avg_incentive: f64 = if !miners.is_empty() {
+        miners.iter().map(|n| n.incentive).sum::<f64>() / miners.len() as f64
+    } else {
+        0.0
+    };
+    let avg_dividends: f64 = if !validators.is_empty() {
+        validators.iter().map(|n| n.dividends).sum::<f64>() / validators.len() as f64
+    } else {
+        0.0
+    };
 
     let mut top_miners = miners.clone();
-    top_miners.sort_by(|a, b| b.incentive.partial_cmp(&a.incentive).unwrap_or(std::cmp::Ordering::Equal));
+    top_miners.sort_by(|a, b| {
+        b.incentive
+            .partial_cmp(&a.incentive)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     let mut top_vals = validators.clone();
-    top_vals.sort_by(|a, b| b.dividends.partial_cmp(&a.dividends).unwrap_or(std::cmp::Ordering::Equal));
+    top_vals.sort_by(|a, b| {
+        b.dividends
+            .partial_cmp(&a.dividends)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
-    let unique_coldkeys: std::collections::HashSet<&String> = neurons.iter().map(|n| &n.coldkey).collect();
+    let unique_coldkeys: std::collections::HashSet<&String> =
+        neurons.iter().map(|n| &n.coldkey).collect();
 
     if output == "json" {
         print_json(&serde_json::json!({
@@ -469,19 +606,48 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     println!("=== Subnet Analytics: SN{} ({}) ===\n", netuid, name);
 
     if let Some(si) = &subnet_identity {
-        if !si.description.is_empty() { println!("  {}\n", si.description); }
-        if !si.github_repo.is_empty() { println!("  GitHub: {}", si.github_repo); }
-        if !si.discord.is_empty() { println!("  Discord: {}", si.discord); }
+        if !si.description.is_empty() {
+            println!("  {}\n", si.description);
+        }
+        if !si.github_repo.is_empty() {
+            println!("  GitHub: {}", si.github_repo);
+        }
+        if !si.discord.is_empty() {
+            println!("  Discord: {}", si.discord);
+        }
         println!();
     }
 
     println!("  Neurons:         {}", n);
-    println!("  Validators:      {} ({:.0}%)", validators.len(), if n > 0 { validators.len() as f64 / n as f64 * 100.0 } else { 0.0 });
-    println!("  Miners:          {} ({:.0}%)", miners.len(), if n > 0 { miners.len() as f64 / n as f64 * 100.0 } else { 0.0 });
+    println!(
+        "  Validators:      {} ({:.0}%)",
+        validators.len(),
+        if n > 0 {
+            validators.len() as f64 / n as f64 * 100.0
+        } else {
+            0.0
+        }
+    );
+    println!(
+        "  Miners:          {} ({:.0}%)",
+        miners.len(),
+        if n > 0 {
+            miners.len() as f64 / n as f64 * 100.0
+        } else {
+            0.0
+        }
+    );
     println!("  Unique owners:   {}", unique_coldkeys.len());
     if let Some(ref i) = info {
         println!("  Max neurons:     {}", i.max_n);
-        println!("  Capacity:        {:.0}%", if i.max_n > 0 { n as f64 / i.max_n as f64 * 100.0 } else { 0.0 });
+        println!(
+            "  Capacity:        {:.0}%",
+            if i.max_n > 0 {
+                n as f64 / i.max_n as f64 * 100.0
+            } else {
+                0.0
+            }
+        );
     }
 
     println!("\n  Economics:");
@@ -494,12 +660,22 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     if let Some(ref d) = dynamic {
         println!("    Price:               {:.6} τ/α", d.price);
         println!("    TAO in pool:         {}", d.tao_in.display_tao());
-        println!("    Subnet volume:       {:.4} τ", d.subnet_volume as f64 / 1e9);
+        println!(
+            "    Subnet volume:       {:.4} τ",
+            d.subnet_volume as f64 / 1e9
+        );
     }
 
     if let Some(ref h) = hyperparams {
         println!("    Tempo:               {} blocks", h.tempo);
-        println!("    Commit-reveal:       {}", if h.commit_reveal_weights_enabled { "enabled" } else { "disabled" });
+        println!(
+            "    Commit-reveal:       {}",
+            if h.commit_reveal_weights_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
     }
 
     if !top_miners.is_empty() {
@@ -521,7 +697,14 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     if !top_vals.is_empty() {
         println!("\n  Top Validators (by dividends):");
         let mut table = comfy_table::Table::new();
-        table.set_header(vec!["UID", "Hotkey", "Stake", "VTrust", "Dividends", "Emission"]);
+        table.set_header(vec![
+            "UID",
+            "Hotkey",
+            "Stake",
+            "VTrust",
+            "Dividends",
+            "Emission",
+        ]);
         for v in top_vals.iter().take(5) {
             table.add_row(vec![
                 format!("{}", v.uid),
@@ -564,10 +747,18 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
         let tao_in = di.map(|d| d.tao_in.tao()).unwrap_or(0.0);
         let name = di.map(|d| d.name.clone()).unwrap_or_default();
 
-        let share = if tao_in > 0.0 { staked_tao / tao_in } else { 0.0 };
+        let share = if tao_in > 0.0 {
+            staked_tao / tao_in
+        } else {
+            0.0
+        };
         let emission_per_block_tao = subnet_emission as f64 / 1e9;
         let daily_emission = emission_per_block_tao * 7200.0 * share;
-        let apy = if staked_tao > 0.0 { daily_emission / staked_tao * 365.0 * 100.0 } else { 0.0 };
+        let apy = if staked_tao > 0.0 {
+            daily_emission / staked_tao * 365.0 * 100.0
+        } else {
+            0.0
+        };
 
         positions.push(PositionAnalytics {
             netuid: s.netuid.0,
@@ -579,21 +770,37 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
         });
     }
 
-    positions.sort_by(|a, b| b.estimated_apy.partial_cmp(&a.estimated_apy).unwrap_or(std::cmp::Ordering::Equal));
+    positions.sort_by(|a, b| {
+        b.estimated_apy
+            .partial_cmp(&a.estimated_apy)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let total_staked: f64 = positions.iter().map(|p| p.staked_tao).sum();
-    let total_daily: f64 = positions.iter().map(|p| p.estimated_daily_emission_tao).sum();
-    let weighted_apy = if total_staked > 0.0 { total_daily / total_staked * 365.0 * 100.0 } else { 0.0 };
+    let total_daily: f64 = positions
+        .iter()
+        .map(|p| p.estimated_daily_emission_tao)
+        .sum();
+    let weighted_apy = if total_staked > 0.0 {
+        total_daily / total_staked * 365.0 * 100.0
+    } else {
+        0.0
+    };
 
     if output == "json" {
-        let pos_json: Vec<serde_json::Value> = positions.iter().map(|p| serde_json::json!({
-            "netuid": p.netuid,
-            "name": p.name,
-            "staked_tao": p.staked_tao,
-            "price": p.price,
-            "estimated_daily_tao": p.estimated_daily_emission_tao,
-            "estimated_apy_pct": p.estimated_apy,
-        })).collect();
+        let pos_json: Vec<serde_json::Value> = positions
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "netuid": p.netuid,
+                    "name": p.name,
+                    "staked_tao": p.staked_tao,
+                    "price": p.price,
+                    "estimated_daily_tao": p.estimated_daily_emission_tao,
+                    "estimated_apy_pct": p.estimated_apy,
+                })
+            })
+            .collect();
         print_json(&serde_json::json!({
             "address": address,
             "total_staked_tao": total_staked,
@@ -605,7 +812,10 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
         return Ok(());
     }
 
-    println!("=== Staking Analytics for {} ===\n", crate::utils::short_ss58(address));
+    println!(
+        "=== Staking Analytics for {} ===\n",
+        crate::utils::short_ss58(address)
+    );
     println!("  Total staked:       {:.4} τ", total_staked);
     println!("  Est. daily yield:   {:.6} τ", total_daily);
     println!("  Est. monthly yield: {:.4} τ", total_daily * 30.0);
@@ -616,7 +826,14 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
     if !positions.is_empty() {
         println!("\n  Position Breakdown:");
         let mut table = comfy_table::Table::new();
-        table.set_header(vec!["Subnet", "Name", "Staked (τ)", "Price", "Daily (τ)", "APY"]);
+        table.set_header(vec![
+            "Subnet",
+            "Name",
+            "Staked (τ)",
+            "Price",
+            "Daily (τ)",
+            "APY",
+        ]);
         for p in &positions {
             table.add_row(vec![
                 format!("SN{}", p.netuid),
@@ -631,12 +848,20 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
     }
 
     println!("\n  Note: APY estimates are based on current emission rates and pool sizes.");
-    println!("  Actual returns depend on validator performance, weight setting, and network changes.");
+    println!(
+        "  Actual returns depend on validator performance, weight setting, and network changes."
+    );
 
     Ok(())
 }
 
-async fn handle_swap_sim(client: &Client, netuid: u16, tao: Option<f64>, alpha: Option<f64>, output: &str) -> Result<()> {
+async fn handle_swap_sim(
+    client: &Client,
+    netuid: u16,
+    tao: Option<f64>,
+    alpha: Option<f64>,
+    output: &str,
+) -> Result<()> {
     use crate::types::NetUid;
     let price_raw = client.current_alpha_price(NetUid(netuid)).await?;
     let price = price_raw as f64 / 1e9;
@@ -644,18 +869,42 @@ async fn handle_swap_sim(client: &Client, netuid: u16, tao: Option<f64>, alpha: 
     // Determine direction and fetch simulation
     let sim = match (tao, alpha) {
         (Some(tao_amt), _) => {
-            let (out, tf, af) = client.sim_swap_tao_for_alpha(NetUid(netuid), (tao_amt * 1e9) as u64).await?;
+            let (out, tf, af) = client
+                .sim_swap_tao_for_alpha(NetUid(netuid), (tao_amt * 1e9) as u64)
+                .await?;
             let out_f = out as f64 / 1e9;
-            Some(("tao_to_alpha", "TAO → Alpha", tao_amt, "τ", out_f, "α",
-                  tf as f64 / 1e9, af as f64 / 1e9,
-                  if out_f > 0.0 { tao_amt / out_f } else { 0.0 }))
+            Some((
+                "tao_to_alpha",
+                "TAO → Alpha",
+                tao_amt,
+                "τ",
+                out_f,
+                "α",
+                tf as f64 / 1e9,
+                af as f64 / 1e9,
+                if out_f > 0.0 { tao_amt / out_f } else { 0.0 },
+            ))
         }
         (_, Some(alpha_amt)) => {
-            let (out, tf, af) = client.sim_swap_alpha_for_tao(NetUid(netuid), (alpha_amt * 1e9) as u64).await?;
+            let (out, tf, af) = client
+                .sim_swap_alpha_for_tao(NetUid(netuid), (alpha_amt * 1e9) as u64)
+                .await?;
             let out_f = out as f64 / 1e9;
-            Some(("alpha_to_tao", "Alpha → TAO", alpha_amt, "α", out_f, "τ",
-                  tf as f64 / 1e9, af as f64 / 1e9,
-                  if alpha_amt > 0.0 { out_f / alpha_amt } else { 0.0 }))
+            Some((
+                "alpha_to_tao",
+                "Alpha → TAO",
+                alpha_amt,
+                "α",
+                out_f,
+                "τ",
+                tf as f64 / 1e9,
+                af as f64 / 1e9,
+                if alpha_amt > 0.0 {
+                    out_f / alpha_amt
+                } else {
+                    0.0
+                },
+            ))
         }
         _ => None,
     };
@@ -670,7 +919,11 @@ async fn handle_swap_sim(client: &Client, netuid: u16, tao: Option<f64>, alpha: 
                     "effective_price": eff_price, "current_price": price,
                 }));
             } else {
-                let slippage = if price > 0.0 { ((eff_price - price) / price).abs() * 100.0 } else { 0.0 };
+                let slippage = if price > 0.0 {
+                    ((eff_price - price) / price).abs() * 100.0
+                } else {
+                    0.0
+                };
                 println!("Swap Simulation — SN{}", netuid);
                 println!("  Direction:       {}", dir_label);
                 println!("  In:              {:.4} {}", amt_in, sym_in);
@@ -687,7 +940,9 @@ async fn handle_swap_sim(client: &Client, netuid: u16, tao: Option<f64>, alpha: 
                 print_json(&serde_json::json!({"netuid": netuid, "current_price": price}));
             } else {
                 println!("SN{} current alpha price: {:.6} τ/α", netuid, price);
-                println!("Use --tao <amount> to simulate TAO→Alpha, or --alpha <amount> for Alpha→TAO");
+                println!(
+                    "Use --tao <amount> to simulate TAO→Alpha, or --alpha <amount> for Alpha→TAO"
+                );
             }
         }
     }
@@ -702,11 +957,17 @@ async fn handle_nominations(client: &Client, hotkey: &str, output: &str) -> Resu
     }
 
     if delegates.is_empty() {
-        println!("No delegation info found for {}", crate::utils::short_ss58(hotkey));
+        println!(
+            "No delegation info found for {}",
+            crate::utils::short_ss58(hotkey)
+        );
         return Ok(());
     }
 
-    println!("Nominations for hotkey {}", crate::utils::short_ss58(hotkey));
+    println!(
+        "Nominations for hotkey {}",
+        crate::utils::short_ss58(hotkey)
+    );
     for d in &delegates {
         println!("\n  Delegate: {}", crate::utils::short_ss58(&d.hotkey));
         println!("    Owner:       {}", crate::utils::short_ss58(&d.owner));
@@ -718,7 +979,11 @@ async fn handle_nominations(client: &Client, hotkey: &str, output: &str) -> Resu
             sorted.sort_by(|a, b| b.1.rao().cmp(&a.1.rao()));
             println!("    Top nominators:");
             for (addr, stake) in sorted.iter().take(10) {
-                println!("      {} — {}", crate::utils::short_ss58(addr), stake.display_tao());
+                println!(
+                    "      {} — {}",
+                    crate::utils::short_ss58(addr),
+                    stake.display_tao()
+                );
             }
         }
     }

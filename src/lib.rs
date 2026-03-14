@@ -33,12 +33,7 @@ pub mod wallet;
 pub mod cli;
 
 /// Generated chain API from subtensor runtime metadata (build.rs).
-#[allow(
-    dead_code,
-    unused_imports,
-    non_camel_case_types,
-    clippy::all
-)]
+#[allow(dead_code, unused_imports, non_camel_case_types, clippy::all)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/metadata.rs"));
 }

@@ -2,8 +2,8 @@
 //! Most queries now go through subxt runtime APIs (see chain/mod.rs).
 //! These remain for raw storage key access if needed.
 
-use anyhow::Result;
 use super::connection::rpc_call;
+use anyhow::Result;
 
 /// Query a raw storage key.
 pub async fn get_storage(rpc_url: &str, storage_key: &str) -> Result<Option<String>> {

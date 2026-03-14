@@ -6,9 +6,7 @@ use clap::Parser;
 /// Verify that --yes flag is parsed globally.
 #[test]
 fn parse_global_yes_flag() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--yes", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--yes", "balance"]);
     assert!(cli.is_ok(), "should parse --yes flag: {:?}", cli.err());
     let cli = cli.unwrap();
     assert!(cli.yes);
@@ -17,9 +15,7 @@ fn parse_global_yes_flag() {
 /// Verify -y short form works.
 #[test]
 fn parse_global_y_short() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "-y", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "-y", "balance"]);
     assert!(cli.is_ok());
     assert!(cli.unwrap().yes);
 }
@@ -27,9 +23,7 @@ fn parse_global_y_short() {
 /// Verify --password is parsed globally.
 #[test]
 fn parse_global_password() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--password", "mysecret", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--password", "mysecret", "balance"]);
     assert!(cli.is_ok());
     assert_eq!(cli.unwrap().password, Some("mysecret".to_string()));
 }
@@ -38,7 +32,13 @@ fn parse_global_password() {
 #[test]
 fn parse_wallet_create_with_password() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "wallet", "create", "--name", "test", "--password", "abc123",
+        "agcli",
+        "wallet",
+        "create",
+        "--name",
+        "test",
+        "--password",
+        "abc123",
     ]);
     assert!(cli.is_ok());
 }
@@ -58,8 +58,16 @@ fn parse_wallet_import_non_interactive() {
 #[test]
 fn parse_stake_wizard_non_interactive() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--yes", "--password", "pass",
-        "stake", "wizard", "--netuid", "1", "--amount", "0.5",
+        "agcli",
+        "--yes",
+        "--password",
+        "pass",
+        "stake",
+        "wizard",
+        "--netuid",
+        "1",
+        "--amount",
+        "0.5",
     ]);
     assert!(cli.is_ok());
     let cli = cli.unwrap();
@@ -78,9 +86,7 @@ fn default_network_is_finney() {
 /// Verify --output json is accepted.
 #[test]
 fn parse_output_json() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--output", "json", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "balance"]);
     assert!(cli.is_ok());
     assert_eq!(cli.unwrap().output, "json");
 }
@@ -88,9 +94,7 @@ fn parse_output_json() {
 /// Verify --output csv is accepted.
 #[test]
 fn parse_output_csv() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--output", "csv", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "csv", "balance"]);
     assert!(cli.is_ok());
     assert_eq!(cli.unwrap().output, "csv");
 }
@@ -98,18 +102,14 @@ fn parse_output_csv() {
 /// Invalid output format is rejected.
 #[test]
 fn parse_output_invalid_rejected() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--output", "xml", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "xml", "balance"]);
     assert!(cli.is_err());
 }
 
 /// Verify all stake subcommands parse.
 #[test]
 fn parse_stake_add() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "stake", "add", "1.5", "--netuid", "1",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "stake", "add", "1.5", "--netuid", "1"]);
     assert!(cli.is_ok(), "stake add should parse: {:?}", cli.err());
 }
 
@@ -117,7 +117,10 @@ fn parse_stake_add() {
 #[test]
 fn parse_transfer() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "transfer", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1.0",
+        "agcli",
+        "transfer",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "1.0",
     ]);
     assert!(cli.is_ok());
 }
@@ -198,11 +201,13 @@ fn parse_proxy_list() {
 /// Verify endpoint override works.
 #[test]
 fn parse_endpoint_override() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--endpoint", "ws://127.0.0.1:9944", "balance",
-    ]);
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "--endpoint", "ws://127.0.0.1:9944", "balance"]);
     assert!(cli.is_ok());
-    assert_eq!(cli.unwrap().endpoint, Some("ws://127.0.0.1:9944".to_string()));
+    assert_eq!(
+        cli.unwrap().endpoint,
+        Some("ws://127.0.0.1:9944".to_string())
+    );
 }
 
 /// Verify live flag parses with a value.
@@ -211,9 +216,7 @@ fn parse_live_flag() {
     // --live requires a value or no value; with Option<Option<u64>>,
     // the bare --live may conflict with subcommand parsing.
     // Test with explicit value:
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--live", "5", "subnet", "metagraph", "1",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--live", "5", "subnet", "metagraph", "1"]);
     assert!(cli.is_ok(), "should parse --live 5: {:?}", cli.err());
 }
 
@@ -223,26 +226,45 @@ fn parse_live_flag() {
 #[test]
 fn parse_weights_commit_reveal() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "weights", "commit-reveal", "--netuid", "97", "0:100,1:200", "--wait",
+        "agcli",
+        "weights",
+        "commit-reveal",
+        "--netuid",
+        "97",
+        "0:100,1:200",
+        "--wait",
     ]);
-    assert!(cli.is_ok(), "should parse weights commit-reveal: {:?}", cli.err());
+    assert!(
+        cli.is_ok(),
+        "should parse weights commit-reveal: {:?}",
+        cli.err()
+    );
 }
 
 /// Verify weights set --dry-run parses.
 #[test]
 fn parse_weights_set_dry_run() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "weights", "set", "--netuid", "1", "0:100,1:200", "--dry-run",
+        "agcli",
+        "weights",
+        "set",
+        "--netuid",
+        "1",
+        "0:100,1:200",
+        "--dry-run",
     ]);
-    assert!(cli.is_ok(), "should parse weights set --dry-run: {:?}", cli.err());
+    assert!(
+        cli.is_ok(),
+        "should parse weights set --dry-run: {:?}",
+        cli.err()
+    );
 }
 
 /// Verify subnet monitor parses with --json flag.
 #[test]
 fn parse_subnet_monitor() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subnet", "monitor", "--netuid", "97", "--json",
-    ]);
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "subnet", "monitor", "--netuid", "97", "--json"]);
     assert!(cli.is_ok(), "should parse subnet monitor: {:?}", cli.err());
 }
 
@@ -250,53 +272,58 @@ fn parse_subnet_monitor() {
 #[test]
 fn parse_subnet_monitor_interval() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subnet", "monitor", "--netuid", "1", "--interval", "60",
+        "agcli",
+        "subnet",
+        "monitor",
+        "--netuid",
+        "1",
+        "--interval",
+        "60",
     ]);
-    assert!(cli.is_ok(), "should parse subnet monitor with interval: {:?}", cli.err());
+    assert!(
+        cli.is_ok(),
+        "should parse subnet monitor with interval: {:?}",
+        cli.err()
+    );
 }
 
 /// Verify subnet health parses.
 #[test]
 fn parse_subnet_health() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subnet", "health", "97",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "health", "97"]);
     assert!(cli.is_ok(), "should parse subnet health: {:?}", cli.err());
 }
 
 /// Verify subnet emissions parses.
 #[test]
 fn parse_subnet_emissions() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subnet", "emissions", "97",
-    ]);
-    assert!(cli.is_ok(), "should parse subnet emissions: {:?}", cli.err());
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "emissions", "97"]);
+    assert!(
+        cli.is_ok(),
+        "should parse subnet emissions: {:?}",
+        cli.err()
+    );
 }
 
 /// Verify subnet cost parses.
 #[test]
 fn parse_subnet_cost() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subnet", "cost", "97",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "cost", "97"]);
     assert!(cli.is_ok(), "should parse subnet cost: {:?}", cli.err());
 }
 
 /// Verify metagraph --uid single-UID lookup parses.
 #[test]
 fn parse_metagraph_single_uid() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subnet", "metagraph", "97", "--uid", "11",
-    ]);
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "subnet", "metagraph", "97", "--uid", "11"]);
     assert!(cli.is_ok(), "should parse metagraph --uid: {:?}", cli.err());
 }
 
 /// Verify metagraph without --uid still works.
 #[test]
 fn parse_metagraph_full() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subnet", "metagraph", "1",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subnet", "metagraph", "1"]);
     assert!(cli.is_ok(), "should parse full metagraph: {:?}", cli.err());
 }
 
@@ -305,9 +332,7 @@ fn parse_metagraph_full() {
 /// Verify --batch flag is parsed globally.
 #[test]
 fn parse_global_batch_flag() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--batch", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--batch", "balance"]);
     assert!(cli.is_ok(), "should parse --batch flag: {:?}", cli.err());
     assert!(cli.unwrap().batch);
 }
@@ -315,9 +340,7 @@ fn parse_global_batch_flag() {
 /// Verify --pretty flag is parsed globally.
 #[test]
 fn parse_global_pretty_flag() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--pretty", "--output", "json", "balance",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--pretty", "--output", "json", "balance"]);
     assert!(cli.is_ok());
     let cli = cli.unwrap();
     assert!(cli.pretty);
@@ -327,9 +350,7 @@ fn parse_global_pretty_flag() {
 /// Verify wallet sign parses.
 #[test]
 fn parse_wallet_sign() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "wallet", "sign", "hello world",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "sign", "hello world"]);
     assert!(cli.is_ok(), "should parse wallet sign: {:?}", cli.err());
 }
 
@@ -337,9 +358,14 @@ fn parse_wallet_sign() {
 #[test]
 fn parse_wallet_verify() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "wallet", "verify", "hello world",
-        "--signature", "0xaabbccdd",
-        "--signer", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "agcli",
+        "wallet",
+        "verify",
+        "hello world",
+        "--signature",
+        "0xaabbccdd",
+        "--signer",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
     ]);
     assert!(cli.is_ok(), "should parse wallet verify: {:?}", cli.err());
 }
@@ -348,7 +374,10 @@ fn parse_wallet_verify() {
 #[test]
 fn parse_wallet_derive() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "wallet", "derive", "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+        "agcli",
+        "wallet",
+        "derive",
+        "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
     ]);
     assert!(cli.is_ok(), "should parse wallet derive: {:?}", cli.err());
 }
@@ -357,7 +386,12 @@ fn parse_wallet_derive() {
 #[test]
 fn parse_balance_watch() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "balance", "--watch", "30", "--threshold", "10.0",
+        "agcli",
+        "balance",
+        "--watch",
+        "30",
+        "--threshold",
+        "10.0",
     ]);
     assert!(cli.is_ok(), "should parse balance watch: {:?}", cli.err());
 }
@@ -366,26 +400,48 @@ fn parse_balance_watch() {
 #[test]
 fn parse_subscribe_events_with_netuid() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subscribe", "events", "staking", "--netuid", "97",
+        "agcli",
+        "subscribe",
+        "events",
+        "staking",
+        "--netuid",
+        "97",
     ]);
-    assert!(cli.is_ok(), "should parse subscribe events with netuid: {:?}", cli.err());
+    assert!(
+        cli.is_ok(),
+        "should parse subscribe events with netuid: {:?}",
+        cli.err()
+    );
 }
 
 /// Verify subscribe events --account filter parses.
 #[test]
 fn parse_subscribe_events_with_account() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "subscribe", "events", "weights",
-        "--account", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "agcli",
+        "subscribe",
+        "events",
+        "weights",
+        "--account",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
     ]);
-    assert!(cli.is_ok(), "should parse subscribe events with account: {:?}", cli.err());
+    assert!(
+        cli.is_ok(),
+        "should parse subscribe events with account: {:?}",
+        cli.err()
+    );
 }
 
 /// Verify --batch and --yes can be combined.
 #[test]
 fn parse_batch_and_yes_combined() {
     let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "--batch", "--yes", "--password", "pass", "balance",
+        "agcli",
+        "--batch",
+        "--yes",
+        "--password",
+        "pass",
+        "balance",
     ]);
     assert!(cli.is_ok());
     let cli = cli.unwrap();
@@ -398,17 +454,17 @@ fn parse_batch_and_yes_combined() {
 /// Verify batch command parses with file argument.
 #[test]
 fn parse_batch_command() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "batch", "calls.json",
-    ]);
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "batch", "calls.json"]);
     assert!(cli.is_ok(), "should parse batch command: {:?}", cli.err());
 }
 
 /// Verify batch --no-atomic flag parses.
 #[test]
 fn parse_batch_no_atomic() {
-    let cli = agcli::cli::Cli::try_parse_from([
-        "agcli", "batch", "calls.json", "--no-atomic",
-    ]);
-    assert!(cli.is_ok(), "should parse batch --no-atomic: {:?}", cli.err());
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "batch", "calls.json", "--no-atomic"]);
+    assert!(
+        cli.is_ok(),
+        "should parse batch --no-atomic: {:?}",
+        cli.err()
+    );
 }

@@ -2,12 +2,12 @@
 
 pub mod commands;
 pub mod helpers;
-pub mod wallet_cmds;
 pub mod stake_cmds;
 pub mod view_cmds;
+pub mod wallet_cmds;
 
-use clap::{Parser, Subcommand};
 use crate::types::network::Network;
+use clap::{Parser, Subcommand};
 
 /// agcli — Rust CLI for the Bittensor network
 #[derive(Parser, Debug)]

@@ -39,13 +39,7 @@ pub async fn rpc_call(url: &str, method: &str, params: Vec<Value>) -> Result<Val
         params,
     };
 
-    let resp: RpcResponse = client
-        .post(url)
-        .json(&req)
-        .send()
-        .await?
-        .json()
-        .await?;
+    let resp: RpcResponse = client.post(url).json(&req).send().await?.json().await?;
 
     if let Some(err) = resp.error {
         anyhow::bail!("RPC error {}: {}", err.code, err.message);

@@ -56,5 +56,8 @@ async fn main() {
         }
     }
 
-    eprintln!("agcli: metadata codegen complete → {}", metadata_path.display());
+    eprintln!(
+        "agcli: metadata codegen complete → {}",
+        metadata_path.display()
+    );
 }

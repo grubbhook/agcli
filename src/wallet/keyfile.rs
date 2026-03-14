@@ -26,8 +26,8 @@ pub fn write_encrypted_keyfile(path: &Path, mnemonic: &str, password: &str) -> R
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
 
     let key = derive_key(password, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|e| anyhow::anyhow!("cipher init: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow::anyhow!("cipher init: {}", e))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(nonce, mnemonic.as_bytes())
@@ -48,7 +48,8 @@ pub fn write_encrypted_keyfile(path: &Path, mnemonic: &str, password: &str) -> R
 
 /// Read and decrypt an encrypted keyfile, returning the mnemonic.
 pub fn read_encrypted_keyfile(path: &Path, password: &str) -> Result<String> {
-    let data = fs::read(path).with_context(|| format!("Cannot read keyfile at '{}'", path.display()))?;
+    let data =
+        fs::read(path).with_context(|| format!("Cannot read keyfile at '{}'", path.display()))?;
     if data.len() < SALT_LEN + NONCE_LEN {
         anyhow::bail!("Keyfile '{}' is corrupted (too short). Re-create your wallet with `agcli wallet create`.", path.display());
     }
@@ -57,8 +58,8 @@ pub fn read_encrypted_keyfile(path: &Path, password: &str) -> Result<String> {
     let (nonce_bytes, ciphertext) = rest.split_at(NONCE_LEN);
 
     let key = derive_key(password, salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|e| anyhow::anyhow!("cipher init: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow::anyhow!("cipher init: {}", e))?;
     let nonce = Nonce::from_slice(nonce_bytes);
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
@@ -118,8 +119,7 @@ const NACL_PREFIX: &[u8] = b"$NACL";
 
 /// Fixed salt used by the Python bittensor-wallet for Argon2i KDF.
 const NACL_SALT: [u8; 16] = [
-    0x13, 0x71, 0x83, 0xdf, 0xf1, 0x5a, 0x09, 0xbc,
-    0x9c, 0x90, 0xb5, 0x51, 0x87, 0x39, 0xe9, 0xb1,
+    0x13, 0x71, 0x83, 0xdf, 0xf1, 0x5a, 0x09, 0xbc, 0x9c, 0x90, 0xb5, 0x51, 0x87, 0x39, 0xe9, 0xb1,
 ];
 
 /// Check if keyfile data is in the Python NaCl format.
@@ -146,18 +146,27 @@ pub fn decrypt_nacl_keyfile_data(data: &[u8], password: &str) -> Result<String> 
     // Derive key using Argon2i (matching Python: opslimit=4, memlimit=1GiB)
     let argon2_params = argon2::Params::new(
         1_048_576, // 1 GiB in KiB (1024*1024)
-        4,   // t_cost (opslimit)
-        1,   // p_cost (parallelism)
+        4,         // t_cost (opslimit)
+        1,         // p_cost (parallelism)
         Some(KEY_LEN),
-    ).map_err(|e| anyhow::anyhow!("argon2 params error: {}", e))?;
-    let argon2 = argon2::Argon2::new(argon2::Algorithm::Argon2i, argon2::Version::V0x13, argon2_params);
+    )
+    .map_err(|e| anyhow::anyhow!("argon2 params error: {}", e))?;
+    let argon2 = argon2::Argon2::new(
+        argon2::Algorithm::Argon2i,
+        argon2::Version::V0x13,
+        argon2_params,
+    );
     let mut key = [0u8; KEY_LEN];
-    argon2.hash_password_into(password.as_bytes(), &NACL_SALT, &mut key)
+    argon2
+        .hash_password_into(password.as_bytes(), &NACL_SALT, &mut key)
         .map_err(|e| anyhow::anyhow!("key derivation failed: {}", e))?;
 
     // Decrypt using XSalsa20-Poly1305 (NaCl SecretBox)
     // PyNaCl SecretBox format: nonce (24 bytes) + ciphertext (with MAC)
-    use crypto_secretbox::{XSalsa20Poly1305, aead::{Aead, KeyInit}};
+    use crypto_secretbox::{
+        aead::{Aead, KeyInit},
+        XSalsa20Poly1305,
+    };
     if encrypted.len() < 24 {
         anyhow::bail!("NaCl keyfile too short");
     }

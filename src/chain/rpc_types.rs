@@ -188,7 +188,11 @@ impl From<GenDelegateInfo> for DelegateInfo {
                 })
                 .collect(),
             registrations: d.registrations.into_iter().map(|r| NetUid(r.0)).collect(),
-            validator_permits: d.validator_permits.into_iter().map(|p| NetUid(p.0)).collect(),
+            validator_permits: d
+                .validator_permits
+                .into_iter()
+                .map(|p| NetUid(p.0))
+                .collect(),
             return_per_1000: Balance::from_rao(d.return_per_1000),
         }
     }
@@ -217,9 +221,7 @@ fn fixed_i128_to_f64(bits: i128) -> f64 {
 }
 
 /// Decode Compact<u8> vec to a UTF-8 string.
-fn compact_u8_vec_to_string(
-    v: &[parity_scale_codec::Compact<u8>],
-) -> String {
+fn compact_u8_vec_to_string(v: &[parity_scale_codec::Compact<u8>]) -> String {
     let bytes: Vec<u8> = v.iter().map(|c| c.0).collect();
     String::from_utf8_lossy(&bytes).to_string()
 }
@@ -229,7 +231,8 @@ impl From<GenDynamicInfo> for DynamicInfo {
         let price = fixed_i128_to_f64(d.moving_price.bits);
         let name = compact_u8_vec_to_string(&d.subnet_name);
         let symbol = compact_u8_vec_to_string(&d.token_symbol);
-        let total_emission = d.alpha_out_emission
+        let total_emission = d
+            .alpha_out_emission
             .saturating_add(d.alpha_in_emission)
             .saturating_add(d.tao_in_emission);
         DynamicInfo {

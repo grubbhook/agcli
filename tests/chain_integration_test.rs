@@ -14,30 +14,45 @@ const KNOWN_ADDRESS: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
 #[tokio::test]
 async fn test_subnet_hyperparams() {
     let client = Client::connect(FINNEY).await.expect("connect");
-    let params = client.get_subnet_hyperparams(NetUid(1)).await.expect("hyperparams");
+    let params = client
+        .get_subnet_hyperparams(NetUid(1))
+        .await
+        .expect("hyperparams");
     assert!(params.is_some(), "SN1 should have hyperparams");
     let h = params.unwrap();
     assert!(h.tempo > 0, "tempo should be positive");
     assert!(h.max_validators > 0, "max_validators should be positive");
-    println!("SN1 tempo={} max_validators={} rho={}", h.tempo, h.max_validators, h.rho);
+    println!(
+        "SN1 tempo={} max_validators={} rho={}",
+        h.tempo, h.max_validators, h.rho
+    );
 }
 
 #[tokio::test]
 async fn test_get_subnet_info() {
     let client = Client::connect(FINNEY).await.expect("connect");
-    let info = client.get_subnet_info(NetUid(1)).await.expect("subnet info");
+    let info = client
+        .get_subnet_info(NetUid(1))
+        .await
+        .expect("subnet info");
     assert!(info.is_some(), "SN1 should exist");
     let s = info.unwrap();
     assert_eq!(s.netuid, NetUid(1));
     assert!(s.n > 0, "SN1 should have neurons");
-    println!("SN1: name={} n={}/{} tempo={}", s.name, s.n, s.max_n, s.tempo);
+    println!(
+        "SN1: name={} n={}/{} tempo={}",
+        s.name, s.n, s.max_n, s.tempo
+    );
 }
 
 #[tokio::test]
 async fn test_dynamic_info_all_vs_single() {
     let client = Client::connect(FINNEY).await.expect("connect");
     let all = client.get_all_dynamic_info().await.expect("all dynamic");
-    let single = client.get_dynamic_info(NetUid(1)).await.expect("single dynamic");
+    let single = client
+        .get_dynamic_info(NetUid(1))
+        .await
+        .expect("single dynamic");
     assert!(single.is_some());
     let s = single.unwrap();
 
@@ -48,16 +63,31 @@ async fn test_dynamic_info_all_vs_single() {
 
     // Prices should be reasonably close (queried at slightly different times)
     let diff = (s.price - f.price).abs();
-    assert!(diff < 0.1, "Prices should be close: single={} all={}", s.price, f.price);
-    println!("SN1 price: single={:.6} all={:.6} diff={:.6}", s.price, f.price, diff);
+    assert!(
+        diff < 0.1,
+        "Prices should be close: single={} all={}",
+        s.price,
+        f.price
+    );
+    println!(
+        "SN1 price: single={:.6} all={:.6} diff={:.6}",
+        s.price, f.price, diff
+    );
 }
 
 #[tokio::test]
 async fn test_get_balance_known_account() {
     let client = Client::connect(FINNEY).await.expect("connect");
-    let balance = client.get_balance_ss58(KNOWN_ADDRESS).await.expect("balance");
+    let balance = client
+        .get_balance_ss58(KNOWN_ADDRESS)
+        .await
+        .expect("balance");
     // Alice dev account likely has some balance
-    println!("Known account balance: {} RAO ({} TAO)", balance.rao(), balance.tao());
+    println!(
+        "Known account balance: {} RAO ({} TAO)",
+        balance.rao(),
+        balance.tao()
+    );
 }
 
 #[tokio::test]
@@ -76,7 +106,10 @@ async fn test_get_stake_for_unknown_coldkey() {
 async fn test_nonexistent_subnet() {
     let client = Client::connect(FINNEY).await.expect("connect");
     // Very high netuid should not exist
-    let info = client.get_subnet_info(NetUid(65535)).await.expect("no error");
+    let info = client
+        .get_subnet_info(NetUid(65535))
+        .await
+        .expect("no error");
     assert!(info.is_none(), "netuid 65535 should not exist");
 }
 
@@ -97,5 +130,9 @@ async fn test_neurons_lite_ordering() {
     for (i, n) in neurons.iter().enumerate() {
         assert_eq!(n.uid as usize, i, "neuron UIDs should be sequential");
     }
-    println!("SN1: {} neurons, UIDs 0..{}", neurons.len(), neurons.len() - 1);
+    println!(
+        "SN1: {} neurons, UIDs 0..{}",
+        neurons.len(),
+        neurons.len() - 1
+    );
 }

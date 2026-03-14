@@ -1,9 +1,9 @@
 //! Config and network resolution tests.
 //! Run with: cargo test --test config_test
 
-use clap::Parser;
 use agcli::cli::Cli;
 use agcli::types::network::Network;
+use clap::Parser;
 
 #[test]
 fn resolve_finney() {
@@ -30,8 +30,14 @@ fn resolve_local_network() {
 #[test]
 fn endpoint_overrides_network() {
     let cli = Cli::try_parse_from([
-        "agcli", "--endpoint", "ws://custom:9944", "--network", "test", "balance",
-    ]).unwrap();
+        "agcli",
+        "--endpoint",
+        "ws://custom:9944",
+        "--network",
+        "test",
+        "balance",
+    ])
+    .unwrap();
     let net = cli.resolve_network();
     assert!(matches!(net, Network::Custom(_)));
     assert_eq!(net.ws_url(), "ws://custom:9944");
@@ -51,8 +57,14 @@ fn config_apply_defaults() {
 #[test]
 fn cli_flags_override_config() {
     let mut cli = Cli::try_parse_from([
-        "agcli", "--network", "local", "--wallet", "explicit", "balance",
-    ]).unwrap();
+        "agcli",
+        "--network",
+        "local",
+        "--wallet",
+        "explicit",
+        "balance",
+    ])
+    .unwrap();
     let mut cfg = agcli::Config::default();
     cfg.network = Some("test".to_string());
     cfg.wallet = Some("config_wallet".to_string());

@@ -21,7 +21,9 @@ pub fn unlock_coldkey(wallet: &mut Wallet, password: Option<&str>) -> Result<()>
         Some(p) => p.to_string(),
         None => {
             if is_batch_mode() {
-                anyhow::bail!("Password required in batch mode. Pass --password <pw> or set AGCLI_PASSWORD.");
+                anyhow::bail!(
+                    "Password required in batch mode. Pass --password <pw> or set AGCLI_PASSWORD."
+                );
             }
             dialoguer::Password::new()
                 .with_prompt("Coldkey password")
@@ -69,7 +71,10 @@ pub fn check_spending_limit(netuid: u16, tao_amount: f64) -> Result<()> {
 /// Print a JSON value to stdout. Respects the global pretty-print flag.
 pub fn print_json(value: &serde_json::Value) {
     if is_pretty_mode() {
-        println!("{}", serde_json::to_string_pretty(value).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(value).unwrap_or_default()
+        );
     } else {
         println!("{}", value);
     }
@@ -78,7 +83,10 @@ pub fn print_json(value: &serde_json::Value) {
 /// Print a Serialize-able value as JSON. Respects global pretty-print flag.
 pub fn print_json_ser<T: serde::Serialize>(value: &T) {
     if is_pretty_mode() {
-        println!("{}", serde_json::to_string_pretty(value).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(value).unwrap_or_default()
+        );
     } else {
         println!("{}", serde_json::to_string(value).unwrap_or_default());
     }
@@ -87,7 +95,10 @@ pub fn print_json_ser<T: serde::Serialize>(value: &T) {
 /// Print a JSON value to stderr. Respects the global pretty-print flag.
 pub fn eprint_json(value: &serde_json::Value) {
     if is_pretty_mode() {
-        eprintln!("{}", serde_json::to_string_pretty(value).unwrap_or_default());
+        eprintln!(
+            "{}",
+            serde_json::to_string_pretty(value).unwrap_or_default()
+        );
     } else {
         eprintln!("{}", value);
     }
@@ -128,7 +139,11 @@ pub fn is_batch_mode() -> bool {
     BATCH_MODE.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-pub fn resolve_coldkey_address(address: Option<String>, wallet_dir: &str, wallet_name: &str) -> String {
+pub fn resolve_coldkey_address(
+    address: Option<String>,
+    wallet_dir: &str,
+    wallet_name: &str,
+) -> String {
     address.unwrap_or_else(|| {
         open_wallet(wallet_dir, wallet_name)
             .ok()
@@ -173,12 +188,19 @@ pub fn parse_weight_pairs(weights_str: &str) -> Result<(Vec<u16>, Vec<u16>)> {
     for pair in weights_str.split(',') {
         let parts: Vec<&str> = pair.trim().split(':').collect();
         if parts.len() != 2 {
-            anyhow::bail!("Invalid weight pair '{}'. Format: 'uid:weight' (e.g., '0:100,1:200,2:50')", pair);
+            anyhow::bail!(
+                "Invalid weight pair '{}'. Format: 'uid:weight' (e.g., '0:100,1:200,2:50')",
+                pair
+            );
         }
-        uids.push(parts[0].trim().parse::<u16>()
-            .map_err(|_| anyhow::anyhow!("Invalid UID '{}' — must be 0–65535", parts[0].trim()))?);
-        weights.push(parts[1].trim().parse::<u16>()
-            .map_err(|_| anyhow::anyhow!("Invalid weight '{}' — must be 0–65535", parts[1].trim()))?);
+        uids.push(
+            parts[0].trim().parse::<u16>().map_err(|_| {
+                anyhow::anyhow!("Invalid UID '{}' — must be 0–65535", parts[0].trim())
+            })?,
+        );
+        weights.push(parts[1].trim().parse::<u16>().map_err(|_| {
+            anyhow::anyhow!("Invalid weight '{}' — must be 0–65535", parts[1].trim())
+        })?);
     }
     Ok((uids, weights))
 }
@@ -193,8 +215,12 @@ pub fn parse_children(children_str: &str) -> Result<Vec<(u64, String)>> {
                 pair
             );
         }
-        let proportion = parts[0].trim().parse::<u64>()
-            .map_err(|_| anyhow::anyhow!("Invalid proportion '{}' — must be a positive integer (u64)", parts[0].trim()))?;
+        let proportion = parts[0].trim().parse::<u64>().map_err(|_| {
+            anyhow::anyhow!(
+                "Invalid proportion '{}' — must be a positive integer (u64)",
+                parts[0].trim()
+            )
+        })?;
         let hotkey = parts[1].trim().to_string();
         result.push((proportion, hotkey));
     }

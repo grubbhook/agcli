@@ -16,7 +16,12 @@ pub fn format_tao(balance: Balance) -> String {
     if tao >= 1_000.0 {
         let whole = tao as u64;
         let frac = tao - whole as f64;
-        format!("{},{:03}.{:04}", whole / 1000, whole % 1000, (frac * 10000.0) as u64)
+        format!(
+            "{},{:03}.{:04}",
+            whole / 1000,
+            whole % 1000,
+            (frac * 10000.0) as u64
+        )
     } else {
         format!("{:.4}", tao)
     }
