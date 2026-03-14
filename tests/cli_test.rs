@@ -216,3 +216,86 @@ fn parse_live_flag() {
     ]);
     assert!(cli.is_ok(), "should parse --live 5: {:?}", cli.err());
 }
+
+// ──── Step 17: New command parsing tests ────
+
+/// Verify weights commit-reveal parses.
+#[test]
+fn parse_weights_commit_reveal() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "commit-reveal", "--netuid", "97", "0:100,1:200", "--wait",
+    ]);
+    assert!(cli.is_ok(), "should parse weights commit-reveal: {:?}", cli.err());
+}
+
+/// Verify weights set --dry-run parses.
+#[test]
+fn parse_weights_set_dry_run() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "set", "--netuid", "1", "0:100,1:200", "--dry-run",
+    ]);
+    assert!(cli.is_ok(), "should parse weights set --dry-run: {:?}", cli.err());
+}
+
+/// Verify subnet monitor parses with --json flag.
+#[test]
+fn parse_subnet_monitor() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "monitor", "--netuid", "97", "--json",
+    ]);
+    assert!(cli.is_ok(), "should parse subnet monitor: {:?}", cli.err());
+}
+
+/// Verify subnet monitor custom interval.
+#[test]
+fn parse_subnet_monitor_interval() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "monitor", "--netuid", "1", "--interval", "60",
+    ]);
+    assert!(cli.is_ok(), "should parse subnet monitor with interval: {:?}", cli.err());
+}
+
+/// Verify subnet health parses.
+#[test]
+fn parse_subnet_health() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "health", "97",
+    ]);
+    assert!(cli.is_ok(), "should parse subnet health: {:?}", cli.err());
+}
+
+/// Verify subnet emissions parses.
+#[test]
+fn parse_subnet_emissions() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "emissions", "97",
+    ]);
+    assert!(cli.is_ok(), "should parse subnet emissions: {:?}", cli.err());
+}
+
+/// Verify subnet cost parses.
+#[test]
+fn parse_subnet_cost() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "cost", "97",
+    ]);
+    assert!(cli.is_ok(), "should parse subnet cost: {:?}", cli.err());
+}
+
+/// Verify metagraph --uid single-UID lookup parses.
+#[test]
+fn parse_metagraph_single_uid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "97", "--uid", "11",
+    ]);
+    assert!(cli.is_ok(), "should parse metagraph --uid: {:?}", cli.err());
+}
+
+/// Verify metagraph without --uid still works.
+#[test]
+fn parse_metagraph_full() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph", "1",
+    ]);
+    assert!(cli.is_ok(), "should parse full metagraph: {:?}", cli.err());
+}

@@ -252,7 +252,45 @@ async fn handle_subnet(
             }
             Ok(())
         }
-        SubnetCommands::Metagraph { netuid } => {
+        SubnetCommands::Metagraph { netuid, uid } => {
+            // Single-UID lookup
+            if let Some(target_uid) = uid {
+                let neuron = client.get_neuron(NetUid(netuid), target_uid).await?;
+                match neuron {
+                    Some(n) => {
+                        if output == "json" {
+                            println!("{}", serde_json::to_string_pretty(&n)?);
+                        } else {
+                            println!("Neuron UID {} on SN{}", target_uid, netuid);
+                            println!("  Hotkey:      {}", n.hotkey);
+                            println!("  Coldkey:     {}", n.coldkey);
+                            println!("  Active:      {}", n.active);
+                            println!("  Stake:       {}", n.stake.display_tao());
+                            println!("  Rank:        {:.6}", n.rank);
+                            println!("  Trust:       {:.6}", n.trust);
+                            println!("  Consensus:   {:.6}", n.consensus);
+                            println!("  Incentive:   {:.6}", n.incentive);
+                            println!("  Dividends:   {:.6}", n.dividends);
+                            println!("  Emission:    {:.4} τ", n.emission / 1e9);
+                            println!("  Val. Trust:  {:.6}", n.validator_trust);
+                            println!("  Val. Permit: {}", n.validator_permit);
+                            println!("  Last Update: block {}", n.last_update);
+                            if let Some(axon) = &n.axon_info {
+                                println!("  Axon:        {}:{} (v{}, proto {})", axon.ip, axon.port, axon.version, axon.protocol);
+                            }
+                        }
+                    }
+                    None => {
+                        if output == "json" {
+                            println!("{}", serde_json::json!({"error": format!("UID {} not found on SN{}", target_uid, netuid)}));
+                        } else {
+                            println!("UID {} not found on SN{}", target_uid, netuid);
+                        }
+                    }
+                }
+                return Ok(());
+            }
+            // Full metagraph
             if let Some(interval) = live_interval {
                 return crate::live::live_metagraph(client, netuid.into(), interval).await;
             }
@@ -260,15 +298,15 @@ async fn handle_subnet(
             if output == "json" {
                 println!("{}", serde_json::to_string_pretty(&mg)?);
             } else if output == "csv" {
-                println!("uid,hotkey,coldkey,stake_rao,rank,trust,consensus,incentive,dividends,emission,validator_permit");
+                println!("uid,hotkey,coldkey,stake_rao,rank,trust,consensus,incentive,dividends,emission,validator_permit,last_update");
                 for n in &mg.neurons {
-                    println!("{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.0},{}", n.uid, n.hotkey, n.coldkey, n.stake.rao(), n.rank, n.trust, n.consensus, n.incentive, n.dividends, n.emission, n.validator_permit);
+                    println!("{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.0},{},{}", n.uid, n.hotkey, n.coldkey, n.stake.rao(), n.rank, n.trust, n.consensus, n.incentive, n.dividends, n.emission, n.validator_permit, n.last_update);
                 }
             } else {
                 println!("Metagraph SN{} — {} neurons, block {}", netuid, mg.n, mg.block);
                 let mut table = comfy_table::Table::new();
                 table.set_header(vec![
-                    "UID", "Hotkey", "Stake", "Rank", "Trust", "Incentive", "Emission", "VP",
+                    "UID", "Hotkey", "Stake", "Rank", "Trust", "Incentive", "Emission", "Updated", "VP",
                 ]);
                 for n in &mg.neurons {
                     table.add_row(vec![
@@ -279,6 +317,7 @@ async fn handle_subnet(
                         format!("{:.4}", n.trust),
                         format!("{:.4}", n.incentive),
                         format!("{:.4} τ", n.emission / 1e9),
+                        format!("{}", n.last_update),
                         if n.validator_permit { "Y" } else { "" }.to_string(),
                     ]);
                 }
@@ -342,6 +381,18 @@ async fn handle_subnet(
         }
         SubnetCommands::Liquidity { netuid } => {
             handle_subnet_liquidity(client, output, netuid).await
+        }
+        SubnetCommands::Monitor { netuid, interval, json } => {
+            handle_subnet_monitor(client, netuid, interval, json).await
+        }
+        SubnetCommands::Health { netuid } => {
+            handle_subnet_health(client, netuid, output).await
+        }
+        SubnetCommands::Emissions { netuid } => {
+            handle_subnet_emissions(client, netuid, output).await
+        }
+        SubnetCommands::Cost { netuid } => {
+            handle_subnet_cost(client, netuid, output).await
         }
     }
 }
@@ -544,6 +595,388 @@ fn format_slippage(pct: f64) -> String {
     }
 }
 
+// ──────── Subnet Monitor ────────
+
+async fn handle_subnet_monitor(client: &Client, netuid: u16, interval: u64, json_mode: bool) -> Result<()> {
+    use std::collections::HashMap;
+    let nuid = NetUid(netuid);
+
+    if !json_mode {
+        eprintln!("Monitoring SN{} (poll every {}s, Ctrl+C to stop)", netuid, interval);
+        eprintln!("Tracking: registrations, deregistrations, emission shifts, stake changes\n");
+    }
+
+    // Snapshot state for diff detection
+    #[allow(dead_code)]
+    struct NeuronSnapshot {
+        hotkey: String,
+        coldkey: String,
+        stake: u64,
+        incentive: f64,
+        emission: f64,
+        trust: f64,
+        rank: f64,
+        active: bool,
+        last_update: u64,
+    }
+
+    let mut prev_map: HashMap<u16, NeuronSnapshot> = HashMap::new();
+    let mut prev_uids: std::collections::HashSet<u16> = std::collections::HashSet::new();
+    let mut first = true;
+
+    loop {
+        let block = client.get_block_number().await?;
+        let neurons = client.get_neurons_lite(nuid).await?;
+        let mut cur_map: HashMap<u16, NeuronSnapshot> = HashMap::new();
+        let mut cur_uids: std::collections::HashSet<u16> = std::collections::HashSet::new();
+
+        for n in &neurons {
+            cur_uids.insert(n.uid);
+            cur_map.insert(n.uid, NeuronSnapshot {
+                hotkey: n.hotkey.clone(),
+                coldkey: n.coldkey.clone(),
+                stake: n.stake.rao(),
+                incentive: n.incentive,
+                emission: n.emission,
+                trust: n.trust,
+                rank: n.rank,
+                active: n.active,
+                last_update: n.last_update,
+            });
+        }
+
+        if !first {
+            // Detect new registrations
+            for &uid in &cur_uids {
+                if !prev_uids.contains(&uid) {
+                    let snap = &cur_map[&uid];
+                    let event = serde_json::json!({
+                        "event": "registration",
+                        "block": block,
+                        "netuid": netuid,
+                        "uid": uid,
+                        "hotkey": snap.hotkey,
+                        "coldkey": snap.coldkey,
+                    });
+                    if json_mode {
+                        println!("{}", event);
+                    } else {
+                        println!("[{}] NEW UID {} registered — hotkey {} coldkey {}",
+                            block, uid, crate::utils::short_ss58(&snap.hotkey), crate::utils::short_ss58(&snap.coldkey));
+                    }
+                }
+            }
+
+            // Detect deregistrations
+            for &uid in &prev_uids {
+                if !cur_uids.contains(&uid) {
+                    let snap = &prev_map[&uid];
+                    let event = serde_json::json!({
+                        "event": "deregistration",
+                        "block": block,
+                        "netuid": netuid,
+                        "uid": uid,
+                        "hotkey": snap.hotkey,
+                    });
+                    if json_mode {
+                        println!("{}", event);
+                    } else {
+                        println!("[{}] UID {} deregistered (was {})",
+                            block, uid, crate::utils::short_ss58(&snap.hotkey));
+                    }
+                }
+            }
+
+            // Detect significant changes for existing UIDs
+            for &uid in &cur_uids {
+                if !prev_uids.contains(&uid) { continue; }
+                let cur = &cur_map[&uid];
+                let prev = &prev_map[&uid];
+
+                // Hotkey changed (re-registration into same slot)
+                if cur.hotkey != prev.hotkey {
+                    let event = serde_json::json!({
+                        "event": "hotkey_change",
+                        "block": block,
+                        "netuid": netuid,
+                        "uid": uid,
+                        "old_hotkey": prev.hotkey,
+                        "new_hotkey": cur.hotkey,
+                    });
+                    if json_mode {
+                        println!("{}", event);
+                    } else {
+                        println!("[{}] UID {} hotkey changed: {} → {}",
+                            block, uid, crate::utils::short_ss58(&prev.hotkey), crate::utils::short_ss58(&cur.hotkey));
+                    }
+                }
+
+                // Large emission shift (>20% relative change)
+                if prev.emission > 0.0 {
+                    let change_pct = ((cur.emission - prev.emission) / prev.emission * 100.0).abs();
+                    if change_pct > 20.0 {
+                        let event = serde_json::json!({
+                            "event": "emission_shift",
+                            "block": block,
+                            "netuid": netuid,
+                            "uid": uid,
+                            "hotkey": cur.hotkey,
+                            "old_emission": prev.emission,
+                            "new_emission": cur.emission,
+                            "change_pct": change_pct,
+                        });
+                        if json_mode {
+                            println!("{}", event);
+                        } else {
+                            let dir = if cur.emission > prev.emission { "↑" } else { "↓" };
+                            println!("[{}] UID {} emission {}{:.0}% ({:.4}τ → {:.4}τ) — {}",
+                                block, uid, dir, change_pct, prev.emission / 1e9, cur.emission / 1e9,
+                                crate::utils::short_ss58(&cur.hotkey));
+                        }
+                    }
+                }
+
+                // Large incentive shift (>0.05 absolute change)
+                let incentive_delta = (cur.incentive - prev.incentive).abs();
+                if incentive_delta > 0.05 {
+                    let event = serde_json::json!({
+                        "event": "incentive_shift",
+                        "block": block,
+                        "netuid": netuid,
+                        "uid": uid,
+                        "hotkey": cur.hotkey,
+                        "old_incentive": prev.incentive,
+                        "new_incentive": cur.incentive,
+                    });
+                    if json_mode {
+                        println!("{}", event);
+                    } else {
+                        let dir = if cur.incentive > prev.incentive { "↑" } else { "↓" };
+                        println!("[{}] UID {} incentive {} {:.4} → {:.4} — {}",
+                            block, uid, dir, prev.incentive, cur.incentive,
+                            crate::utils::short_ss58(&cur.hotkey));
+                    }
+                }
+
+                // Became inactive
+                if prev.active && !cur.active {
+                    let event = serde_json::json!({
+                        "event": "inactive",
+                        "block": block,
+                        "netuid": netuid,
+                        "uid": uid,
+                        "hotkey": cur.hotkey,
+                    });
+                    if json_mode {
+                        println!("{}", event);
+                    } else {
+                        println!("[{}] UID {} became INACTIVE — {}",
+                            block, uid, crate::utils::short_ss58(&cur.hotkey));
+                    }
+                }
+            }
+        } else if !json_mode {
+            println!("[{}] Initial snapshot: {} neurons on SN{}", block, neurons.len(), netuid);
+        }
+
+        first = false;
+        prev_map = cur_map;
+        prev_uids = cur_uids;
+        tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+    }
+}
+
+// ──────── Subnet Health ────────
+
+async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Result<()> {
+    let nuid = NetUid(netuid);
+    let (neurons, dynamic, hyperparams) = tokio::try_join!(
+        client.get_neurons_lite(nuid),
+        async { client.get_dynamic_info(nuid).await },
+        async { client.get_subnet_hyperparams(nuid).await },
+    )?;
+    let block = client.get_block_number().await?;
+
+    let n = neurons.len();
+    let active_count = neurons.iter().filter(|n| n.active).count();
+    let validators: Vec<_> = neurons.iter().filter(|n| n.validator_permit).collect();
+    let miners: Vec<_> = neurons.iter().filter(|n| !n.validator_permit).collect();
+    let zero_emission = neurons.iter().filter(|n| n.emission == 0.0).count();
+    let stale_count = neurons.iter().filter(|n| block.saturating_sub(n.last_update) > 1000).count();
+
+    if output == "json" {
+        let neuron_json: Vec<serde_json::Value> = neurons.iter().map(|n| {
+            serde_json::json!({
+                "uid": n.uid, "hotkey": n.hotkey, "coldkey": n.coldkey,
+                "active": n.active, "stake_rao": n.stake.rao(),
+                "rank": n.rank, "trust": n.trust, "consensus": n.consensus,
+                "incentive": n.incentive, "dividends": n.dividends,
+                "emission": n.emission, "validator_permit": n.validator_permit,
+                "last_update": n.last_update,
+                "blocks_since_update": block.saturating_sub(n.last_update),
+            })
+        }).collect();
+        println!("{}", serde_json::json!({
+            "netuid": netuid, "block": block, "total_neurons": n,
+            "active": active_count, "validators": validators.len(),
+            "miners": miners.len(), "zero_emission": zero_emission,
+            "stale_neurons": stale_count,
+            "price": dynamic.as_ref().map(|d| d.price).unwrap_or(0.0),
+            "commit_reveal": hyperparams.as_ref().map(|h| h.commit_reveal_weights_enabled).unwrap_or(false),
+            "neurons": neuron_json,
+        }));
+        return Ok(());
+    }
+
+    let name = dynamic.as_ref().map(|d| d.name.as_str()).unwrap_or("?");
+    println!("=== SN{} ({}) Health — Block {} ===\n", netuid, name, block);
+    println!("  Neurons:       {}/{}", active_count, n);
+    println!("  Validators:    {}", validators.len());
+    println!("  Miners:        {}", miners.len());
+    println!("  Zero emission: {} ({:.0}%)", zero_emission, if n > 0 { zero_emission as f64 / n as f64 * 100.0 } else { 0.0 });
+    println!("  Stale (>1000 blocks): {}", stale_count);
+
+    if let Some(ref d) = dynamic {
+        println!("  Price:         {:.6} τ/α", d.price);
+        println!("  TAO pool:      {}", d.tao_in.display_tao());
+    }
+    if let Some(ref h) = hyperparams {
+        println!("  Tempo:         {} blocks", h.tempo);
+        println!("  Commit-reveal: {}", if h.commit_reveal_weights_enabled { "enabled" } else { "disabled" });
+        println!("  Rate limit:    {} blocks", h.weights_rate_limit);
+    }
+
+    println!("\n  All Neurons:");
+    let mut table = comfy_table::Table::new();
+    table.set_header(vec!["UID", "Hotkey", "Active", "Stake", "Incentive", "Emission", "Trust", "Updated", "VP"]);
+    for n in &neurons {
+        let staleness = block.saturating_sub(n.last_update);
+        let stale_mark = if staleness > 1000 { " !" } else { "" };
+        table.add_row(vec![
+            format!("{}", n.uid),
+            crate::utils::short_ss58(&n.hotkey),
+            if n.active { "Y" } else { "N" }.to_string(),
+            format!("{:.4}τ", n.stake.tao()),
+            format!("{:.4}", n.incentive),
+            format!("{:.4} τ", n.emission / 1e9),
+            format!("{:.4}", n.trust),
+            format!("{}{}", staleness, stale_mark),
+            if n.validator_permit { "V" } else { "M" }.to_string(),
+        ]);
+    }
+    println!("{table}");
+    Ok(())
+}
+
+// ──────── Subnet Emissions ────────
+
+async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> Result<()> {
+    let nuid = NetUid(netuid);
+    let neurons = client.get_neurons_lite(nuid).await?;
+    let dynamic = client.get_dynamic_info(nuid).await.ok().flatten();
+
+    let total_emission: f64 = neurons.iter().map(|n| n.emission).sum();
+    let emission_per_block = dynamic.as_ref().map(|d| d.total_emission() as f64 / 1e9).unwrap_or(0.0);
+    let tempo = dynamic.as_ref().map(|d| d.tempo as f64).unwrap_or(360.0);
+    let daily_emission = emission_per_block * 7200.0;
+
+    let mut sorted = neurons.clone();
+    sorted.sort_by(|a, b| b.emission.partial_cmp(&a.emission).unwrap_or(std::cmp::Ordering::Equal));
+
+    if output == "json" {
+        let entries: Vec<serde_json::Value> = sorted.iter().map(|n| {
+            let share = if total_emission > 0.0 { n.emission / total_emission * 100.0 } else { 0.0 };
+            serde_json::json!({
+                "uid": n.uid, "hotkey": n.hotkey,
+                "emission_raw": n.emission,
+                "emission_tao": n.emission / 1e9,
+                "share_pct": share,
+                "is_validator": n.validator_permit,
+            })
+        }).collect();
+        println!("{}", serde_json::json!({
+            "netuid": netuid,
+            "total_emission_per_block_tao": emission_per_block,
+            "daily_emission_tao": daily_emission,
+            "tempo": tempo,
+            "neurons": entries,
+        }));
+        return Ok(());
+    }
+
+    let name = dynamic.as_ref().map(|d| d.name.as_str()).unwrap_or("?");
+    println!("=== SN{} ({}) Emissions ===\n", netuid, name);
+    println!("  Emission/block: {:.6} τ", emission_per_block);
+    println!("  Daily emission: {:.2} τ", daily_emission);
+    println!("  Tempo:          {:.0} blocks\n", tempo);
+
+    let mut table = comfy_table::Table::new();
+    table.set_header(vec!["UID", "Hotkey", "Role", "Emission (τ)", "Share %", "Daily Est."]);
+    for n in sorted.iter().take(50) {
+        let share = if total_emission > 0.0 { n.emission / total_emission * 100.0 } else { 0.0 };
+        let daily_est = share / 100.0 * daily_emission;
+        table.add_row(vec![
+            format!("{}", n.uid),
+            crate::utils::short_ss58(&n.hotkey),
+            if n.validator_permit { "V" } else { "M" }.to_string(),
+            format!("{:.6}", n.emission / 1e9),
+            format!("{:.2}%", share),
+            format!("{:.4} τ", daily_est),
+        ]);
+    }
+    println!("{table}");
+    Ok(())
+}
+
+// ──────── Subnet Cost ────────
+
+async fn handle_subnet_cost(client: &Client, netuid: u16, output: &str) -> Result<()> {
+    let nuid = NetUid(netuid);
+    let info = client.get_subnet_info(nuid).await?;
+    let hyperparams = client.get_subnet_hyperparams(nuid).await.ok().flatten();
+    let dynamic = client.get_dynamic_info(nuid).await.ok().flatten();
+
+    let burn = info.as_ref().map(|i| i.burn).unwrap_or(Balance::ZERO);
+    let difficulty = info.as_ref().map(|i| i.difficulty).unwrap_or(0);
+    let n = info.as_ref().map(|i| i.n).unwrap_or(0);
+    let max_n = info.as_ref().map(|i| i.max_n).unwrap_or(0);
+
+    if output == "json" {
+        println!("{}", serde_json::json!({
+            "netuid": netuid,
+            "burn_rao": burn.rao(),
+            "burn_tao": burn.tao(),
+            "difficulty": difficulty,
+            "neurons": n,
+            "max_neurons": max_n,
+            "registration_allowed": info.as_ref().map(|i| i.registration_allowed).unwrap_or(false),
+            "price": dynamic.as_ref().map(|d| d.price).unwrap_or(0.0),
+            "min_burn": hyperparams.as_ref().map(|h| h.min_burn.tao()).unwrap_or(0.0),
+            "max_burn": hyperparams.as_ref().map(|h| h.max_burn.tao()).unwrap_or(0.0),
+        }));
+        return Ok(());
+    }
+
+    let name = dynamic.as_ref().map(|d| d.name.as_str()).unwrap_or("?");
+    let allowed = info.as_ref().map(|i| i.registration_allowed).unwrap_or(false);
+    println!("=== SN{} ({}) Registration Cost ===\n", netuid, name);
+    println!("  Registration: {}", if allowed { "OPEN" } else { "CLOSED" });
+    println!("  Current burn: {}", burn.display_tao());
+    println!("  POW difficulty: {}", difficulty);
+    println!("  Capacity:     {}/{}", n, max_n);
+    if let Some(ref h) = hyperparams {
+        println!("  Min burn:     {}", h.min_burn.display_tao());
+        println!("  Max burn:     {}", h.max_burn.display_tao());
+        println!("  Target regs:  {}/interval", h.target_regs_per_interval);
+        println!("  Max regs/blk: {}", h.max_regs_per_block);
+        println!("  Immunity:     {} blocks", h.immunity_period);
+    }
+    if n >= max_n {
+        println!("\n  Note: Subnet is at capacity. New registrations will replace the lowest-scoring neuron.");
+    }
+    Ok(())
+}
+
 // ──────── Weights ────────
 
 async fn handle_weights(
@@ -555,29 +988,51 @@ async fn handle_weights(
     password: Option<&str>,
 ) -> Result<()> {
     match cmd {
-        WeightCommands::Set { netuid, weights, version_key } => {
+        WeightCommands::Set { netuid, weights, version_key, dry_run } => {
+            let (uids, wts) = parse_weight_pairs(&weights)?;
+
+            // Pre-flight checks (always run these)
+            let hyperparams = client.get_subnet_hyperparams(NetUid(netuid)).await.ok().flatten();
+
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
-            let (uids, wts) = parse_weight_pairs(&weights)?;
 
-            // Pre-flight: check if hotkey has enough stake-weight
-            if let Some(hk_ss58) = wallet.hotkey_ss58().map(|s| s.to_string()) {
+            // Check stake-weight
+            let stake_ok = if let Some(hk_ss58) = wallet.hotkey_ss58().map(|s| s.to_string()) {
                 let alpha = client.get_total_hotkey_alpha(&hk_ss58, NetUid(netuid)).await.unwrap_or(Balance::ZERO);
                 if alpha.tao() < 1000.0 {
                     eprintln!("Warning: hotkey {} has {:.2}τ stake-weight on SN{} (minimum ~1000τ required).",
                         crate::utils::short_ss58(&hk_ss58), alpha.tao(), netuid);
-                    eprintln!("  set_weights may fail. Consider getting more stake or using commit-reveal.");
-                    eprintln!("  Check: agcli subnet hyperparams {} | grep commit_reveal", netuid);
+                    false
+                } else {
+                    true
                 }
+            } else {
+                false
+            };
+
+            // Check commit-reveal
+            let cr_enabled = hyperparams.as_ref().map(|h| h.commit_reveal_weights_enabled).unwrap_or(false);
+            if cr_enabled {
+                eprintln!("Warning: SN{} has commit-reveal enabled. Use `agcli weights commit-reveal` instead.", netuid);
             }
 
-            // Pre-flight: check rate limit
-            if let Ok(Some(h)) = client.get_subnet_hyperparams(NetUid(netuid)).await {
-                if h.commit_reveal_weights_enabled {
-                    eprintln!("Warning: SN{} has commit-reveal enabled. Use `agcli weights commit` instead.", netuid);
-                    eprintln!("  Direct set_weights will likely fail with CommitRevealEnabled error.");
-                }
+            // Check rate limit
+            let rate_limit = hyperparams.as_ref().map(|h| h.weights_rate_limit).unwrap_or(0);
+
+            if dry_run {
+                println!("{}", serde_json::json!({
+                    "dry_run": true,
+                    "netuid": netuid,
+                    "num_weights": uids.len(),
+                    "version_key": version_key,
+                    "stake_sufficient": stake_ok,
+                    "commit_reveal_enabled": cr_enabled,
+                    "weights_rate_limit_blocks": rate_limit,
+                    "weights": uids.iter().zip(wts.iter()).map(|(u, w)| serde_json::json!({"uid": u, "weight": w})).collect::<Vec<_>>(),
+                }));
+                return Ok(());
             }
 
             println!("Setting {} weights on SN{} (version_key={})", uids.len(), netuid, version_key);
@@ -633,6 +1088,108 @@ async fn handle_weights(
             println!("Revealing {} weights on SN{} (version_key={})", uids.len(), netuid, version_key);
             let hash = client.reveal_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, &salt_u16, version_key).await?;
             println!("Weights revealed. Tx: {}", hash);
+            Ok(())
+        }
+        WeightCommands::CommitReveal { netuid, weights, version_key, wait } => {
+            let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+            unlock_coldkey(&mut wallet, password)?;
+            wallet.load_hotkey(hotkey_name)?;
+            let (uids, wts) = parse_weight_pairs(&weights)?;
+
+            // Pre-flight: check commit-reveal is enabled
+            let hyperparams = client.get_subnet_hyperparams(NetUid(netuid)).await?;
+            let (cr_enabled, cr_interval, tempo) = match &hyperparams {
+                Some(h) => (h.commit_reveal_weights_enabled, h.commit_reveal_weights_interval, h.tempo as u64),
+                None => anyhow::bail!("Subnet SN{} not found or hyperparams unavailable", netuid),
+            };
+
+            if !cr_enabled {
+                eprintln!("Warning: SN{} does NOT have commit-reveal enabled. Using direct set_weights instead.", netuid);
+                let hash = client.set_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, version_key).await?;
+                println!("Weights set (direct). Tx: {}", hash);
+                return Ok(());
+            }
+
+            // Generate salt
+            let salt_str: String = {
+                use rand::Rng;
+                rand::thread_rng()
+                    .sample_iter(&rand::distributions::Alphanumeric)
+                    .take(32)
+                    .map(char::from)
+                    .collect()
+            };
+
+            // Compute commit hash (blake2b, matching the commit handler)
+            let commit_hash = {
+                use blake2::digest::{Update, VariableOutput};
+                let mut hasher = blake2::Blake2bVar::new(32)
+                    .map_err(|e| anyhow::anyhow!("blake2 init error: {:?}", e))?;
+                for u in &uids { hasher.update(&u.to_le_bytes()); }
+                for w in &wts { hasher.update(&w.to_le_bytes()); }
+                hasher.update(salt_str.as_bytes());
+                let mut hash_out = [0u8; 32];
+                hasher.finalize_variable(&mut hash_out)
+                    .map_err(|e| anyhow::anyhow!("blake2 finalize error: {:?}", e))?;
+                hash_out
+            };
+
+            let block_at_commit = client.get_block_number().await?;
+
+            // Step 1: Commit
+            println!("Committing {} weights on SN{}", uids.len(), netuid);
+            println!("  Commit hash: 0x{}", hex::encode(commit_hash));
+            let commit_tx = client.commit_weights(wallet.hotkey()?, NetUid(netuid), commit_hash).await?;
+            println!("  Committed. Tx: {}", commit_tx);
+
+            // Step 2: Wait for reveal window
+            // Reveal window opens after cr_interval tempos from the commit
+            let reveal_after_blocks = cr_interval * tempo;
+            let reveal_target = block_at_commit + reveal_after_blocks;
+            println!("\n  Waiting for reveal window (~{} blocks, ~{}m)...",
+                reveal_after_blocks, reveal_after_blocks * 12 / 60);
+
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(12)).await;
+                let current_block = client.get_block_number().await?;
+                if current_block >= reveal_target {
+                    println!("  Reveal window open at block {}", current_block);
+                    break;
+                }
+                let remaining = reveal_target.saturating_sub(current_block);
+                eprint!("\r  Block {} — {} blocks remaining (~{}m {}s)   ",
+                    current_block, remaining, remaining * 12 / 60, (remaining * 12) % 60);
+            }
+
+            // Step 3: Reveal
+            let salt_u16: Vec<u16> = salt_str
+                .as_bytes()
+                .chunks(2)
+                .map(|chunk| {
+                    let b0 = chunk[0] as u16;
+                    let b1 = if chunk.len() > 1 { chunk[1] as u16 } else { 0 };
+                    (b1 << 8) | b0
+                })
+                .collect();
+            println!("\n  Revealing weights...");
+            let reveal_tx = client.reveal_weights(wallet.hotkey()?, NetUid(netuid), &uids, &wts, &salt_u16, version_key).await?;
+            println!("  Revealed. Tx: {}", reveal_tx);
+
+            if wait {
+                // Verify reveal was included
+                let final_block = client.get_block_number().await?;
+                println!("\n  Confirmed at block {}. Commit-reveal complete.", final_block);
+                println!("{}", serde_json::json!({
+                    "status": "complete",
+                    "netuid": netuid,
+                    "commit_tx": commit_tx,
+                    "reveal_tx": reveal_tx,
+                    "commit_block": block_at_commit,
+                    "reveal_block": final_block,
+                    "num_weights": uids.len(),
+                }));
+            }
+
             Ok(())
         }
     }

@@ -458,10 +458,13 @@ pub enum SubnetCommands {
         /// Subnet UID
         netuid: u16,
     },
-    /// Show metagraph for a subnet
+    /// Show metagraph for a subnet (full or single UID)
     Metagraph {
         /// Subnet UID
         netuid: u16,
+        /// Show only a specific neuron UID
+        #[arg(long)]
+        uid: Option<u16>,
     },
     /// Register a new subnet
     Register,
@@ -498,6 +501,33 @@ pub enum SubnetCommands {
         #[arg(long)]
         netuid: Option<u16>,
     },
+    /// Monitor a subnet: track registrations, weight changes, emission shifts, anomalies
+    Monitor {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Polling interval in seconds (default 24 = ~2 blocks)
+        #[arg(long, default_value = "24")]
+        interval: u64,
+        /// Output in JSON streaming mode (one JSON object per event, for piping)
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show subnet health: all miners, status, weights vs consensus
+    Health {
+        /// Subnet UID
+        netuid: u16,
+    },
+    /// Show who's earning what, projected next epoch
+    Emissions {
+        /// Subnet UID
+        netuid: u16,
+    },
+    /// Show current registration cost + recent trend
+    Cost {
+        /// Subnet UID
+        netuid: u16,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -512,6 +542,9 @@ pub enum WeightCommands {
         /// Version key
         #[arg(long, default_value = "0")]
         version_key: u64,
+        /// Dry-run: check pre-conditions without submitting
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Commit weights (for commit-reveal enabled subnets)
     Commit {
@@ -536,6 +569,20 @@ pub enum WeightCommands {
         /// Version key
         #[arg(long, default_value = "0")]
         version_key: u64,
+    },
+    /// Atomic commit-reveal: commit weights, wait for reveal window, then auto-reveal
+    CommitReveal {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Weights as "uid:weight" pairs, comma-separated
+        weights: String,
+        /// Version key
+        #[arg(long, default_value = "0")]
+        version_key: u64,
+        /// Wait for reveal to be confirmed on-chain before exiting
+        #[arg(long)]
+        wait: bool,
     },
 }
 
