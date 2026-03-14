@@ -45,6 +45,14 @@ pub struct Cli {
     #[arg(long, env = "AGCLI_PROXY")]
     pub proxy: Option<String>,
 
+    /// Skip all confirmation prompts (for non-interactive / agent use)
+    #[arg(long, short = 'y', global = true, env = "AGCLI_YES")]
+    pub yes: bool,
+
+    /// Wallet password (avoids interactive prompt; prefer env var for security)
+    #[arg(long, global = true, env = "AGCLI_PASSWORD", hide_env_values = true)]
+    pub password: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -184,6 +192,9 @@ pub enum WalletCommands {
         /// Wallet name
         #[arg(long, default_value = "default")]
         name: String,
+        /// Coldkey password (non-interactive)
+        #[arg(long, env = "AGCLI_PASSWORD", hide_env_values = true)]
+        password: Option<String>,
     },
     /// List all wallets
     List,
@@ -198,14 +209,30 @@ pub enum WalletCommands {
         /// Wallet name
         #[arg(long, default_value = "default")]
         name: String,
+        /// Mnemonic phrase (non-interactive)
+        #[arg(long)]
+        mnemonic: Option<String>,
+        /// Coldkey password (non-interactive)
+        #[arg(long, env = "AGCLI_PASSWORD", hide_env_values = true)]
+        password: Option<String>,
     },
     /// Regenerate coldkey from mnemonic
-    RegenColdkey,
+    RegenColdkey {
+        /// Mnemonic phrase (non-interactive)
+        #[arg(long)]
+        mnemonic: Option<String>,
+        /// Coldkey password (non-interactive)
+        #[arg(long, env = "AGCLI_PASSWORD", hide_env_values = true)]
+        password: Option<String>,
+    },
     /// Regenerate hotkey from mnemonic
     RegenHotkey {
         /// Hotkey name
         #[arg(long, default_value = "default")]
         name: String,
+        /// Mnemonic phrase (non-interactive)
+        #[arg(long)]
+        mnemonic: Option<String>,
     },
     /// Create a new hotkey
     NewHotkey {
@@ -389,8 +416,18 @@ pub enum StakeCommands {
         #[arg(long)]
         hotkey: Option<String>,
     },
-    /// Full staking wizard (interactive)
-    Wizard,
+    /// Full staking wizard (interactive or non-interactive with flags)
+    Wizard {
+        /// Subnet UID (skip interactive subnet selection)
+        #[arg(long)]
+        netuid: Option<u16>,
+        /// Amount of TAO to stake (skip interactive amount input)
+        #[arg(long)]
+        amount: Option<f64>,
+        /// Hotkey SS58 (skip interactive hotkey selection)
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

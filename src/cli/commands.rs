@@ -12,9 +12,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
     let network = cli.resolve_network();
     let output = cli.output.as_str();
     let live_interval = cli.live_interval();
+    let password = cli.password.clone();
+    let yes = cli.yes;
 
     match cli.command {
-        Commands::Wallet(cmd) => wallet_cmds::handle_wallet(cmd, &cli.wallet_dir).await,
+        Commands::Wallet(cmd) => wallet_cmds::handle_wallet(cmd, &cli.wallet_dir, password.as_deref()).await,
         Commands::Balance { address } => {
             let client = Client::connect(network.ws_url()).await?;
             let addr = resolve_coldkey_address(address, &cli.wallet_dir, &cli.wallet);
@@ -30,7 +32,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::Transfer { dest, amount } => {
             let client = Client::connect(network.ws_url()).await?;
             let mut wallet = open_wallet(&cli.wallet_dir, &cli.wallet)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password.as_deref())?;
             let balance = Balance::from_tao(amount);
             println!("Transferring {} to {}", balance.display_tao(), dest);
             let hash = client.transfer(wallet.coldkey()?, &dest, balance).await?;
@@ -44,7 +46,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::TransferAll { dest, keep_alive } => {
             let client = Client::connect(network.ws_url()).await?;
             let mut wallet = open_wallet(&cli.wallet_dir, &cli.wallet)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password.as_deref())?;
             println!("Transferring all balance to {} (keep_alive={})", dest, keep_alive);
             let hash = client.transfer_all(wallet.coldkey()?, &dest, keep_alive).await?;
             if output == "json" {
@@ -56,23 +58,23 @@ pub async fn execute(cli: Cli) -> Result<()> {
         }
         Commands::Stake(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            stake_cmds::handle_stake(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output).await
+            stake_cmds::handle_stake(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output, password.as_deref(), yes).await
         }
         Commands::Subnet(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_subnet(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output, live_interval).await
+            handle_subnet(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output, live_interval, password.as_deref()).await
         }
         Commands::Weights(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_weights(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey).await
+            handle_weights(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, password.as_deref()).await
         }
         Commands::Root(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_root(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey).await
+            handle_root(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, password.as_deref()).await
         }
         Commands::Delegate(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_delegate(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output).await
+            handle_delegate(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, output, password.as_deref()).await
         }
         Commands::View(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
@@ -80,30 +82,30 @@ pub async fn execute(cli: Cli) -> Result<()> {
         }
         Commands::Identity(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_identity(cmd, &client, &cli.wallet_dir, &cli.wallet).await
+            handle_identity(cmd, &client, &cli.wallet_dir, &cli.wallet, password.as_deref()).await
         }
         Commands::Serve(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_serve(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey).await
+            handle_serve(cmd, &client, &cli.wallet_dir, &cli.wallet, &cli.hotkey, password.as_deref()).await
         }
         Commands::Proxy(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_proxy(cmd, &client, &cli.wallet_dir, &cli.wallet, output).await
+            handle_proxy(cmd, &client, &cli.wallet_dir, &cli.wallet, output, password.as_deref()).await
         }
         Commands::Crowdloan(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_crowdloan(cmd, &client, &cli.wallet_dir, &cli.wallet, output).await
+            handle_crowdloan(cmd, &client, &cli.wallet_dir, &cli.wallet, output, password.as_deref()).await
         }
         Commands::Swap(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
-            handle_swap(cmd, &client, &cli.wallet_dir, &cli.wallet).await
+            handle_swap(cmd, &client, &cli.wallet_dir, &cli.wallet, password.as_deref()).await
         }
         Commands::Subscribe(cmd) => {
             let client = Client::connect(network.ws_url()).await?;
             handle_subscribe(cmd, &client, output).await
         }
         Commands::Multisig(cmd) => {
-            handle_multisig(cmd, &cli.wallet_dir, &cli.wallet, network.ws_url()).await
+            handle_multisig(cmd, &cli.wallet_dir, &cli.wallet, network.ws_url(), password.as_deref()).await
         }
         Commands::Config(cmd) => handle_config(cmd).await,
         Commands::Completions { shell } => {
@@ -126,6 +128,7 @@ async fn handle_subnet(
     hotkey_name: &str,
     output: &str,
     live_interval: Option<u64>,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         SubnetCommands::List => {
@@ -151,7 +154,7 @@ async fn handle_subnet(
                         format!("{}", s.n),
                         format!("{}", s.max_n),
                         format!("{}", s.tempo),
-                        format!("{}", s.emission_value),
+                        format!("{:.4} τ", s.emission_value as f64 / 1e9),
                         s.burn.display_tao(),
                         crate::utils::short_ss58(&s.owner),
                     ]);
@@ -261,7 +264,7 @@ async fn handle_subnet(
                         format!("{:.4}", n.rank),
                         format!("{:.4}", n.trust),
                         format!("{:.4}", n.incentive),
-                        format!("{:.0}", n.emission),
+                        format!("{:.4} τ", n.emission / 1e9),
                         if n.validator_permit { "Y" } else { "" }.to_string(),
                     ]);
                 }
@@ -270,21 +273,21 @@ async fn handle_subnet(
             Ok(())
         }
         SubnetCommands::Register => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None)?;
+            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             println!("Registering new subnet...");
             let hash = client.register_network(&pair, &hk).await?;
             println!("Subnet registered. Tx: {}", hash);
             Ok(())
         }
         SubnetCommands::RegisterNeuron { netuid } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None)?;
+            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             println!("Burn-registering on SN{} with hotkey {}", netuid, crate::utils::short_ss58(&hk));
             let hash = client.burned_register(&pair, NetUid(netuid), &hk).await?;
             println!("Neuron registered. Tx: {}", hash);
             Ok(())
         }
         SubnetCommands::Pow { netuid, threads } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None)?;
+            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             let hotkey_pk = crate::wallet::keypair::from_ss58(&hk)?;
             println!("POW registration on SN{} with {} threads", netuid, threads);
             let (block_number, block_hash) = client.get_block_info_for_pow().await?;
@@ -314,7 +317,7 @@ async fn handle_subnet(
         }
         SubnetCommands::Dissolve { netuid } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             println!("Dissolving subnet SN{} (owner only)", netuid);
             let hash = client.dissolve_network(wallet.coldkey()?, NetUid(netuid)).await?;
             println!("Subnet dissolved. Tx: {}", hash);
@@ -331,11 +334,12 @@ async fn handle_weights(
     wallet_dir: &str,
     wallet_name: &str,
     hotkey_name: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         WeightCommands::Set { netuid, weights, version_key } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
             let (uids, wts) = parse_weight_pairs(&weights)?;
             println!("Setting {} weights on SN{} (version_key={})", uids.len(), netuid, version_key);
@@ -345,7 +349,7 @@ async fn handle_weights(
         }
         WeightCommands::Commit { netuid, weights, salt } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
             let (uids, wts) = parse_weight_pairs(&weights)?;
             let salt_str = salt.unwrap_or_else(|| {
@@ -376,7 +380,7 @@ async fn handle_weights(
         }
         WeightCommands::Reveal { netuid, weights, salt, version_key } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
             let (uids, wts) = parse_weight_pairs(&weights)?;
             let salt_u16: Vec<u16> = salt
@@ -404,10 +408,11 @@ async fn handle_root(
     wallet_dir: &str,
     wallet_name: &str,
     hotkey_name: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         RootCommands::Register => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None)?;
+            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             println!("Registering on root network with hotkey {}", crate::utils::short_ss58(&hk));
             let hash = client.root_register(&pair, &hk).await?;
             println!("Root registered. Tx: {}", hash);
@@ -415,7 +420,7 @@ async fn handle_root(
         }
         RootCommands::Weights { weights } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
             let (uids, wts) = parse_weight_pairs(&weights)?;
             println!("Setting {} root weights", uids.len());
@@ -435,6 +440,7 @@ async fn handle_delegate(
     wallet_name: &str,
     hotkey_name: &str,
     output: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         DelegateCommands::List => {
@@ -495,7 +501,7 @@ async fn handle_delegate(
             Ok(())
         }
         DelegateCommands::DecreaseTake { take, hotkey } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey)?;
+            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
             let take_u16 = (take / 100.0 * 65535.0).min(65535.0) as u16;
             println!("Decreasing take to {:.2}% for {}", take, crate::utils::short_ss58(&hk));
             let hash = client.decrease_take(&pair, &hk, take_u16).await?;
@@ -503,7 +509,7 @@ async fn handle_delegate(
             Ok(())
         }
         DelegateCommands::IncreaseTake { take, hotkey } => {
-            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey)?;
+            let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
             let take_u16 = (take / 100.0 * 65535.0).min(65535.0) as u16;
             println!("Increasing take to {:.2}% for {}", take, crate::utils::short_ss58(&hk));
             let hash = client.increase_take(&pair, &hk, take_u16).await?;
@@ -520,6 +526,7 @@ async fn handle_identity(
     client: &Client,
     wallet_dir: &str,
     wallet_name: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         IdentityCommands::Show { address } => {
@@ -549,7 +556,7 @@ async fn handle_identity(
         }
         IdentityCommands::SetSubnet { netuid, name, github, url } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             let identity = crate::types::chain_data::SubnetIdentity {
                 subnet_name: name.clone(),
                 github_repo: github.unwrap_or_default(),
@@ -574,11 +581,12 @@ async fn handle_swap(
     client: &Client,
     wallet_dir: &str,
     wallet_name: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         SwapCommands::Hotkey { new_hotkey } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             let old_hotkey = match wallet.hotkey_ss58().map(|s| s.to_string()) {
                 Some(hk) => hk,
                 None => {
@@ -594,7 +602,7 @@ async fn handle_swap(
         }
         SwapCommands::Coldkey { new_coldkey } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             println!("Scheduling coldkey swap to {}", crate::utils::short_ss58(&new_coldkey));
             let hash = client.schedule_swap_coldkey(wallet.coldkey()?, &new_coldkey).await?;
             println!("Coldkey swap scheduled. Tx: {}", hash);
@@ -692,6 +700,7 @@ async fn handle_multisig(
     wallet_dir: &str,
     wallet_name: &str,
     ws_url: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         MultisigCommands::Address { signatories, threshold } => {
@@ -725,7 +734,7 @@ async fn handle_multisig(
         MultisigCommands::Submit { others, threshold, pallet, call, args } => {
             let client = Client::connect(ws_url).await?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
 
             let other_addrs: Vec<&str> = others.split(',').map(|s| s.trim()).collect();
             let mut other_ids: Vec<crate::AccountId> = other_addrs.iter()
@@ -752,7 +761,7 @@ async fn handle_multisig(
         MultisigCommands::Approve { others, threshold, call_hash } => {
             let client = Client::connect(ws_url).await?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
 
             let other_addrs: Vec<&str> = others.split(',').map(|s| s.trim()).collect();
             let mut other_ids: Vec<crate::AccountId> = other_addrs.iter()
@@ -783,10 +792,11 @@ async fn handle_serve(
     wallet_dir: &str,
     wallet_name: &str,
     hotkey_name: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         ServeCommands::Axon { netuid, ip, port, protocol, version } => {
-            let (pair, _hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None)?;
+            let (pair, _hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
             let ip_u128: u128 = {
                 let parts: Vec<u8> = ip.split('.').filter_map(|p| p.parse().ok()).collect();
                 if parts.len() == 4 {
@@ -820,11 +830,12 @@ async fn handle_proxy(
     wallet_dir: &str,
     wallet_name: &str,
     output: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     match cmd {
         ProxyCommands::Add { delegate, proxy_type, delay } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             println!("Adding proxy: {} (type={}, delay={})", crate::utils::short_ss58(&delegate), proxy_type, delay);
             let hash = client.add_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?;
             println!("Proxy added. Tx: {}", hash);
@@ -832,7 +843,7 @@ async fn handle_proxy(
         }
         ProxyCommands::Remove { delegate, proxy_type, delay } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             println!("Removing proxy: {} (type={}, delay={})", crate::utils::short_ss58(&delegate), proxy_type, delay);
             let hash = client.remove_proxy(wallet.coldkey()?, &delegate, &proxy_type, delay).await?;
             println!("Proxy removed. Tx: {}", hash);
@@ -874,12 +885,13 @@ async fn handle_crowdloan(
     wallet_dir: &str,
     wallet_name: &str,
     output: &str,
+    password: Option<&str>,
 ) -> Result<()> {
     let _ = output;
     match cmd {
         CrowdloanCommands::Contribute { crowdloan_id, amount } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             let bal = Balance::from_tao(amount);
             println!("Contributing {} to crowdloan #{}", bal.display_tao(), crowdloan_id);
             let hash = client.crowdloan_contribute(wallet.coldkey()?, crowdloan_id, bal).await?;
@@ -888,7 +900,7 @@ async fn handle_crowdloan(
         }
         CrowdloanCommands::Withdraw { crowdloan_id } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             println!("Withdrawing from crowdloan #{}", crowdloan_id);
             let hash = client.crowdloan_withdraw(wallet.coldkey()?, crowdloan_id).await?;
             println!("Withdrawal submitted. Tx: {}", hash);
@@ -896,7 +908,7 @@ async fn handle_crowdloan(
         }
         CrowdloanCommands::Finalize { crowdloan_id } => {
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-            unlock_coldkey(&mut wallet)?;
+            unlock_coldkey(&mut wallet, password)?;
             println!("Finalizing crowdloan #{}", crowdloan_id);
             let hash = client.crowdloan_finalize(wallet.coldkey()?, crowdloan_id).await?;
             println!("Crowdloan finalized. Tx: {}", hash);

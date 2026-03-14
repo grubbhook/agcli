@@ -7,11 +7,16 @@ pub fn open_wallet(wallet_dir: &str, wallet_name: &str) -> Result<Wallet> {
     Wallet::open(&format!("{}/{}", wallet_dir, wallet_name))
 }
 
-pub fn unlock_coldkey(wallet: &mut Wallet) -> Result<()> {
-    let password = dialoguer::Password::new()
-        .with_prompt("Coldkey password")
-        .interact()?;
-    wallet.unlock_coldkey(&password)
+/// Unlock the coldkey. If `password` is provided, use it directly (non-interactive).
+/// Otherwise, prompt interactively.
+pub fn unlock_coldkey(wallet: &mut Wallet, password: Option<&str>) -> Result<()> {
+    let pw = match password {
+        Some(p) => p.to_string(),
+        None => dialoguer::Password::new()
+            .with_prompt("Coldkey password")
+            .interact()?,
+    };
+    wallet.unlock_coldkey(&pw)
 }
 
 pub fn resolve_coldkey_address(address: Option<String>, wallet_dir: &str, wallet_name: &str) -> String {
@@ -44,9 +49,10 @@ pub fn unlock_and_resolve(
     wallet_name: &str,
     hotkey_name: &str,
     hotkey_arg: Option<String>,
+    password: Option<&str>,
 ) -> Result<(sp_core::sr25519::Pair, String)> {
     let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-    unlock_coldkey(&mut wallet)?;
+    unlock_coldkey(&mut wallet, password)?;
     let hotkey_ss58 = resolve_hotkey_ss58(hotkey_arg, &mut wallet, hotkey_name)?;
     let pair = wallet.coldkey()?.clone();
     Ok((pair, hotkey_ss58))

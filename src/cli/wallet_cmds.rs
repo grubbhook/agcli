@@ -5,13 +5,19 @@ use crate::wallet::Wallet;
 use anyhow::Result;
 use sp_core::Pair as _;
 
-pub async fn handle_wallet(cmd: WalletCommands, wallet_dir: &str) -> Result<()> {
+pub async fn handle_wallet(cmd: WalletCommands, wallet_dir: &str, global_password: Option<&str>) -> Result<()> {
     match cmd {
-        WalletCommands::Create { name } => {
-            let password = dialoguer::Password::new()
-                .with_prompt("Set coldkey password")
-                .with_confirmation("Confirm password", "Passwords don't match")
-                .interact()?;
+        WalletCommands::Create { name, password: cmd_password } => {
+            let password = cmd_password
+                .or_else(|| global_password.map(|s| s.to_string()))
+                .map(Ok)
+                .unwrap_or_else(|| {
+                    dialoguer::Password::new()
+                        .with_prompt("Set coldkey password")
+                        .with_confirmation("Confirm password", "Passwords don't match")
+                        .interact()
+                        .map_err(anyhow::Error::from)
+                })?;
             let wallet = Wallet::create(wallet_dir, &name, &password, "default")?;
             println!("Wallet '{}' created.", name);
             if let Some(addr) = wallet.coldkey_ss58() {
@@ -65,14 +71,23 @@ pub async fn handle_wallet(cmd: WalletCommands, wallet_dir: &str) -> Result<()> 
             }
             Ok(())
         }
-        WalletCommands::Import { name } => {
-            let mnemonic = dialoguer::Input::<String>::new()
-                .with_prompt("Enter mnemonic phrase")
-                .interact_text()?;
-            let password = dialoguer::Password::new()
-                .with_prompt("Set password")
-                .with_confirmation("Confirm", "Mismatch")
-                .interact()?;
+        WalletCommands::Import { name, mnemonic: cmd_mnemonic, password: cmd_password } => {
+            let mnemonic = match cmd_mnemonic {
+                Some(m) => m,
+                None => dialoguer::Input::<String>::new()
+                    .with_prompt("Enter mnemonic phrase")
+                    .interact_text()?,
+            };
+            let password = cmd_password
+                .or_else(|| global_password.map(|s| s.to_string()))
+                .map(Ok)
+                .unwrap_or_else(|| {
+                    dialoguer::Password::new()
+                        .with_prompt("Set password")
+                        .with_confirmation("Confirm", "Mismatch")
+                        .interact()
+                        .map_err(anyhow::Error::from)
+                })?;
             let wallet = Wallet::import_from_mnemonic(wallet_dir, &name, &mnemonic, &password)?;
             println!("Wallet '{}' imported.", name);
             if let Some(addr) = wallet.coldkey_ss58() {
@@ -80,15 +95,24 @@ pub async fn handle_wallet(cmd: WalletCommands, wallet_dir: &str) -> Result<()> 
             }
             Ok(())
         }
-        WalletCommands::RegenColdkey => {
+        WalletCommands::RegenColdkey { mnemonic: cmd_mnemonic, password: cmd_password } => {
             println!("Regenerating coldkey from mnemonic...");
-            let mnemonic = dialoguer::Input::<String>::new()
-                .with_prompt("Enter mnemonic phrase")
-                .interact_text()?;
-            let password = dialoguer::Password::new()
-                .with_prompt("Set password")
-                .with_confirmation("Confirm", "Mismatch")
-                .interact()?;
+            let mnemonic = match cmd_mnemonic {
+                Some(m) => m,
+                None => dialoguer::Input::<String>::new()
+                    .with_prompt("Enter mnemonic phrase")
+                    .interact_text()?,
+            };
+            let password = cmd_password
+                .or_else(|| global_password.map(|s| s.to_string()))
+                .map(Ok)
+                .unwrap_or_else(|| {
+                    dialoguer::Password::new()
+                        .with_prompt("Set password")
+                        .with_confirmation("Confirm", "Mismatch")
+                        .interact()
+                        .map_err(anyhow::Error::from)
+                })?;
             let wallet =
                 Wallet::import_from_mnemonic(wallet_dir, "default", &mnemonic, &password)?;
             println!("Coldkey regenerated.");
@@ -97,11 +121,14 @@ pub async fn handle_wallet(cmd: WalletCommands, wallet_dir: &str) -> Result<()> 
             }
             Ok(())
         }
-        WalletCommands::RegenHotkey { name } => {
+        WalletCommands::RegenHotkey { name, mnemonic: cmd_mnemonic } => {
             println!("Regenerating hotkey '{}' from mnemonic...", name);
-            let mnemonic = dialoguer::Input::<String>::new()
-                .with_prompt("Enter hotkey mnemonic phrase")
-                .interact_text()?;
+            let mnemonic = match cmd_mnemonic {
+                Some(m) => m,
+                None => dialoguer::Input::<String>::new()
+                    .with_prompt("Enter hotkey mnemonic phrase")
+                    .interact_text()?,
+            };
             let pair = crate::wallet::keypair::pair_from_mnemonic(&mnemonic)?;
             let ss58 = crate::wallet::keypair::to_ss58(&pair.public(), 42);
             let hotkey_path =

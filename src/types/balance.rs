@@ -110,4 +110,75 @@ mod tests {
         let b = Balance::from_rao(20);
         assert_eq!((a - b).rao(), 0); // saturating
     }
+
+    #[test]
+    fn zero_balance() {
+        let b = Balance::ZERO;
+        assert_eq!(b.rao(), 0);
+        assert_eq!(b.tao(), 0.0);
+    }
+
+    #[test]
+    fn add_balances() {
+        let a = Balance::from_rao(500_000_000);
+        let b = Balance::from_rao(700_000_000);
+        let c = a + b;
+        assert_eq!(c.rao(), 1_200_000_000);
+        assert!((c.tao() - 1.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn saturating_add_at_max() {
+        let a = Balance::from_rao(u64::MAX);
+        let b = Balance::from_rao(1);
+        let c = a + b;
+        assert_eq!(c.rao(), u64::MAX);
+    }
+
+    #[test]
+    fn display_tao_format() {
+        let b = Balance::from_tao(3.14);
+        let s = b.display_tao();
+        assert!(s.contains("τ"));
+        assert!(s.starts_with("3."));
+    }
+
+    #[test]
+    fn from_tao_fractional() {
+        let b = Balance::from_tao(0.000000001);
+        assert_eq!(b.rao(), 1);
+    }
+
+    #[test]
+    fn ordering() {
+        let a = Balance::from_tao(1.0);
+        let b = Balance::from_tao(2.0);
+        assert!(a < b);
+        assert!(b > a);
+    }
+
+    #[test]
+    fn alpha_balance_basics() {
+        let a = AlphaBalance::ZERO;
+        assert_eq!(a.raw(), 0);
+        let b = AlphaBalance::from_raw(1_000_000_000);
+        assert_eq!(b.raw(), 1_000_000_000);
+        let display = format!("{}", b);
+        assert!(display.contains("α"));
+    }
+
+    #[test]
+    fn balance_equality() {
+        let a = Balance::from_tao(1.0);
+        let b = Balance::from_rao(1_000_000_000);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn balance_serialization() {
+        let b = Balance::from_tao(2.5);
+        let json = serde_json::to_string(&b).unwrap();
+        let deserialized: Balance = serde_json::from_str(&json).unwrap();
+        assert_eq!(b, deserialized);
+    }
 }

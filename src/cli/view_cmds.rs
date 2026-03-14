@@ -151,7 +151,7 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
                 d.tao_in.display_tao(),
                 format!("{}", d.alpha_in),
                 format!("{}", d.alpha_out),
-                format!("{}", d.emission),
+                format!("{:.4} τ", d.emission as f64 / 1e9),
                 format!("{}", d.tempo),
             ]);
         }
@@ -225,7 +225,7 @@ async fn handle_validators(
                     format!("{:.4}τ", v.stake.tao()),
                     format!("{:.4}", v.validator_trust),
                     format!("{:.4}", v.dividends),
-                    format!("{:.0}", v.emission),
+                    format!("{:.4} τ", v.emission / 1e9),
                 ]);
             }
             println!("{table}");
@@ -494,7 +494,7 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     if let Some(ref d) = dynamic {
         println!("    Price:               {:.6} τ/α", d.price);
         println!("    TAO in pool:         {}", d.tao_in.display_tao());
-        println!("    Subnet volume:       {}", d.subnet_volume);
+        println!("    Subnet volume:       {:.4} τ", d.subnet_volume as f64 / 1e9);
     }
 
     if let Some(ref h) = hyperparams {
