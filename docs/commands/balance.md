@@ -48,6 +48,11 @@ Stops on Ctrl+C. Continues through transient RPC errors with warnings.
 | Connection timeout | RPC endpoint down | Try `--network archive` or check endpoint |
 | Invalid SS58 | Bad address format | Verify address (prefix 42) |
 
+## Source Code
+**agcli handler**: [`src/cli/commands.rs`](https://github.com/unconst/agcli/blob/main/src/cli/commands.rs) — Balance at L132 (one-shot, watch, historical modes)
+
+**On-chain**: reads `System::Account` storage from the standard Substrate System pallet.
+
 ## Related Commands
 - `agcli transfer` — Send TAO
 - `agcli stake list` — View staked positions

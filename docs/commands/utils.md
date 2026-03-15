@@ -45,6 +45,11 @@ Diagnostic check: connectivity, wallet access, chain state.
 agcli doctor
 ```
 
+## Source Code
+**agcli handler**: [`src/cli/system_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/system_cmds.rs) — `handle_utils()` at L184 (Convert L191, Latency L215), `generate_completions()` at L112, `handle_update()` at L331, `handle_doctor()` at L439
+
+**No on-chain interaction** for convert/completions/update. Latency and doctor make RPC test calls.
+
 ## Related Commands
 - `agcli explain` — Built-in concept reference
 - `agcli config show` — Current configuration

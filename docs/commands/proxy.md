@@ -54,5 +54,10 @@ agcli --proxy 5RealAccount... stake add --amount 10 --netuid 1
 
 This wraps the extrinsic in `Proxy.proxy(real_account, call)`.
 
+## Source Code
+**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_proxy()` at L500, subcommands: Add L509, CreatePure L545, KillPure L563, List L581
+
+**Substrate pallet**: Uses standard `Proxy` pallet (`Proxy::add_proxy`, `Proxy::remove_proxy`, `Proxy::create_pure`, `Proxy::kill_pure`).
+
 ## Related Commands
 - `agcli explain --topic proxy` — How proxies work on Bittensor

@@ -128,6 +128,13 @@ agcli wallet check-swap [--address SS58]
 - Wallet creation is protected by a directory-level lock (prevents concurrent creation corruption)
 - Never expose mnemonics or private keys in logs or output
 
+## Source Code
+**agcli handler**: [`src/cli/wallet_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/wallet_cmds.rs) — `handle_wallet()` at L9, subcommands: Create L17, List L41, Show L78, Import L171, RegenColdkey L193, RegenHotkey L213, NewHotkey L238, Sign L259, Verify L277, Derive L325. AssociateHotkey and CheckSwap dispatched from [`src/cli/commands.rs`](https://github.com/unconst/agcli/blob/main/src/cli/commands.rs) at L79 and L90.
+
+**Subtensor pallet** (for on-chain ops):
+- [`macros/dispatches.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/dispatches.rs) — `try_associate_hotkey` dispatch
+- [`swap/swap_coldkey.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/swap/swap_coldkey.rs) — swap status queries
+
 ## Related Commands
 - `agcli balance` — Check wallet balance
 - `agcli stake list` — View stakes for wallet

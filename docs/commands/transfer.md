@@ -56,6 +56,11 @@ agcli transfer-all --dest 5Dest... [--keep-alive] [--password PW] [--yes]
 - Existential deposit: 500 RAO (0.0000005 TAO) — the minimum balance to keep an account alive
 - Fee handler: `SubtensorTxFeeHandler` (custom Bittensor fee logic)
 
+## Source Code
+**agcli handler**: [`src/cli/commands.rs`](https://github.com/unconst/agcli/blob/main/src/cli/commands.rs) — Transfer at L238, TransferAll at L269
+
+**Substrate pallet**: Uses `Balances::transfer_keep_alive` and `Balances::transfer_all` from the standard Substrate Balances pallet (not SubtensorModule).
+
 ## Related Commands
 - `agcli balance` — Check balance before transfer
 - `agcli view history` — See recent transactions

@@ -35,6 +35,13 @@ agcli serve prometheus --ip 1.2.3.4 --port 9090 [--version 0]
 **On-chain**: `SubtensorModule::serve_prometheus(origin, netuid, version, ip, port, ip_type)`
 - Events: `PrometheusServed(netuid, hotkey)`
 
+## Source Code
+**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_serve()` at L430, subcommands: Axon L438, Reset L474
+
+**Subtensor pallet**:
+- [`subnets/serving.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/serving.rs) — `serve_axon`, `serve_prometheus` logic
+- [`macros/dispatches.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/dispatches.rs) — dispatch entry points
+
 ## Related Commands
 - `agcli subnet metagraph --netuid N --full` — See axon endpoints for all neurons
 - `agcli subnet probe --netuid N` — Test axon connectivity

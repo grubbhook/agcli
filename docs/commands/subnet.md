@@ -226,6 +226,21 @@ agcli subnet set-emission-split --netuid 1 --weights "50,50"
 | `TooManyRegistrationsThisBlock` | Registration flood | Wait 1+ blocks |
 | `SubNetRegistrationDisabled` | Subnet has registration off | Check hyperparams |
 
+## Source Code
+**agcli handler**: [`src/cli/subnet_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/subnet_cmds.rs) — `handle_subnet()` at L9, subcommands: List L17, Show L115, Hyperparams L182, Metagraph L264, Register L472, RegisterNeuron L480, Pow L492, Dissolve L540, Watch L561, Monitor L567, Health L572, Emissions L573, Cost L576, Commits L721, SetParam L724, SetSymbol L738, Trim L768, Start L821, CheckStart L796, EmissionSplit L748, MechanismCount L836, SetMechanismCount L846, SetEmissionSplit L864, CacheLoad L577, CacheList L635, CacheDiff L660, CachePrune L704, Probe L713, Liquidity L564
+
+**Subtensor pallet**:
+- [`subnets/registration.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/registration.rs) — `register_network`, `burned_register`, `register` (PoW)
+- [`subnets/subnet.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/subnet.rs) — `schedule_dissolve_network`, `start_call`, subnet lifecycle
+- [`subnets/mechanism.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/mechanism.rs) — emission mechanisms, mechanism counts
+- [`subnets/symbols.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/symbols.rs) — `update_symbol`
+- [`subnets/uids.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/uids.rs) — UID management, trim
+- [`subnets/serving.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/serving.rs) — axon serving
+- [`subnets/weights.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/weights.rs) — weight commit/reveal
+- [`macros/dispatches.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/dispatches.rs) — all dispatch entry points
+- [`macros/events.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/events.rs) — event definitions
+- [`macros/errors.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/errors.rs) — error definitions
+
 ## Related Commands
 - `agcli stake add --netuid N` — Stake on a subnet
 - `agcli weights set --netuid N` — Set weights on a subnet

@@ -33,6 +33,13 @@ agcli identity set-subnet --netuid 1 --name "MySubnet" [--github "..."] [--url "
 **On-chain**: `SubtensorModule::set_subnet_identity(origin, netuid, subnet_name, github_repo, subnet_contact, subnet_url, discord, description, logo_url, additional)`
 - Errors: `NotSubnetOwner`
 
+## Source Code
+**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_identity()` at L163, subcommands: Show L170, Set L188, SetSubnet L200
+
+**Subtensor pallet**:
+- [`utils/identity.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/utils/identity.rs) — `set_identity`, `set_subnet_identity` logic
+- [`macros/dispatches.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/dispatches.rs) — dispatch entry points
+
 ## Related Commands
 - `agcli view account` — See identity in account overview
 - `agcli delegate show` — Validator identity

@@ -54,5 +54,10 @@ Dissolve a crowdloan after all funds are returned.
 agcli crowdloan dissolve --fund-index ID [--password PW]
 ```
 
+## Source Code
+**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_crowdloan()` at L616, subcommands: List L624, Info L662, Contributors L683, Create L729, Contribute L760, Withdraw L775, Finalize L782, Refund L789, Dissolve L796, UpdateCap L803, UpdateEnd L817, UpdateMinContribution L832
+
+**Substrate pallet**: Uses `Crowdloan` pallet for fund management and [`subnets/leasing.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/leasing.rs) for leased subnet registration.
+
 ## Related Commands
 - `agcli subnet list` — See active subnets including leased ones

@@ -51,6 +51,12 @@ agcli explain --topic tempo
 | `diff` | Compare chain state between two blocks |
 | `owner-workflow` | Step-by-step guide for subnet owners |
 
+## Source Code
+**agcli handler**: [`src/cli/system_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/system_cmds.rs) — `handle_explain()` at L131
+**Topic definitions**: [`src/utils/explain.rs`](https://github.com/unconst/agcli/blob/main/src/utils/explain.rs) — 33 topics with fuzzy matching aliases
+
+**No on-chain interaction** — all content is embedded in the binary.
+
 ## Related
 - `docs/commands/*.md` — Detailed command reference
 - `docs/tutorials/` — Step-by-step guides

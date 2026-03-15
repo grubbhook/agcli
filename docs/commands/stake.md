@@ -213,6 +213,21 @@ agcli stake wizard [--netuid 1] [--amount 5.0] [--hotkey SS58] [--password PW] [
 | `TooManyChildren` | >5 children set | Reduce child count |
 | `AmountTooLow` | Stake amount below minimum | Increase amount |
 
+## Source Code
+**agcli handler**: [`src/cli/stake_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/stake_cmds.rs) — `handle_stake()` at L9, subcommands: Add L100, Remove L140, List L17, Move L165, Swap L188, UnstakeAll L216, AddLimit L233, RemoveLimit L257, SwapLimit L356, ChildkeyTake L278, SetChildren L298, RecycleAlpha L314, BurnAlpha L340, UnstakeAllAlpha L330, ClaimRoot L226, ProcessClaim L480, SetAuto L378, ShowAuto L395, SetClaim L417, TransferStake L457, Wizard L554
+
+**Subtensor pallet**:
+- [`staking/add_stake.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/add_stake.rs) — `add_stake` extrinsic + AMM swap
+- [`staking/remove_stake.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/remove_stake.rs) — `remove_stake` + unstake flow
+- [`staking/move_stake.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/move_stake.rs) — `move_stake`, `swap_stake`, `transfer_stake`
+- [`staking/set_children.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/set_children.rs) — `set_children`, `set_childkey_take`
+- [`staking/recycle_alpha.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/recycle_alpha.rs) — `recycle_alpha`, burn operations
+- [`staking/claim_root.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/claim_root.rs) — `claim_root_dividends`
+- [`staking/stake_utils.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/stake_utils.rs) — AMM: `swap_tao_for_alpha()`, `swap_alpha_for_tao()`
+- [`macros/dispatches.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/dispatches.rs) — all dispatch entry points
+- [`macros/events.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/events.rs) — event definitions
+- [`macros/errors.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/errors.rs) — error definitions
+
 ## Related Commands
 - `agcli balance` — Check balance before staking
 - `agcli view portfolio` — See all stakes and positions

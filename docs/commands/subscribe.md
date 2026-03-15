@@ -34,6 +34,11 @@ agcli subscribe events [--filter staking] [--netuid 1] [--account SS58]
 | `weights` | WeightsSet, WeightsCommitted, WeightsRevealed |
 | `subnet` | NetworkAdded, NetworkRemoved, hyperparameter changes |
 
+## Source Code
+**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_subscribe()` at L284, subcommands: Blocks L292, Events L293
+
+**On-chain**: uses subxt subscription APIs (`subscribe_finalized_blocks`, `subscribe_events`) — no extrinsics.
+
 ## Related Commands
 - `agcli subnet monitor` — Higher-level subnet monitoring with anomaly detection
 - `agcli subnet watch` — Tempo countdown and weight window status

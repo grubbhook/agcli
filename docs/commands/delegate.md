@@ -39,6 +39,14 @@ agcli delegate increase-take --take 15.0 [--hotkey SS58]
 **On-chain**: `SubtensorModule::increase_take(origin, hotkey, take)`
 - Errors: `DelegateTakeTooHigh`, `DelegateTxRateLimitExceeded`
 
+## Source Code
+**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_delegate()` at L49, subcommands: List L55, Show L86, DecreaseTake L121, IncreaseTake L124
+
+**Subtensor pallet**:
+- [`staking/decrease_take.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/decrease_take.rs) — `decrease_take` extrinsic
+- [`staking/increase_take.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/staking/increase_take.rs) — `increase_take` extrinsic
+- [`macros/dispatches.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/dispatches.rs) — dispatch entry points
+
 ## Related Commands
 - `agcli stake add` — Stake behind a delegate
 - `agcli view nominations --hotkey SS58` — See who nominates a delegate

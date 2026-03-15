@@ -110,6 +110,11 @@ agcli --network archive view dynamic --at-block 3500000
 
 Requires an archive node for blocks beyond ~256 block pruning window.
 
+## Source Code
+**agcli handler**: [`src/cli/view_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/view_cmds.rs) — `handle_view()` at L9, subcommands: Portfolio L17, Network L27, Dynamic L28, Neuron L37, Validators L42, History L47, Account L51, SubnetAnalytics L55, StakingAnalytics L58, SwapSim L62, Nominations L65. Audit: `handle_audit()` at L1287.
+
+**On-chain**: read-only queries against `System::Account`, `SubtensorModule` storage maps (Stake, Alpha, DynamicInfo, SubnetHyperparams, Metagraph, etc.). History uses [Subscan API](https://bittensor.api.subscan.io/api/v2/scan/extrinsics).
+
 ## Related Commands
 - `agcli balance` — Simple balance check
 - `agcli stake list` — Stake positions only

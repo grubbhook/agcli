@@ -39,5 +39,10 @@ agcli multisig approve --others "SS58_2,SS58_3" --threshold 2 --call-hash 0x...
 
 **On-chain**: `Multisig::approve_as_multi(origin, threshold, other_signatories, maybe_timepoint, call_hash, max_weight)`
 
+## Source Code
+**agcli handler**: [`src/cli/network_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/network_cmds.rs) — `handle_multisig()` at L314, subcommands: Address L323, Submit L356, Approve L400
+
+**Substrate pallet**: Uses standard `Multisig` pallet (`Multisig::as_multi`, `Multisig::approve_as_multi`).
+
 ## Related Commands
 - `agcli proxy add` — Simpler delegation (single signer)

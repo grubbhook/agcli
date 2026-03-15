@@ -61,3 +61,8 @@ Pre-flight check runs before every `stake add`. Prevents accidental large stakes
 
 ## Config writes are atomic
 Uses temp-file + rename to prevent corruption on crash.
+
+## Source Code
+**agcli handler**: [`src/cli/system_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/system_cmds.rs) — `handle_config()` at L9, subcommands: Show L11, Set L23, Unset L58, Path L82
+
+**No on-chain interaction** — config is purely local (`~/.agcli/config.toml`).

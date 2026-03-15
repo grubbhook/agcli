@@ -136,6 +136,15 @@ Or use `agcli weights commit-reveal` to do both automatically.
 | `RevealTooEarly` | Reveal window not open yet | Wait for reveal window |
 | `UidVecContainInvalidOne` | UID not in metagraph | Check `agcli subnet metagraph` |
 
+## Source Code
+**agcli handler**: [`src/cli/weights_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/weights_cmds.rs) — `handle_weights()` at L9, subcommands: Set L17, Commit L98, Reveal L128, CommitReveal L166, Status L291
+
+**Subtensor pallet**:
+- [`subnets/weights.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/subnets/weights.rs) — `set_weights`, `commit_crv3_weights`, `reveal_crv3_weights`, mechanism weights, timelocked weights, batch weight operations
+- [`macros/dispatches.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/dispatches.rs) — dispatch entry points for all weight extrinsics
+- [`macros/events.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/events.rs) — WeightsSet, CRV3WeightsCommitted, CRV3WeightsRevealed, TimelockedWeightsCommitted, BatchWeightsCompleted
+- [`macros/errors.rs`](https://github.com/opentensor/subtensor/blob/main/pallets/subtensor/src/macros/errors.rs) — weight-related error definitions
+
 ## Related Commands
 - `agcli subnet hyperparams --netuid N` — Check weights_rate_limit, commit_reveal settings
 - `agcli subnet watch --netuid N` — Live tempo countdown and weight window status

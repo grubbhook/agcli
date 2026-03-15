@@ -29,6 +29,11 @@ agcli batch --file calls.json [--no-atomic] [--password PW] [--yes]
 - **atomic** (`batch_all`, default): All calls succeed or all revert. Safe for related operations.
 - **non-atomic** (`batch`, `--no-atomic`): Each call independent. Failed calls don't revert others.
 
+## Source Code
+**agcli handler**: [`src/cli/system_cmds.rs`](https://github.com/unconst/agcli/blob/main/src/cli/system_cmds.rs) — `handle_batch()` at L354. Dispatched from [`src/cli/commands.rs`](https://github.com/unconst/agcli/blob/main/src/cli/commands.rs) at L384.
+
+**Substrate pallet**: Uses standard `Utility` pallet (`Utility::batch_all`, `Utility::batch`).
+
 ## Related Commands
 - `agcli weights set` — Single weight set (simpler than batch)
 - `agcli stake add` — Single stake (simpler than batch)
