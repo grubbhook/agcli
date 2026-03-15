@@ -1,0 +1,58 @@
+# proxy — Proxy Account Management
+
+Delegate signing authority to another account. Proxy accounts can sign transactions on behalf of the delegator, filtered by operation type.
+
+## Subcommands
+
+### proxy add
+Add a proxy delegate.
+
+```bash
+agcli proxy add --delegate SS58 [--proxy-type staking] [--delay 0]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--delegate` | SS58 address to grant proxy access |
+| `--proxy-type` | Restrict to: any, owner, staking, non_transfer, non_critical, governance, senate |
+| `--delay` | Announcement delay in blocks (0 = instant) |
+
+**On-chain**: `Proxy::add_proxy(origin, delegate, proxy_type, delay)`
+
+### proxy remove
+Remove a proxy delegate.
+
+```bash
+agcli proxy remove --delegate SS58 [--proxy-type staking] [--delay 0]
+```
+
+### proxy list
+List all proxy delegates for an account.
+
+```bash
+agcli proxy list [--address SS58]
+# JSON: [{"delegate", "proxy_type", "delay"}]
+```
+
+## Proxy Types
+| Type | Allowed Operations |
+|------|-------------------|
+| `any` | All operations |
+| `owner` | Subnet owner operations |
+| `staking` | Stake add/remove/move only |
+| `non_transfer` | Everything except transfers |
+| `non_critical` | Non-critical operations |
+| `governance` | Governance voting |
+| `senate` | Senate operations |
+
+## Using Proxied Operations
+Any agcli command can be run through a proxy with `--proxy SS58`:
+
+```bash
+agcli --proxy 5RealAccount... stake add --amount 10 --netuid 1
+```
+
+This wraps the extrinsic in `Proxy.proxy(real_account, call)`.
+
+## Related Commands
+- `agcli explain --topic proxy` — How proxies work on Bittensor

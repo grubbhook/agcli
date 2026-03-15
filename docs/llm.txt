@@ -8,6 +8,46 @@ A Rust CLI and SDK for the Bittensor decentralized AI network. Manage wallets, s
 cargo install --git https://github.com/unconst/agcli
 ```
 
+## Command Reference (Agent-Optimized)
+
+Detailed docs for every command group in `docs/commands/`:
+
+| File | Commands | Description |
+|------|----------|-------------|
+| [stake.md](commands/stake.md) | stake add/remove/move/swap/list + 15 more | Staking, unstaking, limits, childkeys, alpha |
+| [subnet.md](commands/subnet.md) | subnet list/show/register/metagraph + 20 more | Subnet creation, monitoring, hyperparams |
+| [weights.md](commands/weights.md) | weights set/commit/reveal/commit-reveal/status | Weight setting with commit-reveal support |
+| [transfer.md](commands/transfer.md) | transfer, transfer-all | TAO transfers between accounts |
+| [balance.md](commands/balance.md) | balance, balance --watch | Balance queries and monitoring |
+| [view.md](commands/view.md) | view portfolio/network/dynamic/neuron + 7 more | Read-only analytics and queries |
+| [wallet.md](commands/wallet.md) | wallet create/list/show/import/sign + 6 more | Keypair management and signing |
+| [delegate.md](commands/delegate.md) | delegate list/show/decrease-take/increase-take | Validator delegation management |
+| [root.md](commands/root.md) | root register/weights | Root network (SN0) operations |
+| [identity.md](commands/identity.md) | identity show/set/set-subnet | On-chain identity management |
+| [proxy.md](commands/proxy.md) | proxy add/remove/list | Proxy account delegation |
+| [swap.md](commands/swap.md) | swap hotkey/coldkey | Key rotation and security |
+| [subscribe.md](commands/subscribe.md) | subscribe blocks/events | Real-time event streaming |
+| [multisig.md](commands/multisig.md) | multisig address/submit/approve | Multi-signature transactions |
+| [batch.md](commands/batch.md) | batch --file | Batch extrinsic submission from JSON |
+| [config.md](commands/config.md) | config show/set/unset/path | Persistent configuration |
+| [block.md](commands/block.md) | block latest/info | Block explorer |
+| [serve.md](commands/serve.md) | serve axon | Miner/validator endpoint announcement |
+| [crowdloan.md](commands/crowdloan.md) | crowdloan contribute/withdraw/finalize | Crowdloan participation |
+| [diff.md](commands/diff.md) | diff portfolio/subnet/network | Historical state comparison |
+| [explain.md](commands/explain.md) | explain [--topic T] | 33 built-in concept explanations |
+| [utils.md](commands/utils.md) | utils convert/latency, completions, update, doctor | Utilities and diagnostics |
+
+Each doc includes: CLI usage, flags, on-chain behavior (pallet calls, storage, events), error conditions, and related commands.
+
+## Tutorials
+
+Step-by-step guides in `docs/tutorials/`:
+- [getting-started.md](tutorials/getting-started.md) — First steps with agcli
+- [staking-guide.md](tutorials/staking-guide.md) — Staking and yield strategies
+- [validator-guide.md](tutorials/validator-guide.md) — Running a validator
+- [subnet-builder.md](tutorials/subnet-builder.md) — Creating and managing subnets
+- [agent-automation.md](tutorials/agent-automation.md) — Automating agcli with AI agents
+
 ## Agent / Non-Interactive Mode
 
 Every command is fully scriptable with zero stdin blocking when all required args are provided. Every argument uses `--flag` syntax (no positional args).
