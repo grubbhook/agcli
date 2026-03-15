@@ -16,7 +16,7 @@ agcli transfer --dest 5Dest... --amount 10.0 [--password PW] [--yes]
 | `--dest` | yes | Destination SS58 address |
 | `--amount` | yes | TAO to send (decimal, e.g. 10.5) |
 
-**On-chain**: `Balances::transfer_allow_death(origin, dest, value)`
+**On-chain**: `Balances::transfer_keep_alive(origin, dest, value)` — ensures sender stays above existential deposit.
 - 1 TAO = 1,000,000,000 RAO (u64)
 - Events: `Transfer { from, to, amount }`
 - Pre-checks: balance >= amount (checked client-side before submission)
@@ -52,8 +52,9 @@ agcli transfer-all --dest 5Dest... [--keep-alive] [--password PW] [--yes]
 | Invalid SS58 | Bad destination address | Verify address format (prefix 42) |
 
 ## Fees
-- Transaction fee: ~0.000125 TAO per transfer (varies with network load)
-- Existential deposit: 0.0005 TAO (500,000 RAO)
+- Transaction fee: ~0.000125 TAO per transfer (linear weight-to-fee, 1 RAO per byte length fee)
+- Existential deposit: 500 RAO (0.0000005 TAO) — the minimum balance to keep an account alive
+- Fee handler: `SubtensorTxFeeHandler` (custom Bittensor fee logic)
 
 ## Related Commands
 - `agcli balance` — Check balance before transfer

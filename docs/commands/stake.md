@@ -19,10 +19,11 @@ agcli stake add --amount 10.0 --netuid 1 [--hotkey SS58] [--max-slippage 2.0] [-
 | `--max-slippage` | no | Max slippage % — aborts if AMM price impact exceeds this |
 
 **On-chain**: `SubtensorModule::add_stake(origin, hotkey, netuid, amount_staked)`
-- Storage: `Stake`, `TotalHotkeyStake`, `TotalColdkeyStake`, `TotalSubnetStake`
-- Events: `StakeAdded(hotkey, coldkey, netuid, amount)`
+- Flow: withdraw TAO from coldkey → `stake_into_subnet()` → `swap_tao_for_alpha()` via AMM → increase alpha shares
+- Storage: `Alpha(hotkey, coldkey, netuid)` shares, `TotalHotkeyAlpha`, `SubnetTAO`, `SubnetAlphaIn/Out`, `TotalStake`
+- Events: `StakeAdded(coldkey, hotkey, tao_amount, alpha_amount, netuid, block)`
 - Pre-checks: balance >= amount, spending limit check, slippage simulation
-- Errors: `NotEnoughBalanceToStake`, `HotKeyAccountNotExists`, `StakingRateLimitExceeded`
+- Errors: `NotEnoughBalanceToStake`, `HotKeyAccountNotExists`, `StakingRateLimitExceeded`, `InsufficientLiquidity`
 
 ### stake remove
 Unstake alpha from a subnet. Converts alpha → TAO via the AMM pool.
@@ -32,8 +33,9 @@ agcli stake remove --amount 5.0 --netuid 1 [--hotkey SS58] [--max-slippage 2.0]
 ```
 
 **On-chain**: `SubtensorModule::remove_stake(origin, hotkey, netuid, amount_unstaked)`
-- Events: `StakeRemoved(hotkey, coldkey, netuid, amount)`
-- Errors: `NotEnoughStakeToWithdraw`, `StakingRateLimitExceeded`
+- Flow: decrease alpha shares → `unstake_from_subnet()` → `swap_alpha_for_tao()` via AMM → deposit TAO to coldkey
+- Events: `StakeRemoved(coldkey, hotkey, tao_amount, alpha_amount, netuid, block)`
+- Errors: `NotEnoughStakeToWithdraw`, `StakingRateLimitExceeded`, `InsufficientLiquidity`
 
 ### stake list
 Show all stakes for a coldkey across all subnets.
@@ -53,8 +55,9 @@ agcli stake move --amount 5.0 --from 1 --to 2 [--hotkey SS58]
 ```
 
 **On-chain**: `SubtensorModule::move_stake(origin, hotkey, origin_netuid, destination_netuid, alpha_amount)`
-- Events: `StakeMoved(hotkey, coldkey, from_netuid, to_netuid, amount)`
-- Two AMM operations: sell alpha on source, buy alpha on destination
+- Events: `StakeMoved(coldkey, origin_hotkey, origin_netuid, dest_hotkey, dest_netuid, tao_equivalent)`
+- Two AMM operations: `swap_alpha_for_tao()` on source, `swap_tao_for_alpha()` on destination
+- All move/swap/transfer operations funnel through `transition_stake_internal()`
 
 ### stake swap
 Swap stake between hotkeys on the same subnet.
