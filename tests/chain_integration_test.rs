@@ -172,7 +172,7 @@ async fn extended_chain_queries() {
     println!("[ok] Proxies for address: {}", proxies.len());
 
     // ── all dynamic prices non-negative ──
-    for d in &all {
+    for d in all.iter() {
         assert!(
             d.price >= 0.0,
             "SN{} has negative price: {}",

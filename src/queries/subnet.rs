@@ -7,7 +7,8 @@ use anyhow::Result;
 /// List all subnets with basic info.
 pub async fn list_subnets(client: &Client) -> Result<Vec<SubnetInfo>> {
     // Enrich subnet list with real names from DynamicInfo (one call vs N identity queries)
-    let mut subnets = client.get_all_subnets().await?;
+    let subnets_arc = client.get_all_subnets().await?;
+    let mut subnets = (*subnets_arc).clone();
     if let Ok(dynamic) = client.get_all_dynamic_info().await {
         let name_map: std::collections::HashMap<u16, (String, u64)> = dynamic
             .iter()

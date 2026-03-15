@@ -827,12 +827,12 @@ async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Res
 // ──────── Subnet Liquidity ────────
 
 async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u16>) -> Result<()> {
-    let dynamic = match netuid {
+    let dynamic: Vec<crate::types::chain_data::DynamicInfo> = match netuid {
         Some(n) => match client.get_dynamic_info(NetUid(n)).await? {
             Some(d) => vec![d],
             None => anyhow::bail!("Subnet SN{} not found", n),
         },
-        None => client.get_all_dynamic_info().await?,
+        None => (*client.get_all_dynamic_info().await?).clone(),
     };
 
     // Common trade sizes for slippage estimation

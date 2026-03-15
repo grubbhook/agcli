@@ -34,10 +34,10 @@ impl Client {
     // ──────── Subnet Queries ────────
 
     /// List all subnets (via runtime API, cached for 30s).
-    pub async fn get_all_subnets(&self) -> Result<Vec<SubnetInfo>> {
+    /// Returns `Arc<Vec<SubnetInfo>>` to avoid cloning the entire collection.
+    pub async fn get_all_subnets(&self) -> Result<std::sync::Arc<Vec<SubnetInfo>>> {
         let inner = &self.inner;
-        let result = self
-            .cache
+        self.cache
             .get_all_subnets(|| async {
                 let payload = api::apis().subnet_info_runtime_api().get_subnets_info();
                 let result = inner
@@ -48,8 +48,7 @@ impl Client {
                     .await?;
                 Ok(result.into_iter().flatten().map(SubnetInfo::from).collect())
             })
-            .await?;
-        Ok((*result).clone())
+            .await
     }
 
     /// Get info for a specific subnet.
@@ -86,10 +85,10 @@ impl Client {
     }
 
     /// Get dynamic info for all subnets (cached for 30s).
-    pub async fn get_all_dynamic_info(&self) -> Result<Vec<DynamicInfo>> {
+    /// Returns `Arc<Vec<DynamicInfo>>` to avoid cloning the entire collection.
+    pub async fn get_all_dynamic_info(&self) -> Result<std::sync::Arc<Vec<DynamicInfo>>> {
         let inner = &self.inner;
-        let result = self
-            .cache
+        self.cache
             .get_all_dynamic_info(|| async {
                 let payload = api::apis().subnet_info_runtime_api().get_all_dynamic_info();
                 let result = inner
@@ -104,8 +103,7 @@ impl Client {
                     .map(DynamicInfo::from)
                     .collect())
             })
-            .await?;
-        Ok((*result).clone())
+            .await
     }
 
     /// Get dynamic info for a specific subnet (cached for 30s).
@@ -233,13 +231,13 @@ impl Client {
             .subnet_identities_v3(netuid.0);
         let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
         Ok(result.map(|id| SubnetIdentity {
-            subnet_name: String::from_utf8_lossy(&id.subnet_name).to_string(),
-            github_repo: String::from_utf8_lossy(&id.github_repo).to_string(),
-            subnet_contact: String::from_utf8_lossy(&id.subnet_contact).to_string(),
-            subnet_url: String::from_utf8_lossy(&id.subnet_url).to_string(),
-            discord: String::from_utf8_lossy(&id.discord).to_string(),
-            description: String::from_utf8_lossy(&id.description).to_string(),
-            additional: String::from_utf8_lossy(&id.additional).to_string(),
+            subnet_name: String::from_utf8_lossy(&id.subnet_name).into_owned(),
+            github_repo: String::from_utf8_lossy(&id.github_repo).into_owned(),
+            subnet_contact: String::from_utf8_lossy(&id.subnet_contact).into_owned(),
+            subnet_url: String::from_utf8_lossy(&id.subnet_url).into_owned(),
+            discord: String::from_utf8_lossy(&id.discord).into_owned(),
+            description: String::from_utf8_lossy(&id.description).into_owned(),
+            additional: String::from_utf8_lossy(&id.additional).into_owned(),
         }))
     }
 
@@ -657,7 +655,7 @@ fn decode_identity_data(data: &api::runtime_types::pallet_registry::types::Data)
         ($($variant:ident),+) => {
             match data {
                 Data::None => String::new(),
-                $(Data::$variant(b) => String::from_utf8_lossy(b).to_string(),)+
+                $(Data::$variant(b) => String::from_utf8_lossy(b).into_owned(),)+
                 _ => format!("<hash:{:?}>", data),
             }
         }

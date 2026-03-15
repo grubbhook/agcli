@@ -11,22 +11,51 @@ pub async fn fetch_metagraph(client: &Client, netuid: NetUid) -> Result<Metagrap
     let n = neurons.len() as u16;
     let block = client.get_block_number().await?;
 
+    // Single-pass extraction: iterate once instead of 12 times
+    let mut stake = Vec::with_capacity(neurons.len());
+    let mut ranks = Vec::with_capacity(neurons.len());
+    let mut trust = Vec::with_capacity(neurons.len());
+    let mut consensus = Vec::with_capacity(neurons.len());
+    let mut incentive = Vec::with_capacity(neurons.len());
+    let mut dividends = Vec::with_capacity(neurons.len());
+    let mut emission = Vec::with_capacity(neurons.len());
+    let mut validator_trust = Vec::with_capacity(neurons.len());
+    let mut validator_permit = Vec::with_capacity(neurons.len());
+    let mut uids = Vec::with_capacity(neurons.len());
+    let mut active = Vec::with_capacity(neurons.len());
+    let mut last_update = Vec::with_capacity(neurons.len());
+
+    for neuron in &neurons {
+        stake.push(neuron.stake);
+        ranks.push(neuron.rank);
+        trust.push(neuron.trust);
+        consensus.push(neuron.consensus);
+        incentive.push(neuron.incentive);
+        dividends.push(neuron.dividends);
+        emission.push(neuron.emission);
+        validator_trust.push(neuron.validator_trust);
+        validator_permit.push(neuron.validator_permit);
+        uids.push(neuron.uid);
+        active.push(neuron.active);
+        last_update.push(neuron.last_update);
+    }
+
     Ok(Metagraph {
         netuid,
         n,
         block,
-        stake: neurons.iter().map(|n| n.stake).collect(),
-        ranks: neurons.iter().map(|n| n.rank).collect(),
-        trust: neurons.iter().map(|n| n.trust).collect(),
-        consensus: neurons.iter().map(|n| n.consensus).collect(),
-        incentive: neurons.iter().map(|n| n.incentive).collect(),
-        dividends: neurons.iter().map(|n| n.dividends).collect(),
-        emission: neurons.iter().map(|n| n.emission).collect(),
-        validator_trust: neurons.iter().map(|n| n.validator_trust).collect(),
-        validator_permit: neurons.iter().map(|n| n.validator_permit).collect(),
-        uids: neurons.iter().map(|n| n.uid).collect(),
-        active: neurons.iter().map(|n| n.active).collect(),
-        last_update: neurons.iter().map(|n| n.last_update).collect(),
+        stake,
+        ranks,
+        trust,
+        consensus,
+        incentive,
+        dividends,
+        emission,
+        validator_trust,
+        validator_permit,
+        uids,
+        active,
+        last_update,
         neurons,
     })
 }

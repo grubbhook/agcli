@@ -31,7 +31,15 @@ pub async fn fetch_portfolio(client: &Client, coldkey_ss58: &str) -> Result<Port
     let (balance, stakes, dynamic) = tokio::try_join!(
         client.get_balance_ss58(coldkey_ss58),
         client.get_stake_for_coldkey(coldkey_ss58),
-        async { Ok::<_, anyhow::Error>(client.get_all_dynamic_info().await.unwrap_or_default()) },
+        async {
+            match client.get_all_dynamic_info().await {
+                Ok(d) => Ok::<_, anyhow::Error>(d),
+                Err(e) => {
+                    tracing::warn!("Failed to fetch dynamic info for portfolio: {e:#}");
+                    Ok(std::sync::Arc::new(vec![]))
+                }
+            }
+        },
     )?;
     let dynamic_map: std::collections::HashMap<u16, &crate::types::chain_data::DynamicInfo> =
         dynamic.iter().map(|d| (d.netuid.0, d)).collect();

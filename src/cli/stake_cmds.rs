@@ -487,10 +487,12 @@ async fn check_slippage(
     let nuid = NetUid(netuid);
     let rao = (amount * 1e9) as u64;
     let slippage = if is_buy {
-        // Staking: TAO → Alpha
-        let price_raw = client.current_alpha_price(nuid).await?;
+        // Staking: TAO → Alpha — parallel fetch price + simulation
+        let (price_raw, (out, _tf, _af)) = tokio::try_join!(
+            client.current_alpha_price(nuid),
+            client.sim_swap_tao_for_alpha(nuid, rao),
+        )?;
         let price = price_raw as f64 / 1e9;
-        let (out, _tf, _af) = client.sim_swap_tao_for_alpha(nuid, rao).await?;
         let out_f = out as f64 / 1e9;
         let eff_price = if out_f > 0.0 { amount / out_f } else { 0.0 };
         if price > 0.0 {
@@ -499,10 +501,12 @@ async fn check_slippage(
             0.0
         }
     } else {
-        // Unstaking: Alpha → TAO
-        let price_raw = client.current_alpha_price(nuid).await?;
+        // Unstaking: Alpha → TAO — parallel fetch price + simulation
+        let (price_raw, (out, _tf, _af)) = tokio::try_join!(
+            client.current_alpha_price(nuid),
+            client.sim_swap_alpha_for_tao(nuid, rao),
+        )?;
         let price = price_raw as f64 / 1e9;
-        let (out, _tf, _af) = client.sim_swap_alpha_for_tao(nuid, rao).await?;
         let out_f = out as f64 / 1e9;
         let eff_price = if amount > 0.0 { out_f / amount } else { 0.0 };
         if price > 0.0 {
@@ -558,16 +562,16 @@ async fn staking_wizard(
         crate::utils::short_ss58(&coldkey_ss58)
     );
 
-    let balance = client.get_balance_ss58(&coldkey_ss58).await?;
+    let (balance, dynamic) = tokio::try_join!(
+        client.get_balance_ss58(&coldkey_ss58),
+        client.get_all_dynamic_info(),
+    )?;
     println!("Balance: {}\n", balance.display_tao());
 
     if balance.rao() == 0 {
         println!("You need TAO to stake. Transfer some TAO to your coldkey first.");
         return Ok(());
     }
-
-    println!("Fetching subnet data...");
-    let dynamic = client.get_all_dynamic_info().await?;
     let mut subnets_with_pool: Vec<_> = dynamic.iter().filter(|d| d.tao_in.rao() > 0).collect();
     subnets_with_pool.sort_by(|a, b| b.tao_in.rao().cmp(&a.tao_in.rao()));
 

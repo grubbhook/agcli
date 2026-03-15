@@ -686,7 +686,12 @@ async fn handle_account_explorer(
         client.get_balance_ss58(address),
         client.get_stake_for_coldkey(address),
         client.get_identity(address),
-        async { Ok::<_, anyhow::Error>(client.get_all_dynamic_info().await.unwrap_or_default()) },
+        async {
+            match client.get_all_dynamic_info().await {
+                Ok(d) => Ok::<_, anyhow::Error>(d),
+                Err(e) => { tracing::warn!("get_all_dynamic_info failed (non-fatal): {e:#}"); Ok(Default::default()) }
+            }
+        },
         async {
             Ok::<_, anyhow::Error>(match client.get_delegate(address).await {
                 Ok(v) => v,
@@ -1009,7 +1014,12 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
 async fn handle_staking_analytics(client: &Client, address: &str, output: &str) -> Result<()> {
     let (stakes, dynamic, block_emission) = tokio::try_join!(
         client.get_stake_for_coldkey(address),
-        async { Ok::<_, anyhow::Error>(client.get_all_dynamic_info().await.unwrap_or_default()) },
+        async {
+            match client.get_all_dynamic_info().await {
+                Ok(d) => Ok::<_, anyhow::Error>(d),
+                Err(e) => { tracing::warn!("get_all_dynamic_info failed (non-fatal): {e:#}"); Ok(Default::default()) }
+            }
+        },
         client.get_block_emission(),
     )?;
     let dynamic_map = build_dynamic_map(&dynamic);
@@ -1288,10 +1298,10 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
             })
         },
         async {
-            Ok::<_, anyhow::Error>(match client.get_all_dynamic_info().await {
-                Ok(v) => v,
-                Err(e) => { tracing::debug!(error = %e, "get_all_dynamic_info failed (non-fatal)"); Vec::new() }
-            })
+            match client.get_all_dynamic_info().await {
+                Ok(d) => Ok::<_, anyhow::Error>(d),
+                Err(e) => { tracing::debug!(error = %e, "get_all_dynamic_info failed (non-fatal)"); Ok(Default::default()) }
+            }
         },
         async {
             Ok::<_, anyhow::Error>(match client.get_coldkey_swap_scheduled(address).await {
