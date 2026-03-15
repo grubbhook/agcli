@@ -939,6 +939,15 @@ fn format_slippage(pct: f64) -> String {
 
 // ──────── Subnet Monitor ────────
 
+/// Output an event as JSON or human-readable text.
+fn emit_event(json_mode: bool, event: serde_json::Value, human_msg: &str) {
+    if json_mode {
+        println!("{}", event);
+    } else {
+        println!("{}", human_msg);
+    }
+}
+
 async fn handle_subnet_monitor(
     client: &Client,
     netuid: u16,
@@ -956,7 +965,6 @@ async fn handle_subnet_monitor(
         eprintln!("Tracking: registrations, deregistrations, emission shifts, stake changes\n");
     }
 
-    // Snapshot state for diff detection
     struct NeuronSnapshot {
         hotkey: String,
         coldkey: String,
@@ -990,57 +998,42 @@ async fn handle_subnet_monitor(
         }
 
         if !first {
-            // Detect new registrations
             for &uid in &cur_uids {
                 if !prev_uids.contains(&uid) {
                     let snap = &cur_map[&uid];
-                    let event = serde_json::json!({
-                        "event": "registration",
-                        "block": block,
-                        "netuid": netuid,
-                        "uid": uid,
-                        "hotkey": snap.hotkey,
-                        "coldkey": snap.coldkey,
-                    });
-                    if json_mode {
-                        println!("{}", event);
-                    } else {
-                        println!(
+                    emit_event(
+                        json_mode,
+                        serde_json::json!({
+                            "event": "registration", "block": block, "netuid": netuid,
+                            "uid": uid, "hotkey": snap.hotkey, "coldkey": snap.coldkey,
+                        }),
+                        &format!(
                             "[{}] NEW UID {} registered — hotkey {} coldkey {}",
-                            block,
-                            uid,
+                            block, uid,
                             crate::utils::short_ss58(&snap.hotkey),
                             crate::utils::short_ss58(&snap.coldkey)
-                        );
-                    }
+                        ),
+                    );
                 }
             }
 
-            // Detect deregistrations
             for &uid in &prev_uids {
                 if !cur_uids.contains(&uid) {
                     let snap = &prev_map[&uid];
-                    let event = serde_json::json!({
-                        "event": "deregistration",
-                        "block": block,
-                        "netuid": netuid,
-                        "uid": uid,
-                        "hotkey": snap.hotkey,
-                    });
-                    if json_mode {
-                        println!("{}", event);
-                    } else {
-                        println!(
+                    emit_event(
+                        json_mode,
+                        serde_json::json!({
+                            "event": "deregistration", "block": block, "netuid": netuid,
+                            "uid": uid, "hotkey": snap.hotkey,
+                        }),
+                        &format!(
                             "[{}] UID {} deregistered (was {})",
-                            block,
-                            uid,
-                            crate::utils::short_ss58(&snap.hotkey)
-                        );
-                    }
+                            block, uid, crate::utils::short_ss58(&snap.hotkey)
+                        ),
+                    );
                 }
             }
 
-            // Detect significant changes for existing UIDs
             for &uid in &cur_uids {
                 if !prev_uids.contains(&uid) {
                     continue;
@@ -1048,116 +1041,74 @@ async fn handle_subnet_monitor(
                 let cur = &cur_map[&uid];
                 let prev = &prev_map[&uid];
 
-                // Hotkey changed (re-registration into same slot)
                 if cur.hotkey != prev.hotkey {
-                    let event = serde_json::json!({
-                        "event": "hotkey_change",
-                        "block": block,
-                        "netuid": netuid,
-                        "uid": uid,
-                        "old_hotkey": prev.hotkey,
-                        "new_hotkey": cur.hotkey,
-                    });
-                    if json_mode {
-                        println!("{}", event);
-                    } else {
-                        println!(
+                    emit_event(
+                        json_mode,
+                        serde_json::json!({
+                            "event": "hotkey_change", "block": block, "netuid": netuid,
+                            "uid": uid, "old_hotkey": prev.hotkey, "new_hotkey": cur.hotkey,
+                        }),
+                        &format!(
                             "[{}] UID {} hotkey changed: {} → {}",
-                            block,
-                            uid,
+                            block, uid,
                             crate::utils::short_ss58(&prev.hotkey),
                             crate::utils::short_ss58(&cur.hotkey)
-                        );
-                    }
+                        ),
+                    );
                 }
 
-                // Large emission shift (>20% relative change)
                 if prev.emission > 0.0 {
                     let change_pct = ((cur.emission - prev.emission) / prev.emission * 100.0).abs();
                     if change_pct > 20.0 {
-                        let event = serde_json::json!({
-                            "event": "emission_shift",
-                            "block": block,
-                            "netuid": netuid,
-                            "uid": uid,
-                            "hotkey": cur.hotkey,
-                            "old_emission": prev.emission,
-                            "new_emission": cur.emission,
-                            "change_pct": change_pct,
-                        });
-                        if json_mode {
-                            println!("{}", event);
-                        } else {
-                            let dir = if cur.emission > prev.emission {
-                                "↑"
-                            } else {
-                                "↓"
-                            };
-                            println!(
+                        let dir = if cur.emission > prev.emission { "↑" } else { "↓" };
+                        emit_event(
+                            json_mode,
+                            serde_json::json!({
+                                "event": "emission_shift", "block": block, "netuid": netuid,
+                                "uid": uid, "hotkey": cur.hotkey,
+                                "old_emission": prev.emission, "new_emission": cur.emission,
+                                "change_pct": change_pct,
+                            }),
+                            &format!(
                                 "[{}] UID {} emission {}{:.0}% ({:.4}τ → {:.4}τ) — {}",
-                                block,
-                                uid,
-                                dir,
-                                change_pct,
-                                prev.emission / 1e9,
-                                cur.emission / 1e9,
+                                block, uid, dir, change_pct,
+                                prev.emission / 1e9, cur.emission / 1e9,
                                 crate::utils::short_ss58(&cur.hotkey)
-                            );
-                        }
+                            ),
+                        );
                     }
                 }
 
-                // Large incentive shift (>0.05 absolute change)
                 let incentive_delta = (cur.incentive - prev.incentive).abs();
                 if incentive_delta > 0.05 {
-                    let event = serde_json::json!({
-                        "event": "incentive_shift",
-                        "block": block,
-                        "netuid": netuid,
-                        "uid": uid,
-                        "hotkey": cur.hotkey,
-                        "old_incentive": prev.incentive,
-                        "new_incentive": cur.incentive,
-                    });
-                    if json_mode {
-                        println!("{}", event);
-                    } else {
-                        let dir = if cur.incentive > prev.incentive {
-                            "↑"
-                        } else {
-                            "↓"
-                        };
-                        println!(
+                    let dir = if cur.incentive > prev.incentive { "↑" } else { "↓" };
+                    emit_event(
+                        json_mode,
+                        serde_json::json!({
+                            "event": "incentive_shift", "block": block, "netuid": netuid,
+                            "uid": uid, "hotkey": cur.hotkey,
+                            "old_incentive": prev.incentive, "new_incentive": cur.incentive,
+                        }),
+                        &format!(
                             "[{}] UID {} incentive {} {:.4} → {:.4} — {}",
-                            block,
-                            uid,
-                            dir,
-                            prev.incentive,
-                            cur.incentive,
+                            block, uid, dir, prev.incentive, cur.incentive,
                             crate::utils::short_ss58(&cur.hotkey)
-                        );
-                    }
+                        ),
+                    );
                 }
 
-                // Became inactive
                 if prev.active && !cur.active {
-                    let event = serde_json::json!({
-                        "event": "inactive",
-                        "block": block,
-                        "netuid": netuid,
-                        "uid": uid,
-                        "hotkey": cur.hotkey,
-                    });
-                    if json_mode {
-                        println!("{}", event);
-                    } else {
-                        println!(
+                    emit_event(
+                        json_mode,
+                        serde_json::json!({
+                            "event": "inactive", "block": block, "netuid": netuid,
+                            "uid": uid, "hotkey": cur.hotkey,
+                        }),
+                        &format!(
                             "[{}] UID {} became INACTIVE — {}",
-                            block,
-                            uid,
-                            crate::utils::short_ss58(&cur.hotkey)
-                        );
-                    }
+                            block, uid, crate::utils::short_ss58(&cur.hotkey)
+                        ),
+                    );
                 }
             }
         } else if !json_mode {
