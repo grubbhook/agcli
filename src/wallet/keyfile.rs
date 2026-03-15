@@ -117,7 +117,13 @@ pub fn write_keyfile(path: &Path, mnemonic: &str) -> Result<()> {
 
 /// Read a plaintext keyfile (acquires shared lock to avoid reading mid-write).
 pub fn read_keyfile(path: &Path) -> Result<String> {
-    let _lock = lock_keyfile(path).ok();
+    let _lock = match lock_keyfile(path) {
+        Ok(lock) => Some(lock),
+        Err(e) => {
+            tracing::warn!(path = %path.display(), error = %e, "Could not acquire keyfile lock, reading without lock");
+            None
+        }
+    };
     fs::read_to_string(path).context("read keyfile")
 }
 
@@ -261,5 +267,76 @@ mod tests {
         let mnemonic = "test mnemonic phrase";
         write_encrypted_keyfile(&path, mnemonic, "correct").unwrap();
         assert!(read_encrypted_keyfile(&path, "wrong").is_err());
+    }
+
+    #[test]
+    fn concurrent_encrypted_read_write() {
+        // Verify that concurrent reads and writes to the same keyfile
+        // are safely serialized via advisory locks.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("concurrent_coldkey");
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let password = "test123";
+
+        // Write the keyfile first
+        write_encrypted_keyfile(&path, mnemonic, password).unwrap();
+
+        // Spawn concurrent readers
+        let mut handles = Vec::new();
+        for _ in 0..8 {
+            let p = path.clone();
+            let pw = password.to_string();
+            handles.push(std::thread::spawn(move || {
+                read_encrypted_keyfile(&p, &pw)
+            }));
+        }
+
+        // All reads should succeed with the same result
+        for h in handles {
+            let result = h.join().expect("reader thread panicked");
+            assert_eq!(result.unwrap(), mnemonic);
+        }
+    }
+
+    #[test]
+    fn concurrent_plaintext_read_write() {
+        // Verify concurrent reads of plaintext keyfiles work correctly.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("concurrent_hotkey");
+        let mnemonic = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12";
+        write_keyfile(&path, mnemonic).unwrap();
+
+        let mut handles = Vec::new();
+        for _ in 0..8 {
+            let p = path.clone();
+            handles.push(std::thread::spawn(move || read_keyfile(&p)));
+        }
+
+        for h in handles {
+            let result = h.join().expect("reader thread panicked");
+            assert_eq!(result.unwrap(), mnemonic);
+        }
+    }
+
+    #[test]
+    fn corrupted_keyfile_reports_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad_coldkey");
+        // Write a file that's too short to be valid
+        std::fs::write(&path, &[0u8; 5]).unwrap();
+        let result = read_encrypted_keyfile(&path, "any");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("corrupted"), "Expected 'corrupted' in error: {}", msg);
+    }
+
+    #[test]
+    fn public_key_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pubkey.txt");
+        let pk = sr25519::Public::from_raw([42u8; 32]);
+        write_public_key(&path, &pk).unwrap();
+        let recovered = read_public_key(&path).unwrap();
+        assert_eq!(pk, recovered);
     }
 }

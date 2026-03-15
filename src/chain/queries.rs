@@ -1,6 +1,6 @@
 //! Chain query methods — subnet, neuron, delegate, identity, and historical queries.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::types::balance::Balance;
 use crate::types::chain_data::*;
@@ -23,9 +23,11 @@ impl Client {
             .inner
             .runtime_api()
             .at_latest()
-            .await?
+            .await
+            .context("Failed to get latest block for stake query")?
             .call(payload)
-            .await?;
+            .await
+            .with_context(|| format!("Failed to query stakes for coldkey {}", crate::utils::short_ss58(coldkey_ss58)))?;
         let stakes: Vec<StakeInfo> = result.into_iter().map(StakeInfo::from).collect();
         tracing::debug!(elapsed_ms = start.elapsed().as_millis() as u64, count = stakes.len(), "get_stake_for_coldkey");
         Ok(stakes)
@@ -60,9 +62,11 @@ impl Client {
             .inner
             .runtime_api()
             .at_latest()
-            .await?
+            .await
+            .context("Failed to get latest block for subnet query")?
             .call(payload)
-            .await?;
+            .await
+            .with_context(|| format!("Failed to query subnet info for SN{}", netuid.0))?;
         Ok(result.map(SubnetInfo::from))
     }
 
@@ -138,9 +142,11 @@ impl Client {
             .inner
             .runtime_api()
             .at_latest()
-            .await?
+            .await
+            .context("Failed to get latest block for neuron query")?
             .call(payload)
-            .await?;
+            .await
+            .with_context(|| format!("Failed to query neurons for SN{}", netuid.0))?;
         Ok(result.into_iter().map(NeuronInfoLite::from).collect())
     }
 
@@ -173,9 +179,11 @@ impl Client {
             .inner
             .runtime_api()
             .at_latest()
-            .await?
+            .await
+            .context("Failed to get latest block for delegate query")?
             .call(payload)
-            .await?;
+            .await
+            .context("Failed to query delegates")?;
         Ok(result.into_iter().map(DelegateInfo::from).collect())
     }
 
@@ -201,7 +209,9 @@ impl Client {
     pub async fn get_identity(&self, ss58: &str) -> Result<Option<ChainIdentity>> {
         let account_id = Self::ss58_to_account_id(ss58)?;
         let addr = api::storage().registry().identity_of(&account_id);
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let result = self.inner.storage().at_latest().await?
+            .fetch(&addr).await
+            .with_context(|| format!("Failed to fetch identity for {}", crate::utils::short_ss58(ss58)))?;
         Ok(result.map(|reg| chain_identity_from_registration(reg.info)))
     }
 

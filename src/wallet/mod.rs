@@ -55,12 +55,20 @@ impl Wallet {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "default".to_string());
 
-        let coldkey_ss58 = keyfile::read_public_key(&path.join("coldkeypub.txt"))
-            .ok()
-            .map(|pk| keypair::to_ss58(&pk, 42));
-        let hotkey_ss58 = keyfile::read_public_key(&path.join("hotkeys").join("default"))
-            .ok()
-            .map(|pk| keypair::to_ss58(&pk, 42));
+        let coldkey_ss58 = match keyfile::read_public_key(&path.join("coldkeypub.txt")) {
+            Ok(pk) => Some(keypair::to_ss58(&pk, 42)),
+            Err(e) => {
+                tracing::debug!(wallet = %name, error = %e, "Could not read coldkeypub.txt (not yet created or corrupted)");
+                None
+            }
+        };
+        let hotkey_ss58 = match keyfile::read_public_key(&path.join("hotkeys").join("default")) {
+            Ok(pk) => Some(keypair::to_ss58(&pk, 42)),
+            Err(e) => {
+                tracing::debug!(wallet = %name, error = %e, "Could not read default hotkey public key");
+                None
+            }
+        };
 
         Ok(Self {
             name,

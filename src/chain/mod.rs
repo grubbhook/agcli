@@ -18,6 +18,46 @@ use crate::{api, AccountId, SubtensorConfig};
 // Re-export for event subscription
 pub use subxt;
 
+/// Retry a fallible async operation with exponential backoff on transient errors.
+/// Retries up to `max_retries` times with delays of 500ms, 1s, 2s, ...
+/// Only retries on errors that look transient (connection, timeout, transport).
+pub(crate) async fn retry_on_transient<F, Fut, T>(label: &str, max_retries: u32, f: F) -> Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<T>>,
+{
+    let mut last_err = None;
+    for attempt in 0..=max_retries {
+        match f().await {
+            Ok(val) => return Ok(val),
+            Err(e) => {
+                let msg = format!("{:#}", e);
+                let is_transient = msg.contains("onnect")
+                    || msg.contains("timeout")
+                    || msg.contains("Ws")
+                    || msg.contains("transport")
+                    || msg.contains("closed")
+                    || msg.contains("reset");
+                if !is_transient || attempt == max_retries {
+                    return Err(e);
+                }
+                let delay = std::time::Duration::from_millis(500 * (1 << attempt));
+                tracing::warn!(
+                    attempt = attempt + 1,
+                    max = max_retries,
+                    delay_ms = delay.as_millis() as u64,
+                    label,
+                    error = %msg,
+                    "Transient RPC error, retrying"
+                );
+                tokio::time::sleep(delay).await;
+                last_err = Some(e);
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("{}: all retries exhausted", label)))
+}
+
 /// Signer type for extrinsic submission.
 pub type Signer = PairSigner<SubtensorConfig, sr25519::Pair>;
 
@@ -234,8 +274,15 @@ impl Client {
     pub async fn get_balance(&self, account: &sr25519::Public) -> Result<Balance> {
         let start = std::time::Instant::now();
         let account_id = Self::to_account_id(account);
-        let addr = api::storage().system().account(&account_id);
-        let info = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let info = retry_on_transient("get_balance", 2, || async {
+            let addr = api::storage().system().account(&account_id);
+            let result = inner.storage().at_latest().await
+                .context("Failed to get latest block for balance query")?
+                .fetch(&addr).await
+                .context("Failed to fetch account balance")?;
+            Ok(result)
+        }).await?;
         let balance = match info {
             Some(info) => Balance::from_rao(info.data.free),
             None => Balance::ZERO,
@@ -321,7 +368,8 @@ impl Client {
 
     /// Current block number.
     pub async fn get_block_number(&self) -> Result<u64> {
-        let block = self.inner.blocks().at_latest().await?;
+        let block = self.inner.blocks().at_latest().await
+            .context("Failed to fetch latest block")?;
         Ok(block.number() as u64)
     }
 
@@ -408,5 +456,71 @@ fn format_dispatch_error(e: subxt::Error) -> anyhow::Error {
         anyhow::anyhow!("Transaction failed on chain: {}", msg)
     } else {
         anyhow::anyhow!("Transaction failed: {}\n  Hint: {}", msg, hint)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn retry_succeeds_after_transient_error() {
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let c = counter.clone();
+        let result = retry_on_transient("test", 3, || {
+            let c = c.clone();
+            async move {
+                let n = c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if n < 2 {
+                    Err(anyhow::anyhow!("Connection reset"))
+                } else {
+                    Ok(42)
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn retry_does_not_retry_non_transient_error() {
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let c = counter.clone();
+        let result: Result<i32> = retry_on_transient("test", 3, || {
+            let c = c.clone();
+            async move {
+                c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err(anyhow::anyhow!("Invalid SS58 address"))
+            }
+        })
+        .await;
+        assert!(result.is_err());
+        // Should NOT retry for non-transient errors
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_exhausts_all_attempts() {
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let c = counter.clone();
+        let result: Result<i32> = retry_on_transient("test", 2, || {
+            let c = c.clone();
+            async move {
+                c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err(anyhow::anyhow!("Connection timeout"))
+            }
+        })
+        .await;
+        assert!(result.is_err());
+        // 1 initial + 2 retries = 3 total
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn retry_succeeds_immediately() {
+        let result = retry_on_transient("test", 3, || async { Ok::<_, anyhow::Error>(99) })
+            .await;
+        assert_eq!(result.unwrap(), 99);
     }
 }

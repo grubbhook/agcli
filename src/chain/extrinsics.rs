@@ -423,7 +423,13 @@ impl Client {
             .subtensor_module()
             .reveal_period_epochs(netuid.0);
         let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        Ok(val.unwrap_or(1))
+        match val {
+            Some(v) => Ok(v),
+            None => {
+                tracing::debug!(netuid = netuid.0, default = 1, "reveal_period_epochs not set on-chain, using default");
+                Ok(1)
+            }
+        }
     }
 
     // ──────── Registration ────────
@@ -472,7 +478,13 @@ impl Client {
     pub async fn get_difficulty(&self, netuid: NetUid) -> Result<u64> {
         let addr = api::storage().subtensor_module().difficulty(netuid.0);
         let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        Ok(val.unwrap_or(10_000_000))
+        match val {
+            Some(v) => Ok(v),
+            None => {
+                tracing::warn!(netuid = netuid.0, default = 10_000_000, "Difficulty not set on-chain, using default");
+                Ok(10_000_000)
+            }
+        }
     }
 
     // ──────── Child Keys ────────

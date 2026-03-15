@@ -515,7 +515,15 @@ pub(super) async fn handle_subnet(
                     )
                 }));
             }
-            let result = handles.into_iter().find_map(|h| h.join().ok().flatten());
+            let result = handles.into_iter().find_map(|h| {
+                match h.join() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::error!("POW worker thread panicked: {:?}", e);
+                        None
+                    }
+                }
+            });
             match result {
                 Some((nonce, work)) => {
                     println!("POW solved! Nonce: {}", nonce);
