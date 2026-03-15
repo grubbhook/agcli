@@ -18,6 +18,19 @@ use crate::{api, AccountId, SubtensorConfig};
 // Re-export for event subscription
 pub use subxt;
 
+/// Check whether an error message looks transient (connection, timeout, transport).
+fn is_transient_error(msg: &str) -> bool {
+    msg.contains("onnect")
+        || msg.contains("timeout")
+        || msg.contains("Ws")
+        || msg.contains("transport")
+        || msg.contains("closed")
+        || msg.contains("reset")
+}
+
+/// Default retry count for RPC queries.
+const RPC_RETRIES: u32 = 2;
+
 /// Retry a fallible async operation with exponential backoff on transient errors.
 /// Retries up to `max_retries` times with delays of 500ms, 1s, 2s, ...
 /// Only retries on errors that look transient (connection, timeout, transport).
@@ -32,13 +45,7 @@ where
             Ok(val) => return Ok(val),
             Err(e) => {
                 let msg = format!("{:#}", e);
-                let is_transient = msg.contains("onnect")
-                    || msg.contains("timeout")
-                    || msg.contains("Ws")
-                    || msg.contains("transport")
-                    || msg.contains("closed")
-                    || msg.contains("reset");
-                if !is_transient || attempt == max_retries {
+                if !is_transient_error(&msg) || attempt == max_retries {
                     return Err(e);
                 }
                 let delay = std::time::Duration::from_millis(500 * (1 << attempt));
@@ -194,12 +201,27 @@ impl Client {
         let start = std::time::Instant::now();
         let spinner = crate::cli::helpers::spinner("Submitting transaction...");
         tracing::debug!("Submitting extrinsic");
-        let progress = self
-            .inner
-            .tx()
-            .sign_and_submit_then_watch_default(tx, &signer)
-            .await
-            .map_err(|e| { spinner.finish_and_clear(); format_submit_error(e) })?;
+        // Retry submission on transient errors (connection drop before tx reaches node).
+        // Once submitted, we do NOT retry — the finalization wait is non-idempotent.
+        let inner = &self.inner;
+        let progress = retry_on_transient("sign_submit", RPC_RETRIES, || async {
+            match inner
+                .tx()
+                .sign_and_submit_then_watch_default(tx, &signer)
+                .await
+            {
+                Ok(p) => Ok(p),
+                Err(e) => {
+                    let msg = e.to_string();
+                    if is_transient_error(&msg) {
+                        Err(anyhow::anyhow!("{}", msg))
+                    } else {
+                        spinner.finish_and_clear();
+                        Err(format_submit_error(e))
+                    }
+                }
+            }
+        }).await?;
         spinner.set_message("Waiting for finalization...");
         tracing::debug!("Extrinsic submitted, waiting for finalization");
         let result = tokio::time::timeout(
@@ -300,11 +322,14 @@ impl Client {
     /// Resolve a block number to a block hash via RPC.
     pub async fn get_block_hash(&self, block_number: u32) -> Result<subxt::utils::H256> {
         use subxt::backend::legacy::rpc_methods::NumberOrHex;
-        let hash = self
-            .rpc
-            .chain_get_block_hash(Some(NumberOrHex::Number(block_number as u64)))
-            .await
-            .context("Failed to get block hash")?;
+        let rpc = &self.rpc;
+        let hash = retry_on_transient("get_block_hash", RPC_RETRIES, || async {
+            let h = rpc
+                .chain_get_block_hash(Some(NumberOrHex::Number(block_number as u64)))
+                .await
+                .context("Failed to get block hash")?;
+            Ok(h)
+        }).await?;
         hash.ok_or_else(|| anyhow::anyhow!("Block {} not found", block_number))
     }
 
@@ -368,39 +393,54 @@ impl Client {
 
     /// Current block number.
     pub async fn get_block_number(&self) -> Result<u64> {
-        let block = self.inner.blocks().at_latest().await
-            .context("Failed to fetch latest block")?;
-        Ok(block.number() as u64)
+        let inner = &self.inner;
+        retry_on_transient("get_block_number", RPC_RETRIES, || async {
+            let block = inner.blocks().at_latest().await
+                .context("Failed to fetch latest block")?;
+            Ok(block.number() as u64)
+        }).await
     }
 
     // ──────── Network Params ────────
 
     /// Total TAO issuance.
     pub async fn get_total_issuance(&self) -> Result<Balance> {
-        let addr = api::storage().balances().total_issuance();
-        let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        Ok(Balance::from_rao(val.unwrap_or(0) as u64))
+        let inner = &self.inner;
+        retry_on_transient("get_total_issuance", RPC_RETRIES, || async {
+            let addr = api::storage().balances().total_issuance();
+            let val = inner.storage().at_latest().await?.fetch(&addr).await?;
+            Ok(Balance::from_rao(val.unwrap_or(0) as u64))
+        }).await
     }
 
     /// Total staked TAO.
     pub async fn get_total_stake(&self) -> Result<Balance> {
-        let addr = api::storage().subtensor_module().total_stake();
-        let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        Ok(Balance::from_rao(val.unwrap_or(0)))
+        let inner = &self.inner;
+        retry_on_transient("get_total_stake", RPC_RETRIES, || async {
+            let addr = api::storage().subtensor_module().total_stake();
+            let val = inner.storage().at_latest().await?.fetch(&addr).await?;
+            Ok(Balance::from_rao(val.unwrap_or(0)))
+        }).await
     }
 
     /// Total number of subnets.
     pub async fn get_total_networks(&self) -> Result<u16> {
-        let addr = api::storage().subtensor_module().total_networks();
-        let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        Ok(val.unwrap_or(0))
+        let inner = &self.inner;
+        retry_on_transient("get_total_networks", RPC_RETRIES, || async {
+            let addr = api::storage().subtensor_module().total_networks();
+            let val = inner.storage().at_latest().await?.fetch(&addr).await?;
+            Ok(val.unwrap_or(0))
+        }).await
     }
 
     /// Block emission rate.
     pub async fn get_block_emission(&self) -> Result<Balance> {
-        let addr = api::storage().subtensor_module().block_emission();
-        let val = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        Ok(Balance::from_rao(val.unwrap_or(0)))
+        let inner = &self.inner;
+        retry_on_transient("get_block_emission", RPC_RETRIES, || async {
+            let addr = api::storage().subtensor_module().block_emission();
+            let val = inner.storage().at_latest().await?.fetch(&addr).await?;
+            Ok(Balance::from_rao(val.unwrap_or(0)))
+        }).await
     }
 }
 

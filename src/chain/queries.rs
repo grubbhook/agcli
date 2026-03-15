@@ -7,7 +7,7 @@ use crate::types::chain_data::*;
 use crate::types::network::NetUid;
 use crate::api;
 
-use super::Client;
+use super::{retry_on_transient, Client, RPC_RETRIES};
 
 impl Client {
     // ──────── Stake Queries ────────
@@ -16,18 +16,22 @@ impl Client {
     pub async fn get_stake_for_coldkey(&self, coldkey_ss58: &str) -> Result<Vec<StakeInfo>> {
         let start = std::time::Instant::now();
         let account_id = Self::ss58_to_account_id(coldkey_ss58)?;
-        let payload = api::apis()
-            .stake_info_runtime_api()
-            .get_stake_info_for_coldkey(account_id);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await
-            .context("Failed to get latest block for stake query")?
-            .call(payload)
-            .await
-            .with_context(|| format!("Failed to query stakes for coldkey {}", crate::utils::short_ss58(coldkey_ss58)))?;
+        let inner = &self.inner;
+        let short = crate::utils::short_ss58(coldkey_ss58);
+        let result = retry_on_transient("get_stake_for_coldkey", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .stake_info_runtime_api()
+                .get_stake_info_for_coldkey(account_id.clone());
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for stake query")?
+                .call(payload)
+                .await
+                .with_context(|| format!("Failed to query stakes for coldkey {}", short))?;
+            Ok(r)
+        }).await?;
         let stakes: Vec<StakeInfo> = result.into_iter().map(StakeInfo::from).collect();
         tracing::debug!(elapsed_ms = start.elapsed().as_millis() as u64, count = stakes.len(), "get_stake_for_coldkey");
         Ok(stakes)
@@ -41,32 +45,40 @@ impl Client {
         let inner = &self.inner;
         self.cache
             .get_all_subnets(|| async {
-                let payload = api::apis().subnet_info_runtime_api().get_subnets_info();
-                let result = inner
-                    .runtime_api()
-                    .at_latest()
-                    .await?
-                    .call(payload)
-                    .await?;
-                Ok(result.into_iter().flatten().map(SubnetInfo::from).collect())
+                retry_on_transient("get_all_subnets", RPC_RETRIES, || async {
+                    let payload = api::apis().subnet_info_runtime_api().get_subnets_info();
+                    let result = inner
+                        .runtime_api()
+                        .at_latest()
+                        .await
+                        .context("Failed to get latest block for subnet list")?
+                        .call(payload)
+                        .await
+                        .context("Failed to query all subnets")?;
+                    Ok(result.into_iter().flatten().map(SubnetInfo::from).collect())
+                }).await
             })
             .await
     }
 
     /// Get info for a specific subnet.
     pub async fn get_subnet_info(&self, netuid: NetUid) -> Result<Option<SubnetInfo>> {
-        let payload = api::apis()
-            .subnet_info_runtime_api()
-            .get_subnet_info(netuid.0);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await
-            .context("Failed to get latest block for subnet query")?
-            .call(payload)
-            .await
-            .with_context(|| format!("Failed to query subnet info for SN{}", netuid.0))?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_subnet_info", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .subnet_info_runtime_api()
+                .get_subnet_info(nid);
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for subnet query")?
+                .call(payload)
+                .await
+                .with_context(|| format!("Failed to query subnet info for SN{}", nid))?;
+            Ok(r)
+        }).await?;
         Ok(result.map(SubnetInfo::from))
     }
 
@@ -75,16 +87,22 @@ impl Client {
         &self,
         netuid: NetUid,
     ) -> Result<Option<SubnetHyperparameters>> {
-        let payload = api::apis()
-            .subnet_info_runtime_api()
-            .get_subnet_hyperparams(netuid.0);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
-            .await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_subnet_hyperparams", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .subnet_info_runtime_api()
+                .get_subnet_hyperparams(nid);
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for hyperparams query")?
+                .call(payload)
+                .await
+                .with_context(|| format!("Failed to query hyperparams for SN{}", nid))?;
+            Ok(r)
+        }).await?;
         Ok(result.map(|h| SubnetHyperparameters::from_gen(h, netuid)))
     }
 
@@ -94,18 +112,22 @@ impl Client {
         let inner = &self.inner;
         self.cache
             .get_all_dynamic_info(|| async {
-                let payload = api::apis().subnet_info_runtime_api().get_all_dynamic_info();
-                let result = inner
-                    .runtime_api()
-                    .at_latest()
-                    .await?
-                    .call(payload)
-                    .await?;
-                Ok(result
-                    .into_iter()
-                    .flatten()
-                    .map(DynamicInfo::from)
-                    .collect())
+                retry_on_transient("get_all_dynamic_info", RPC_RETRIES, || async {
+                    let payload = api::apis().subnet_info_runtime_api().get_all_dynamic_info();
+                    let result = inner
+                        .runtime_api()
+                        .at_latest()
+                        .await
+                        .context("Failed to get latest block for dynamic info")?
+                        .call(payload)
+                        .await
+                        .context("Failed to query all dynamic info")?;
+                    Ok(result
+                        .into_iter()
+                        .flatten()
+                        .map(DynamicInfo::from)
+                        .collect())
+                }).await
             })
             .await
     }
@@ -113,19 +135,24 @@ impl Client {
     /// Get dynamic info for a specific subnet (cached for 30s).
     pub async fn get_dynamic_info(&self, netuid: NetUid) -> Result<Option<DynamicInfo>> {
         let inner = &self.inner;
+        let nid = netuid.0;
         let result = self
             .cache
-            .get_dynamic_info(netuid.0, || async {
-                let payload = api::apis()
-                    .subnet_info_runtime_api()
-                    .get_dynamic_info(netuid.0);
-                let result = inner
-                    .runtime_api()
-                    .at_latest()
-                    .await?
-                    .call(payload)
-                    .await?;
-                Ok(result.map(DynamicInfo::from))
+            .get_dynamic_info(nid, || async {
+                retry_on_transient("get_dynamic_info", RPC_RETRIES, || async {
+                    let payload = api::apis()
+                        .subnet_info_runtime_api()
+                        .get_dynamic_info(nid);
+                    let r = inner
+                        .runtime_api()
+                        .at_latest()
+                        .await
+                        .context("Failed to get latest block for dynamic info")?
+                        .call(payload)
+                        .await
+                        .with_context(|| format!("Failed to query dynamic info for SN{}", nid))?;
+                    Ok(r.map(DynamicInfo::from))
+                }).await
             })
             .await?;
         Ok(result.map(|arc| (*arc).clone()))
@@ -135,33 +162,43 @@ impl Client {
 
     /// Get lightweight neuron info for a subnet (via runtime API).
     pub async fn get_neurons_lite(&self, netuid: NetUid) -> Result<Vec<NeuronInfoLite>> {
-        let payload = api::apis()
-            .neuron_info_runtime_api()
-            .get_neurons_lite(netuid.0);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await
-            .context("Failed to get latest block for neuron query")?
-            .call(payload)
-            .await
-            .with_context(|| format!("Failed to query neurons for SN{}", netuid.0))?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_neurons_lite", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .neuron_info_runtime_api()
+                .get_neurons_lite(nid);
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for neuron query")?
+                .call(payload)
+                .await
+                .with_context(|| format!("Failed to query neurons for SN{}", nid))?;
+            Ok(r)
+        }).await?;
         Ok(result.into_iter().map(NeuronInfoLite::from).collect())
     }
 
     /// Get full neuron info for a specific UID.
     pub async fn get_neuron(&self, netuid: NetUid, uid: u16) -> Result<Option<NeuronInfo>> {
-        let payload = api::apis()
-            .neuron_info_runtime_api()
-            .get_neuron(netuid.0, uid);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
-            .await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_neuron", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .neuron_info_runtime_api()
+                .get_neuron(nid, uid);
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for neuron query")?
+                .call(payload)
+                .await
+                .with_context(|| format!("Failed to query neuron UID {} on SN{}", uid, nid))?;
+            Ok(r)
+        }).await?;
         Ok(result.map(NeuronInfo::from))
     }
 
@@ -174,32 +211,40 @@ impl Client {
 
     /// Get all delegates (via runtime API).
     pub async fn get_delegates(&self) -> Result<Vec<DelegateInfo>> {
-        let payload = api::apis().delegate_info_runtime_api().get_delegates();
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await
-            .context("Failed to get latest block for delegate query")?
-            .call(payload)
-            .await
-            .context("Failed to query delegates")?;
+        let inner = &self.inner;
+        let result = retry_on_transient("get_delegates", RPC_RETRIES, || async {
+            let payload = api::apis().delegate_info_runtime_api().get_delegates();
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for delegate query")?
+                .call(payload)
+                .await
+                .context("Failed to query delegates")?;
+            Ok(r)
+        }).await?;
         Ok(result.into_iter().map(DelegateInfo::from).collect())
     }
 
     /// Get delegate info for a specific hotkey.
     pub async fn get_delegate(&self, hotkey_ss58: &str) -> Result<Option<DelegateInfo>> {
         let account_id = Self::ss58_to_account_id(hotkey_ss58)?;
-        let payload = api::apis()
-            .delegate_info_runtime_api()
-            .get_delegate(account_id);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
-            .await?;
+        let inner = &self.inner;
+        let result = retry_on_transient("get_delegate", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .delegate_info_runtime_api()
+                .get_delegate(account_id.clone());
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for delegate query")?
+                .call(payload)
+                .await
+                .context("Failed to query delegate info")?;
+            Ok(r)
+        }).await?;
         Ok(result.map(DelegateInfo::from))
     }
 
@@ -208,19 +253,30 @@ impl Client {
     /// Get on-chain identity for an account (from Registry pallet).
     pub async fn get_identity(&self, ss58: &str) -> Result<Option<ChainIdentity>> {
         let account_id = Self::ss58_to_account_id(ss58)?;
-        let addr = api::storage().registry().identity_of(&account_id);
-        let result = self.inner.storage().at_latest().await?
-            .fetch(&addr).await
-            .with_context(|| format!("Failed to fetch identity for {}", crate::utils::short_ss58(ss58)))?;
+        let inner = &self.inner;
+        let short = crate::utils::short_ss58(ss58);
+        let result = retry_on_transient("get_identity", RPC_RETRIES, || async {
+            let addr = api::storage().registry().identity_of(&account_id);
+            let r = inner.storage().at_latest().await?
+                .fetch(&addr).await
+                .with_context(|| format!("Failed to fetch identity for {}", short))?;
+            Ok(r)
+        }).await?;
         Ok(result.map(|reg| chain_identity_from_registration(reg.info)))
     }
 
     /// Get subnet identity (from SubtensorModule SubnetIdentitiesV3).
     pub async fn get_subnet_identity(&self, netuid: NetUid) -> Result<Option<SubnetIdentity>> {
-        let addr = api::storage()
-            .subtensor_module()
-            .subnet_identities_v3(netuid.0);
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_subnet_identity", RPC_RETRIES, || async {
+            let addr = api::storage()
+                .subtensor_module()
+                .subnet_identities_v3(nid);
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .with_context(|| format!("Failed to fetch subnet identity for SN{}", nid))?;
+            Ok(r)
+        }).await?;
         Ok(result.map(|id| SubnetIdentity {
             subnet_name: String::from_utf8_lossy(&id.subnet_name).into_owned(),
             github_repo: String::from_utf8_lossy(&id.github_repo).into_owned(),
@@ -238,16 +294,21 @@ impl Client {
     /// Returns list of delegate info via DelegateInfoRuntimeApi.
     pub async fn get_delegated(&self, hotkey_ss58: &str) -> Result<Vec<DelegateInfo>> {
         let account_id = Self::ss58_to_account_id(hotkey_ss58)?;
-        let payload = api::apis()
-            .delegate_info_runtime_api()
-            .get_delegated(account_id);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
-            .await?;
+        let inner = &self.inner;
+        let result = retry_on_transient("get_delegated", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .delegate_info_runtime_api()
+                .get_delegated(account_id.clone());
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for delegated query")?
+                .call(payload)
+                .await
+                .context("Failed to query delegated info")?;
+            Ok(r)
+        }).await?;
         Ok(result
             .into_iter()
             .map(|(di, _extra)| DelegateInfo::from(di))
@@ -259,8 +320,13 @@ impl Client {
     /// List proxy accounts for a given address (reads Proxy.Proxies storage).
     pub async fn list_proxies(&self, ss58: &str) -> Result<Vec<(String, String, u32)>> {
         let account_id = Self::ss58_to_account_id(ss58)?;
-        let addr = api::storage().proxy().proxies(&account_id);
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let result = retry_on_transient("list_proxies", RPC_RETRIES, || async {
+            let addr = api::storage().proxy().proxies(&account_id);
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .context("Failed to fetch proxy list")?;
+            Ok(r)
+        }).await?;
         match result {
             Some((proxies, _deposit)) => Ok(proxies
                 .0
@@ -281,10 +347,15 @@ impl Client {
     /// Check if a coldkey has a scheduled swap. Returns (execution_block, new_coldkey_ss58) if scheduled.
     pub async fn get_coldkey_swap_scheduled(&self, ss58: &str) -> Result<Option<(u32, String)>> {
         let account_id = Self::ss58_to_account_id(ss58)?;
-        let addr = api::storage()
-            .subtensor_module()
-            .coldkey_swap_scheduled(&account_id);
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let result = retry_on_transient("get_coldkey_swap_scheduled", RPC_RETRIES, || async {
+            let addr = api::storage()
+                .subtensor_module()
+                .coldkey_swap_scheduled(&account_id);
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .context("Failed to query coldkey swap status")?;
+            Ok(r)
+        }).await?;
         Ok(result.map(|(block, new_coldkey)| {
             let new_ss58 = sp_core::crypto::AccountId32::from(new_coldkey.0).to_string();
             (block, new_ss58)
@@ -300,10 +371,16 @@ impl Client {
         netuid: NetUid,
     ) -> Result<Vec<(u64, String)>> {
         let account_id = Self::ss58_to_account_id(hotkey_ss58)?;
-        let addr = api::storage()
-            .subtensor_module()
-            .child_keys(&account_id, netuid.0);
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_child_keys", RPC_RETRIES, || async {
+            let addr = api::storage()
+                .subtensor_module()
+                .child_keys(&account_id, nid);
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .context("Failed to fetch child keys")?;
+            Ok(r)
+        }).await?;
         Ok(result
             .unwrap_or_default()
             .into_iter()
@@ -321,10 +398,16 @@ impl Client {
         netuid: NetUid,
     ) -> Result<Vec<(u64, String)>> {
         let account_id = Self::ss58_to_account_id(hotkey_ss58)?;
-        let addr = api::storage()
-            .subtensor_module()
-            .parent_keys(&account_id, netuid.0);
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_parent_keys", RPC_RETRIES, || async {
+            let addr = api::storage()
+                .subtensor_module()
+                .parent_keys(&account_id, nid);
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .context("Failed to fetch parent keys")?;
+            Ok(r)
+        }).await?;
         Ok(result
             .unwrap_or_default()
             .into_iter()
@@ -345,10 +428,16 @@ impl Client {
         netuid: NetUid,
     ) -> Result<Option<(Vec<(u64, String)>, u64)>> {
         let account_id = Self::ss58_to_account_id(hotkey_ss58)?;
-        let addr = api::storage()
-            .subtensor_module()
-            .pending_child_keys(netuid.0, &account_id);
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_pending_child_keys", RPC_RETRIES, || async {
+            let addr = api::storage()
+                .subtensor_module()
+                .pending_child_keys(nid, &account_id);
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .context("Failed to fetch pending child keys")?;
+            Ok(r)
+        }).await?;
         Ok(result.map(|(children, cooldown_block)| {
             let children_parsed: Vec<(u64, String)> = children
                 .into_iter()
@@ -539,43 +628,61 @@ impl Client {
         subxt::utils::H256,
         subxt::utils::H256,
     )> {
-        let block = self.inner.blocks().at(block_hash).await?;
-        let header = block.header();
-        Ok((
-            header.number,
-            block_hash,
-            header.parent_hash,
-            header.state_root,
-        ))
+        let inner = &self.inner;
+        retry_on_transient("get_block_header", RPC_RETRIES, || async {
+            let block = inner.blocks().at(block_hash).await
+                .context("Failed to fetch block header")?;
+            let header = block.header();
+            Ok((
+                header.number,
+                block_hash,
+                header.parent_hash,
+                header.state_root,
+            ))
+        }).await
     }
 
     /// Get extrinsic count in a block.
     pub async fn get_block_extrinsic_count(&self, block_hash: subxt::utils::H256) -> Result<usize> {
-        let block = self.inner.blocks().at(block_hash).await?;
-        let extrinsics = block.extrinsics().await?;
-        Ok(extrinsics.len())
+        let inner = &self.inner;
+        retry_on_transient("get_block_extrinsic_count", RPC_RETRIES, || async {
+            let block = inner.blocks().at(block_hash).await
+                .context("Failed to fetch block")?;
+            let extrinsics = block.extrinsics().await
+                .context("Failed to decode block extrinsics")?;
+            Ok(extrinsics.len())
+        }).await
     }
 
     /// Get the timestamp for a block by reading the Timestamp.set() inherent.
     pub async fn get_block_timestamp(&self, block_hash: subxt::utils::H256) -> Result<Option<u64>> {
-        let addr = api::storage().timestamp().now();
-        let val = self.inner.storage().at(block_hash).fetch(&addr).await?;
-        Ok(val)
+        let inner = &self.inner;
+        retry_on_transient("get_block_timestamp", RPC_RETRIES, || async {
+            let addr = api::storage().timestamp().now();
+            let val = inner.storage().at(block_hash).fetch(&addr).await
+                .context("Failed to fetch block timestamp")?;
+            Ok(val)
+        }).await
     }
 
     // ──────── Swap Simulation (Runtime APIs) ────────
 
     /// Get current alpha price for a subnet.
     pub async fn current_alpha_price(&self, netuid: NetUid) -> Result<u64> {
-        let payload = api::apis().swap_runtime_api().current_alpha_price(netuid.0);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
-            .await?;
-        Ok(result)
+        let inner = &self.inner;
+        let nid = netuid.0;
+        retry_on_transient("current_alpha_price", RPC_RETRIES, || async {
+            let payload = api::apis().swap_runtime_api().current_alpha_price(nid);
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for alpha price query")?
+                .call(payload)
+                .await
+                .with_context(|| format!("Failed to query alpha price for SN{}", nid))?;
+            Ok(r)
+        }).await
     }
 
     /// Simulate swapping TAO for alpha on a subnet.
@@ -585,16 +692,22 @@ impl Client {
         netuid: NetUid,
         tao_rao: u64,
     ) -> Result<(u64, u64, u64)> {
-        let payload = api::apis()
-            .swap_runtime_api()
-            .sim_swap_tao_for_alpha(netuid.0, tao_rao);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
-            .await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("sim_swap_tao_for_alpha", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .swap_runtime_api()
+                .sim_swap_tao_for_alpha(nid, tao_rao);
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for swap simulation")?
+                .call(payload)
+                .await
+                .context("Failed to simulate TAO→alpha swap")?;
+            Ok(r)
+        }).await?;
         Ok((result.alpha_amount, result.tao_fee, result.alpha_fee))
     }
 
@@ -605,16 +718,22 @@ impl Client {
         netuid: NetUid,
         alpha: u64,
     ) -> Result<(u64, u64, u64)> {
-        let payload = api::apis()
-            .swap_runtime_api()
-            .sim_swap_alpha_for_tao(netuid.0, alpha);
-        let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
-            .await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("sim_swap_alpha_for_tao", RPC_RETRIES, || async {
+            let payload = api::apis()
+                .swap_runtime_api()
+                .sim_swap_alpha_for_tao(nid, alpha);
+            let r = inner
+                .runtime_api()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for swap simulation")?
+                .call(payload)
+                .await
+                .context("Failed to simulate alpha→TAO swap")?;
+            Ok(r)
+        }).await?;
         Ok((result.tao_amount, result.tao_fee, result.alpha_fee))
     }
 
@@ -628,15 +747,21 @@ impl Client {
         netuid: NetUid,
     ) -> Result<Option<String>> {
         let coldkey_id = Self::ss58_to_account_id(coldkey_ss58)?;
-        let addr = subxt::dynamic::storage(
-            "SubtensorModule",
-            "AutoStakeHotkeys",
-            vec![
-                subxt::dynamic::Value::from_bytes(coldkey_id.0),
-                subxt::dynamic::Value::u128(netuid.0 as u128),
-            ],
-        );
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_auto_stake_hotkey", RPC_RETRIES, || async {
+            let addr = subxt::dynamic::storage(
+                "SubtensorModule",
+                "AutoStakeHotkeys",
+                vec![
+                    subxt::dynamic::Value::from_bytes(coldkey_id.0),
+                    subxt::dynamic::Value::u128(nid as u128),
+                ],
+            );
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .context("Failed to fetch auto-stake hotkey")?;
+            Ok(r)
+        }).await?;
         match result {
             Some(val) => {
                 let account_bytes: [u8; 32] = val.as_type()?;
@@ -654,12 +779,18 @@ impl Client {
         &self,
         netuid: NetUid,
     ) -> Result<Option<Vec<(String, u64)>>> {
-        let addr = subxt::dynamic::storage(
-            "SubtensorModule",
-            "MechanismEmissionSplit",
-            vec![subxt::dynamic::Value::u128(netuid.0 as u128)],
-        );
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let nid = netuid.0;
+        let result = retry_on_transient("get_emission_split", RPC_RETRIES, || async {
+            let addr = subxt::dynamic::storage(
+                "SubtensorModule",
+                "MechanismEmissionSplit",
+                vec![subxt::dynamic::Value::u128(nid as u128)],
+            );
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .with_context(|| format!("Failed to fetch emission split for SN{}", nid))?;
+            Ok(r)
+        }).await?;
         match result {
             Some(val) => {
                 let raw: Vec<(u8, u64)> = val.as_type()?;
@@ -687,15 +818,14 @@ impl Client {
     pub async fn list_crowdloans(
         &self,
     ) -> Result<Vec<(u32, String, u64, u64, u64, u32, bool)>> {
-        let addr = subxt::dynamic::storage("Crowdloan", "Crowdloans", ());
+        let inner = &self.inner;
         let mut results = Vec::new();
-        let mut iter = self
-            .inner
-            .storage()
-            .at_latest()
-            .await?
-            .iter(addr)
-            .await?;
+        let mut iter = retry_on_transient("list_crowdloans", RPC_RETRIES, || async {
+            let addr = subxt::dynamic::storage("Crowdloan", "Crowdloans", ());
+            let i = inner.storage().at_latest().await?.iter(addr).await
+                .context("Failed to iterate crowdloans")?;
+            Ok(i)
+        }).await?;
         while let Some(Ok(kv)) = iter.next().await {
             // Extract crowdloan ID from key (last 4 bytes for u32)
             let key_bytes = &kv.key_bytes;
@@ -724,12 +854,17 @@ impl Client {
         &self,
         crowdloan_id: u32,
     ) -> Result<Option<(String, u64, u64, u64, u32, u64, bool, Option<String>)>> {
-        let addr = subxt::dynamic::storage(
-            "Crowdloan",
-            "Crowdloans",
-            vec![subxt::dynamic::Value::u128(crowdloan_id as u128)],
-        );
-        let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
+        let inner = &self.inner;
+        let result = retry_on_transient("get_crowdloan_info", RPC_RETRIES, || async {
+            let addr = subxt::dynamic::storage(
+                "Crowdloan",
+                "Crowdloans",
+                vec![subxt::dynamic::Value::u128(crowdloan_id as u128)],
+            );
+            let r = inner.storage().at_latest().await?.fetch(&addr).await
+                .with_context(|| format!("Failed to fetch crowdloan {}", crowdloan_id))?;
+            Ok(r)
+        }).await?;
         match result {
             Some(val) => {
                 if let Ok((creator_bytes, deposit, raised, cap, end_block, min_contrib, finalized, target_opt, _call))
@@ -752,19 +887,18 @@ impl Client {
         &self,
         crowdloan_id: u32,
     ) -> Result<Vec<(String, u64)>> {
-        let addr = subxt::dynamic::storage(
-            "Crowdloan",
-            "Contributors",
-            vec![subxt::dynamic::Value::u128(crowdloan_id as u128)],
-        );
+        let inner = &self.inner;
         let mut results = Vec::new();
-        let mut iter = self
-            .inner
-            .storage()
-            .at_latest()
-            .await?
-            .iter(addr)
-            .await?;
+        let mut iter = retry_on_transient("get_crowdloan_contributors", RPC_RETRIES, || async {
+            let addr = subxt::dynamic::storage(
+                "Crowdloan",
+                "Contributors",
+                vec![subxt::dynamic::Value::u128(crowdloan_id as u128)],
+            );
+            let i = inner.storage().at_latest().await?.iter(addr).await
+                .with_context(|| format!("Failed to iterate contributors for crowdloan {}", crowdloan_id))?;
+            Ok(i)
+        }).await?;
         while let Some(Ok(kv)) = iter.next().await {
             let key_bytes = &kv.key_bytes;
             if key_bytes.len() >= 32 {
