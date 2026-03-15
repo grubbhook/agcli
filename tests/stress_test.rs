@@ -238,3 +238,218 @@ fn public_key_roundtrip_concurrent() {
         t.join().unwrap();
     }
 }
+
+// ──── Sprint 6: QueryCache concurrent access tests ────
+
+#[tokio::test]
+async fn query_cache_sequential_dedup() {
+    use agcli::queries::query_cache::QueryCache;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    let cache = QueryCache::new();
+    let fetch_count = Arc::new(AtomicU32::new(0));
+
+    // First call: should fetch
+    let count = fetch_count.clone();
+    cache
+        .get_all_subnets(|| {
+            let c = count.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(vec![])
+            }
+        })
+        .await
+        .unwrap();
+
+    // 10 sequential calls: all should hit cache
+    for _ in 0..10 {
+        let count = fetch_count.clone();
+        cache
+            .get_all_subnets(|| {
+                let c = count.clone();
+                async move {
+                    c.fetch_add(1, Ordering::SeqCst);
+                    Ok(vec![])
+                }
+            })
+            .await
+            .unwrap();
+    }
+
+    // Only 1 actual fetch should have happened
+    assert_eq!(
+        fetch_count.load(Ordering::SeqCst),
+        1,
+        "Sequential reads should all hit cache after first fetch"
+    );
+}
+
+#[tokio::test]
+async fn query_cache_dynamic_populates_per_netuid() {
+    use agcli::queries::query_cache::QueryCache;
+    use agcli::types::chain_data::DynamicInfo;
+    use agcli::types::balance::{AlphaBalance, Balance};
+    use agcli::types::network::NetUid;
+
+    let cache = QueryCache::new();
+
+    let make_di = |netuid: u16, name: &str, price: f64, tao_rao: u64| DynamicInfo {
+        netuid: NetUid(netuid),
+        name: name.to_string(),
+        symbol: String::new(),
+        tempo: 360,
+        emission: 0,
+        tao_in: Balance::from_rao(tao_rao),
+        alpha_in: AlphaBalance::from_raw(500_000_000),
+        alpha_out: AlphaBalance::from_raw(500_000_000),
+        price,
+        owner_hotkey: String::new(),
+        owner_coldkey: String::new(),
+        last_step: 0,
+        blocks_since_last_step: 0,
+        alpha_out_emission: 0,
+        alpha_in_emission: 0,
+        tao_in_emission: 0,
+        pending_alpha_emission: 0,
+        pending_root_emission: 0,
+        subnet_volume: 0,
+        network_registered_at: 0,
+    };
+
+    // Fetch all dynamic info with 2 subnets
+    let fetch_count = Arc::new(AtomicU32::new(0));
+    let count = fetch_count.clone();
+    cache
+        .get_all_dynamic_info(|| {
+            let c = count.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(vec![
+                    make_di(1, "alpha", 1.5, 1_000_000_000),
+                    make_di(2, "beta", 0.5, 2_000_000_000),
+                ])
+            }
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(fetch_count.load(Ordering::SeqCst), 1);
+
+    // Now per-netuid cache should be populated — fetching netuid 1 should NOT call fetch
+    let per_netuid_count = Arc::new(AtomicU32::new(0));
+    let c = per_netuid_count.clone();
+    let result = cache
+        .get_dynamic_info(1, || {
+            let c = c.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(None)
+            }
+        })
+        .await
+        .unwrap();
+
+    assert!(result.is_some(), "netuid 1 should be cached");
+    assert_eq!(result.unwrap().name, "alpha");
+    assert_eq!(per_netuid_count.load(Ordering::SeqCst), 0, "should use cache, not fetch");
+}
+
+// ──── Sprint 6: Balance edge cases ────
+
+#[test]
+fn balance_arithmetic_overflow_safety() {
+    use agcli::types::Balance;
+    // Adding two large balances should not panic
+    let a = Balance::from_rao(u64::MAX / 2);
+    let b = Balance::from_rao(u64::MAX / 2);
+    let sum = a + b;
+    assert!(sum.rao() >= u64::MAX / 2, "balance addition should work");
+}
+
+#[test]
+fn balance_display_tao_large() {
+    use agcli::types::Balance;
+    let b = Balance::from_rao(u64::MAX);
+    let display = b.display_tao();
+    assert!(!display.is_empty(), "should display something");
+    // u64::MAX RAO = ~18.4 billion TAO
+    assert!(display.contains("."), "should display decimal TAO");
+}
+
+#[test]
+fn balance_from_tao_fractional() {
+    use agcli::types::Balance;
+    let b = Balance::from_tao(0.000000001); // 1 RAO
+    assert_eq!(b.rao(), 1);
+}
+
+#[test]
+fn balance_zero_operations() {
+    use agcli::types::Balance;
+    let z = Balance::ZERO;
+    assert_eq!(z.rao(), 0);
+    assert_eq!(z.tao(), 0.0);
+    assert_eq!((z + z).rao(), 0);
+    let display = z.display_tao();
+    assert!(display.contains("0"), "zero should display as 0");
+}
+
+// ──── Sprint 6: MEV shield encrypt edge cases ────
+
+#[test]
+fn mev_encrypt_empty_plaintext() {
+    use ml_kem::{EncodedSizeUser, KemCore, MlKem768};
+    let mut rng = rand::thread_rng();
+    let (_dk, ek) = MlKem768::generate(&mut rng);
+    let ek_bytes = ek.as_bytes();
+
+    // Empty plaintext should still work
+    let result = agcli::extrinsics::mev_shield::encrypt_for_mev_shield(ek_bytes.as_slice(), b"");
+    assert!(result.is_ok(), "empty plaintext should encrypt: {:?}", result.err());
+    let (_, ct) = result.unwrap();
+    // Ciphertext: 2 + 1088 + 24 + (0 + 16 tag)
+    assert_eq!(ct.len(), 2 + 1088 + 24 + 16);
+}
+
+#[test]
+fn mev_encrypt_large_plaintext() {
+    use ml_kem::{EncodedSizeUser, KemCore, MlKem768};
+    let mut rng = rand::thread_rng();
+    let (_dk, ek) = MlKem768::generate(&mut rng);
+    let ek_bytes = ek.as_bytes();
+
+    // Large 10KB plaintext
+    let plaintext = vec![0xABu8; 10_000];
+    let result = agcli::extrinsics::mev_shield::encrypt_for_mev_shield(ek_bytes.as_slice(), &plaintext);
+    assert!(result.is_ok(), "large plaintext should encrypt: {:?}", result.err());
+    let (_, ct) = result.unwrap();
+    assert_eq!(ct.len(), 2 + 1088 + 24 + plaintext.len() + 16);
+}
+
+#[test]
+fn mev_encrypt_commitment_deterministic() {
+    use ml_kem::{EncodedSizeUser, KemCore, MlKem768};
+    let mut rng = rand::thread_rng();
+    let (_dk, ek) = MlKem768::generate(&mut rng);
+    let ek_bytes = ek.as_bytes();
+    let plaintext = b"deterministic commitment test";
+
+    let (c1, _) = agcli::extrinsics::mev_shield::encrypt_for_mev_shield(ek_bytes.as_slice(), plaintext).unwrap();
+    let (c2, _) = agcli::extrinsics::mev_shield::encrypt_for_mev_shield(ek_bytes.as_slice(), plaintext).unwrap();
+    assert_eq!(c1, c2, "same plaintext should produce same commitment");
+}
+
+#[test]
+fn mev_encrypt_ciphertext_nondeterministic() {
+    use ml_kem::{EncodedSizeUser, KemCore, MlKem768};
+    let mut rng = rand::thread_rng();
+    let (_dk, ek) = MlKem768::generate(&mut rng);
+    let ek_bytes = ek.as_bytes();
+    let plaintext = b"nondeterministic ciphertext test";
+
+    let (_, ct1) = agcli::extrinsics::mev_shield::encrypt_for_mev_shield(ek_bytes.as_slice(), plaintext).unwrap();
+    let (_, ct2) = agcli::extrinsics::mev_shield::encrypt_for_mev_shield(ek_bytes.as_slice(), plaintext).unwrap();
+    assert_ne!(ct1, ct2, "ciphertext should differ due to random nonce/KEM");
+}

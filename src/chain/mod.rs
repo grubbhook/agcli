@@ -150,6 +150,55 @@ impl Client {
         Ok(hash)
     }
 
+    /// Sign and submit via MEV shield: SCALE-encode the call, encrypt with ML-KEM-768,
+    /// then submit encrypted extrinsic to MevShield.submit_encrypted.
+    pub async fn sign_submit_mev<T: subxt::tx::Payload>(
+        &self,
+        tx: &T,
+        pair: &sr25519::Pair,
+    ) -> Result<String> {
+        tracing::info!("MEV shield: encrypting extrinsic");
+        let start = std::time::Instant::now();
+
+        // 1. Encode the call to SCALE bytes
+        let call_data = self
+            .inner
+            .tx()
+            .call_data(tx)
+            .map_err(|e| anyhow::anyhow!("Failed to encode call data: {}", e))?;
+
+        // 2. Fetch the MEV shield public key from chain
+        let mev_key = self.get_mev_shield_next_key().await?;
+
+        // 3. Encrypt with ML-KEM-768 + XChaCha20-Poly1305
+        let (commitment, ciphertext) =
+            crate::extrinsics::mev_shield::encrypt_for_mev_shield(&mev_key, &call_data)?;
+
+        tracing::info!(
+            elapsed_ms = start.elapsed().as_millis() as u64,
+            ct_len = ciphertext.len(),
+            "MEV shield: encryption complete"
+        );
+
+        // 4. Submit the encrypted extrinsic
+        self.submit_mev_encrypted(pair, commitment, ciphertext)
+            .await
+    }
+
+    /// Sign and submit, optionally wrapping through MEV shield.
+    pub async fn sign_submit_or_mev<T: subxt::tx::Payload>(
+        &self,
+        tx: &T,
+        pair: &sr25519::Pair,
+        use_mev: bool,
+    ) -> Result<String> {
+        if use_mev {
+            self.sign_submit_mev(tx, pair).await
+        } else {
+            self.sign_submit(tx, pair).await
+        }
+    }
+
     // ──────── Balance Queries ────────
 
     /// Get TAO balance (free) for an account.
@@ -538,14 +587,23 @@ impl Client {
         netuid: NetUid,
         amount: Balance,
     ) -> Result<String> {
+        self.add_stake_mev(pair, hotkey_ss58, netuid, amount, false).await
+    }
+
+    /// Add stake, optionally wrapping through MEV shield.
+    pub async fn add_stake_mev(
+        &self,
+        pair: &sr25519::Pair,
+        hotkey_ss58: &str,
+        netuid: NetUid,
+        amount: Balance,
+        mev: bool,
+    ) -> Result<String> {
         let hk = Self::ss58_to_account_id(hotkey_ss58)?;
-        self.sign_submit(
-            &api::tx()
-                .subtensor_module()
-                .add_stake(hk, netuid.0, amount.rao()),
-            pair,
-        )
-        .await
+        let tx = api::tx()
+            .subtensor_module()
+            .add_stake(hk, netuid.0, amount.rao());
+        self.sign_submit_or_mev(&tx, pair, mev).await
     }
 
     /// Remove stake from a hotkey on a subnet.
@@ -556,14 +614,23 @@ impl Client {
         netuid: NetUid,
         amount: Balance,
     ) -> Result<String> {
+        self.remove_stake_mev(pair, hotkey_ss58, netuid, amount, false).await
+    }
+
+    /// Remove stake, optionally wrapping through MEV shield.
+    pub async fn remove_stake_mev(
+        &self,
+        pair: &sr25519::Pair,
+        hotkey_ss58: &str,
+        netuid: NetUid,
+        amount: Balance,
+        mev: bool,
+    ) -> Result<String> {
         let hk = Self::ss58_to_account_id(hotkey_ss58)?;
-        self.sign_submit(
-            &api::tx()
-                .subtensor_module()
-                .remove_stake(hk, netuid.0, amount.rao()),
-            pair,
-        )
-        .await
+        let tx = api::tx()
+            .subtensor_module()
+            .remove_stake(hk, netuid.0, amount.rao());
+        self.sign_submit_or_mev(&tx, pair, mev).await
     }
 
     /// Register on a subnet via burned TAO.

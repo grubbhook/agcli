@@ -27,11 +27,12 @@ pub struct SubnetPosition {
 
 /// Fetch the full portfolio for a coldkey (resolves subnet names and prices from DynamicInfo).
 pub async fn fetch_portfolio(client: &Client, coldkey_ss58: &str) -> Result<Portfolio> {
-    let balance = client.get_balance_ss58(coldkey_ss58).await?;
-    let stakes = client.get_stake_for_coldkey(coldkey_ss58).await?;
-
-    // Fetch dynamic info to resolve names and prices
-    let dynamic = client.get_all_dynamic_info().await.unwrap_or_default();
+    // Parallel fetch: balance, stakes, and dynamic info all at once
+    let (balance, stakes, dynamic) = tokio::try_join!(
+        client.get_balance_ss58(coldkey_ss58),
+        client.get_stake_for_coldkey(coldkey_ss58),
+        async { Ok::<_, anyhow::Error>(client.get_all_dynamic_info().await.unwrap_or_default()) },
+    )?;
     let dynamic_map: std::collections::HashMap<u16, &crate::types::chain_data::DynamicInfo> =
         dynamic.iter().map(|d| (d.netuid.0, d)).collect();
 

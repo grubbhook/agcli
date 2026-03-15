@@ -81,6 +81,10 @@ pub struct Cli {
     #[arg(long, global = true, env = "AGCLI_PASSWORD", hide_env_values = true)]
     pub password: Option<String>,
 
+    /// Wrap staking extrinsics through MEV shield (ML-KEM-768 encrypted submission)
+    #[arg(long, global = true, env = "AGCLI_MEV")]
+    pub mev: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

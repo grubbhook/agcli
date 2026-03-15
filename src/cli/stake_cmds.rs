@@ -16,6 +16,7 @@ pub async fn handle_stake(
     output: &str,
     password: Option<&str>,
     yes: bool,
+    mev: bool,
 ) -> Result<()> {
     match cmd {
         StakeCommands::List { address, at_block } => {
@@ -122,11 +123,14 @@ pub async fn handle_stake(
             if let Some(max_slip) = max_slippage {
                 check_slippage(client, netuid, amount, max_slip, true).await?;
             }
+            if mev {
+                eprintln!("MEV shield: encrypting stake operation");
+            }
             stake_op(
                 "Adding",
                 "added",
                 &hk,
-                client.add_stake(&pair, &hk, NetUid(netuid), bal).await,
+                client.add_stake_mev(&pair, &hk, NetUid(netuid), bal, mev).await,
             )
         }
         StakeCommands::Remove {
@@ -141,12 +145,15 @@ pub async fn handle_stake(
             if let Some(max_slip) = max_slippage {
                 check_slippage(client, netuid, amount, max_slip, false).await?;
             }
+            if mev {
+                eprintln!("MEV shield: encrypting unstake operation");
+            }
             stake_op(
                 "Removing",
                 "removed",
                 &hk,
                 client
-                    .remove_stake(&pair, &hk, NetUid(netuid), Balance::from_tao(amount))
+                    .remove_stake_mev(&pair, &hk, NetUid(netuid), Balance::from_tao(amount), mev)
                     .await,
             )
         }

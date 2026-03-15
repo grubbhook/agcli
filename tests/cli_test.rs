@@ -2439,3 +2439,125 @@ fn parse_crowdloan_update_min_contribution() {
     ]);
     assert!(cli.is_ok(), "should parse crowdloan update-min-contribution: {:?}", cli.err());
 }
+
+// ──── Sprint 6: --mev flag tests ────
+
+#[test]
+fn parse_mev_flag_global() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--mev", "balance"]);
+    assert!(cli.is_ok(), "should parse --mev flag: {:?}", cli.err());
+    assert!(cli.unwrap().mev);
+}
+
+#[test]
+fn parse_mev_flag_with_stake_add() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--mev", "stake", "add", "--amount", "1.0", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "should parse --mev with stake add: {:?}", cli.err());
+    let cli = cli.unwrap();
+    assert!(cli.mev);
+}
+
+#[test]
+fn parse_mev_flag_with_stake_remove() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--mev", "stake", "remove", "--amount", "1.0", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "should parse --mev with stake remove: {:?}", cli.err());
+    assert!(cli.unwrap().mev);
+}
+
+#[test]
+fn parse_mev_flag_default_false() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance"]);
+    assert!(cli.is_ok());
+    assert!(!cli.unwrap().mev, "mev should default to false");
+}
+
+#[test]
+fn parse_mev_combined_with_other_flags() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--mev", "--yes", "--verbose", "--time", "stake", "add",
+        "--amount", "1.0", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "should parse multiple flags together: {:?}", cli.err());
+    let cli = cli.unwrap();
+    assert!(cli.mev);
+    assert!(cli.yes);
+    assert!(cli.verbose);
+    assert!(cli.time);
+}
+
+// ──── Sprint 6: error message quality tests ────
+
+#[test]
+fn parse_stake_add_missing_netuid_error() {
+    let result = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "add", "--amount", "1.0",
+    ]);
+    assert!(result.is_err(), "missing --netuid should error");
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("netuid"), "error should mention netuid: {}", err);
+}
+
+#[test]
+fn parse_stake_add_missing_amount_error() {
+    let result = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "add", "--netuid", "1",
+    ]);
+    assert!(result.is_err(), "missing --amount should error");
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("amount"), "error should mention amount: {}", err);
+}
+
+#[test]
+fn parse_transfer_missing_dest_error() {
+    let result = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer", "--amount", "1.0",
+    ]);
+    assert!(result.is_err(), "missing --dest should error");
+}
+
+#[test]
+fn parse_transfer_missing_amount_error() {
+    let result = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer", "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(result.is_err(), "missing --amount should error");
+}
+
+#[test]
+fn parse_subnet_metagraph_missing_netuid_error() {
+    let result = agcli::cli::Cli::try_parse_from([
+        "agcli", "subnet", "metagraph",
+    ]);
+    assert!(result.is_err(), "missing --netuid should error");
+}
+
+#[test]
+fn parse_invalid_network_string_still_parses() {
+    // Custom/unknown network strings are accepted and treated as Custom
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "ws://custom:9944", "balance",
+    ]);
+    assert!(cli.is_ok(), "custom network string should parse");
+}
+
+#[test]
+fn parse_timeout_zero_is_valid() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--timeout", "0", "balance",
+    ]);
+    assert!(cli.is_ok());
+    assert_eq!(cli.unwrap().timeout, Some(0));
+}
+
+#[test]
+fn parse_timeout_large_value() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--timeout", "3600", "balance",
+    ]);
+    assert!(cli.is_ok());
+    assert_eq!(cli.unwrap().timeout, Some(3600));
+}

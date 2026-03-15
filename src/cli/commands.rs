@@ -16,6 +16,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
     let yes = cli.yes;
     let batch = cli.batch;
     let pretty = cli.pretty;
+    let mev = cli.mev;
 
     // Set global mode flags so helpers can check them
     set_batch_mode(batch || yes);
@@ -159,6 +160,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
                 output,
                 password.as_deref(),
                 yes,
+                mev,
             )
             .await
         }
