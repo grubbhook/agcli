@@ -24,6 +24,8 @@
 //!
 //! **Dynamic**: submit_raw_call (for EVM, MEV Shield, Contracts, etc.)
 
+pub mod mev_shield;
 pub mod weights;
 
+pub use mev_shield::encrypt_for_mev_shield;
 pub use weights::compute_weight_commit_hash;

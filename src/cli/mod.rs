@@ -191,9 +191,14 @@ pub enum Commands {
     Multisig(MultisigCommands),
 
     // ──── Crowdloan ────
-    /// Crowdloan operations (create, contribute, withdraw, finalize)
+    /// Crowdloan operations (create, contribute, withdraw, finalize, refund, dissolve)
     #[command(subcommand)]
     Crowdloan(CrowdloanCommands),
+
+    // ──── Liquidity ────
+    /// Liquidity pool management (add, remove, modify positions)
+    #[command(subcommand)]
+    Liquidity(LiquidityCommands),
 
     // ──── Config ────
     /// Manage persistent configuration (~/.agcli/config.toml)
@@ -548,6 +553,24 @@ pub enum StakeCommands {
         /// Hotkey SS58
         #[arg(long)]
         hotkey: Option<String>,
+    },
+    /// Set auto-stake hotkey for a subnet (rewards auto-compound to this hotkey)
+    SetAuto {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Hotkey SS58 to auto-stake to
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
+    /// Set root claim type (how root emissions are handled)
+    SetClaim {
+        /// Claim type: swap (alpha→TAO), keep (keep alpha), keep-subnets (keep for specific subnets)
+        #[arg(long, value_parser = ["swap", "keep", "keep-subnets"])]
+        claim_type: String,
+        /// Subnet UIDs to keep alpha for (only with --claim-type keep-subnets, comma-separated)
+        #[arg(long)]
+        subnets: Option<String>,
     },
     /// Full staking wizard (interactive or non-interactive with flags)
     Wizard {
@@ -1097,6 +1120,24 @@ pub enum MultisigCommands {
 
 #[derive(Subcommand, Debug)]
 pub enum CrowdloanCommands {
+    /// Create a new crowdloan campaign
+    Create {
+        /// Initial deposit in TAO
+        #[arg(long)]
+        deposit: f64,
+        /// Minimum contribution in TAO
+        #[arg(long)]
+        min_contribution: f64,
+        /// Funding cap in TAO
+        #[arg(long)]
+        cap: f64,
+        /// End block number
+        #[arg(long)]
+        end_block: u32,
+        /// Target SS58 address for funds (optional; if omitted, creator receives)
+        #[arg(long)]
+        target: Option<String>,
+    },
     /// Contribute TAO to a crowdloan
     Contribute {
         /// Crowdloan ID
@@ -1117,6 +1158,103 @@ pub enum CrowdloanCommands {
         /// Crowdloan ID
         #[arg(long)]
         crowdloan_id: u32,
+    },
+    /// Refund all contributors of a failed/expired crowdloan
+    Refund {
+        /// Crowdloan ID
+        #[arg(long)]
+        crowdloan_id: u32,
+    },
+    /// Dissolve a crowdloan (creator only, after refunding)
+    Dissolve {
+        /// Crowdloan ID
+        #[arg(long)]
+        crowdloan_id: u32,
+    },
+    /// Update crowdloan funding cap (creator only)
+    UpdateCap {
+        /// Crowdloan ID
+        #[arg(long)]
+        crowdloan_id: u32,
+        /// New cap in TAO
+        #[arg(long)]
+        cap: f64,
+    },
+    /// Update crowdloan end block (creator only)
+    UpdateEnd {
+        /// Crowdloan ID
+        #[arg(long)]
+        crowdloan_id: u32,
+        /// New end block number
+        #[arg(long)]
+        end_block: u32,
+    },
+    /// Update minimum contribution (creator only)
+    UpdateMinContribution {
+        /// Crowdloan ID
+        #[arg(long)]
+        crowdloan_id: u32,
+        /// New minimum contribution in TAO
+        #[arg(long)]
+        min_contribution: f64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum LiquidityCommands {
+    /// Add a liquidity position to a subnet's AMM pool
+    Add {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Lower price bound (TAO per Alpha)
+        #[arg(long)]
+        price_low: f64,
+        /// Upper price bound (TAO per Alpha)
+        #[arg(long)]
+        price_high: f64,
+        /// Liquidity amount (in RAO units)
+        #[arg(long)]
+        amount: u64,
+        /// Hotkey SS58 (defaults to wallet hotkey)
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
+    /// Remove a liquidity position entirely
+    Remove {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Position ID
+        #[arg(long)]
+        position_id: u128,
+        /// Hotkey SS58 (defaults to wallet hotkey)
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
+    /// Modify liquidity in an existing position
+    Modify {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Position ID
+        #[arg(long)]
+        position_id: u128,
+        /// Liquidity delta (positive = add, negative = remove)
+        #[arg(long, allow_hyphen_values = true)]
+        delta: i64,
+        /// Hotkey SS58 (defaults to wallet hotkey)
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
+    /// Toggle user liquidity for a subnet (subnet owner only)
+    Toggle {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Enable user liquidity
+        #[arg(long)]
+        enable: bool,
     },
 }
 

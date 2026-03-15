@@ -24,6 +24,9 @@ argon2 = "0.5"
 crypto_secretbox = "0.1"
 rand = "0.8"
 zeroize = { version = "1", features = ["derive"] }
+ml-kem = "0.2"
+kem = "=0.3.0-pre.0"
+chacha20poly1305 = "0.10"
 
 # CLI
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }

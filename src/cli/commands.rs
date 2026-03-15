@@ -272,6 +272,19 @@ pub async fn execute(cli: Cli) -> Result<()> {
             )
             .await
         }
+        Commands::Liquidity(cmd) => {
+            let client = Client::connect_network(&network).await?;
+            handle_liquidity(
+                cmd,
+                &client,
+                &cli.wallet_dir,
+                &cli.wallet,
+                &cli.hotkey,
+                output,
+                password.as_deref(),
+            )
+            .await
+        }
         Commands::Swap(cmd) => {
             let client = Client::connect_network(&network).await?;
             handle_swap(
@@ -3596,6 +3609,37 @@ async fn handle_crowdloan(
     unlock_coldkey(&mut wallet, password)?;
     let pair = wallet.coldkey()?;
     let (action, hash) = match cmd {
+        CrowdloanCommands::Create {
+            deposit,
+            min_contribution,
+            cap,
+            end_block,
+            target,
+        } => {
+            let dep = Balance::from_tao(deposit);
+            let min = Balance::from_tao(min_contribution);
+            let cap_b = Balance::from_tao(cap);
+            println!(
+                "Creating crowdloan: deposit={}, min={}, cap={}, end_block={}",
+                dep.display_tao(),
+                min.display_tao(),
+                cap_b.display_tao(),
+                end_block
+            );
+            (
+                "Crowdloan created",
+                client
+                    .crowdloan_create(
+                        pair,
+                        dep.rao(),
+                        min.rao(),
+                        cap_b.rao(),
+                        end_block,
+                        target.as_deref(),
+                    )
+                    .await?,
+            )
+        }
         CrowdloanCommands::Contribute {
             crowdloan_id,
             amount,
@@ -3625,8 +3669,180 @@ async fn handle_crowdloan(
                 client.crowdloan_finalize(pair, crowdloan_id).await?,
             )
         }
+        CrowdloanCommands::Refund { crowdloan_id } => {
+            println!("Refunding contributors of crowdloan #{}", crowdloan_id);
+            (
+                "Refund submitted",
+                client.crowdloan_refund(pair, crowdloan_id).await?,
+            )
+        }
+        CrowdloanCommands::Dissolve { crowdloan_id } => {
+            println!("Dissolving crowdloan #{}", crowdloan_id);
+            (
+                "Crowdloan dissolved",
+                client.crowdloan_dissolve(pair, crowdloan_id).await?,
+            )
+        }
+        CrowdloanCommands::UpdateCap { crowdloan_id, cap } => {
+            let cap_b = Balance::from_tao(cap);
+            println!(
+                "Updating cap of crowdloan #{} to {}",
+                crowdloan_id,
+                cap_b.display_tao()
+            );
+            (
+                "Cap updated",
+                client
+                    .crowdloan_update_cap(pair, crowdloan_id, cap_b.rao())
+                    .await?,
+            )
+        }
+        CrowdloanCommands::UpdateEnd {
+            crowdloan_id,
+            end_block,
+        } => {
+            println!(
+                "Updating end block of crowdloan #{} to {}",
+                crowdloan_id, end_block
+            );
+            (
+                "End block updated",
+                client
+                    .crowdloan_update_end(pair, crowdloan_id, end_block)
+                    .await?,
+            )
+        }
+        CrowdloanCommands::UpdateMinContribution {
+            crowdloan_id,
+            min_contribution,
+        } => {
+            let min = Balance::from_tao(min_contribution);
+            println!(
+                "Updating min contribution of crowdloan #{} to {}",
+                crowdloan_id,
+                min.display_tao()
+            );
+            (
+                "Min contribution updated",
+                client
+                    .crowdloan_update_min_contribution(pair, crowdloan_id, min.rao())
+                    .await?,
+            )
+        }
     };
     println!("{}. Tx: {}", action, hash);
+    Ok(())
+}
+
+// ──────── Liquidity ────────
+
+/// Convert a price (TAO per Alpha) to a Uniswap V3-style tick index.
+/// tick = log(price) / log(1.0001), clamped to [-887272, 887272].
+fn price_to_tick(price: f64) -> i32 {
+    const MIN_TICK: i32 = -887272;
+    const MAX_TICK: i32 = 887272;
+    if price <= 0.0 {
+        return MIN_TICK;
+    }
+    let tick = (price.ln() / 1.0001_f64.ln()) as i32;
+    tick.clamp(MIN_TICK, MAX_TICK)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn handle_liquidity(
+    cmd: LiquidityCommands,
+    client: &Client,
+    wallet_dir: &str,
+    wallet_name: &str,
+    hotkey_name: &str,
+    _output: &str,
+    password: Option<&str>,
+) -> Result<()> {
+    let mut wallet = open_wallet(wallet_dir, wallet_name)?;
+    unlock_coldkey(&mut wallet, password)?;
+
+    match cmd {
+        LiquidityCommands::Add {
+            netuid,
+            price_low,
+            price_high,
+            amount,
+            hotkey,
+        } => {
+            let hk = resolve_hotkey_ss58(hotkey, &mut wallet, hotkey_name)?;
+            let pair = wallet.coldkey()?;
+            let tick_low = price_to_tick(price_low);
+            let tick_high = price_to_tick(price_high);
+            if tick_low >= tick_high {
+                anyhow::bail!(
+                    "price_low ({:.6}) must be less than price_high ({:.6})",
+                    price_low,
+                    price_high
+                );
+            }
+            println!(
+                "Adding liquidity on SN{}: range [{:.6}, {:.6}] (ticks [{}, {}]), amount={} RAO",
+                netuid, price_low, price_high, tick_low, tick_high, amount
+            );
+            let hash = client
+                .add_liquidity(pair, &hk, NetUid(netuid), tick_low, tick_high, amount)
+                .await?;
+            println!("Liquidity added. Tx: {}", hash);
+        }
+        LiquidityCommands::Remove {
+            netuid,
+            position_id,
+            hotkey,
+        } => {
+            let hk = resolve_hotkey_ss58(hotkey, &mut wallet, hotkey_name)?;
+            let pair = wallet.coldkey()?;
+            println!(
+                "Removing liquidity position {} on SN{}",
+                position_id, netuid
+            );
+            let hash = client
+                .remove_liquidity(pair, &hk, NetUid(netuid), position_id)
+                .await?;
+            println!("Position removed. Tx: {}", hash);
+        }
+        LiquidityCommands::Modify {
+            netuid,
+            position_id,
+            delta,
+            hotkey,
+        } => {
+            let hk = resolve_hotkey_ss58(hotkey, &mut wallet, hotkey_name)?;
+            let pair = wallet.coldkey()?;
+            let action = if delta > 0 { "Adding" } else { "Removing" };
+            println!(
+                "{} {} RAO liquidity on position {} (SN{})",
+                action,
+                delta.unsigned_abs(),
+                position_id,
+                netuid
+            );
+            let hash = client
+                .modify_liquidity(pair, &hk, NetUid(netuid), position_id, delta)
+                .await?;
+            println!("Position modified. Tx: {}", hash);
+        }
+        LiquidityCommands::Toggle { netuid, enable } => {
+            let pair = wallet.coldkey()?;
+            let action = if enable { "Enabling" } else { "Disabling" };
+            println!(
+                "{} user liquidity on SN{} (subnet owner only)",
+                action, netuid
+            );
+            let hash = client
+                .toggle_user_liquidity(pair, NetUid(netuid), enable)
+                .await?;
+            println!(
+                "User liquidity {}. Tx: {}",
+                if enable { "enabled" } else { "disabled" },
+                hash
+            );
+        }
+    }
     Ok(())
 }
 

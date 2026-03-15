@@ -2280,3 +2280,162 @@ fn parse_time_and_timeout_together() {
     assert!(cli.time);
     assert_eq!(cli.timeout, Some(120));
 }
+
+// ──── Sprint 5: Liquidity commands ────
+
+#[test]
+fn parse_liquidity_add() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add", "--netuid", "1", "--price-low", "0.5",
+        "--price-high", "2.0", "--amount", "1000000",
+    ]);
+    assert!(cli.is_ok(), "should parse liquidity add: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_add_with_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "add", "--netuid", "1", "--price-low", "0.1",
+        "--price-high", "10.0", "--amount", "500000", "--hotkey", "5GhostHotkey",
+    ]);
+    assert!(cli.is_ok(), "should parse liquidity add with hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_remove() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "remove", "--netuid", "1", "--position-id", "42",
+    ]);
+    assert!(cli.is_ok(), "should parse liquidity remove: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_modify() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "modify", "--netuid", "1", "--position-id", "42",
+        "--delta=-500",
+    ]);
+    assert!(cli.is_ok(), "should parse liquidity modify: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_modify_positive() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "modify", "--netuid", "1", "--position-id", "42",
+        "--delta", "1000",
+    ]);
+    assert!(cli.is_ok(), "should parse liquidity modify positive: {:?}", cli.err());
+}
+
+#[test]
+fn parse_liquidity_toggle() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "liquidity", "toggle", "--netuid", "1", "--enable",
+    ]);
+    assert!(cli.is_ok(), "should parse liquidity toggle: {:?}", cli.err());
+}
+
+// ──── Sprint 5: Auto-stake ────
+
+#[test]
+fn parse_stake_set_auto() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "set-auto", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "should parse stake set-auto: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_set_auto_with_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "set-auto", "--netuid", "1", "--hotkey", "5GhostHotkey",
+    ]);
+    assert!(cli.is_ok(), "should parse stake set-auto with hotkey: {:?}", cli.err());
+}
+
+// ──── Sprint 5: Root claim ────
+
+#[test]
+fn parse_stake_set_claim_swap() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "set-claim", "--claim-type", "swap",
+    ]);
+    assert!(cli.is_ok(), "should parse stake set-claim swap: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_set_claim_keep() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "set-claim", "--claim-type", "keep",
+    ]);
+    assert!(cli.is_ok(), "should parse stake set-claim keep: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_set_claim_keep_subnets() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "stake", "set-claim", "--claim-type", "keep-subnets", "--subnets", "1,3,5",
+    ]);
+    assert!(cli.is_ok(), "should parse stake set-claim keep-subnets: {:?}", cli.err());
+}
+
+// ──── Sprint 5: Crowdloan expanded commands ────
+
+#[test]
+fn parse_crowdloan_create() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create", "--deposit", "10.0", "--min-contribution", "0.1",
+        "--cap", "1000.0", "--end-block", "5000000",
+    ]);
+    assert!(cli.is_ok(), "should parse crowdloan create: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_create_with_target() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "create", "--deposit", "10.0", "--min-contribution", "0.1",
+        "--cap", "1000.0", "--end-block", "5000000", "--target", "5GhostTarget",
+    ]);
+    assert!(cli.is_ok(), "should parse crowdloan create with target: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_refund() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "refund", "--crowdloan-id", "42",
+    ]);
+    assert!(cli.is_ok(), "should parse crowdloan refund: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_dissolve() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "dissolve", "--crowdloan-id", "42",
+    ]);
+    assert!(cli.is_ok(), "should parse crowdloan dissolve: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_update_cap() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "update-cap", "--crowdloan-id", "42", "--cap", "2000.0",
+    ]);
+    assert!(cli.is_ok(), "should parse crowdloan update-cap: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_update_end() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "update-end", "--crowdloan-id", "42", "--end-block", "6000000",
+    ]);
+    assert!(cli.is_ok(), "should parse crowdloan update-end: {:?}", cli.err());
+}
+
+#[test]
+fn parse_crowdloan_update_min_contribution() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "crowdloan", "update-min-contribution", "--crowdloan-id", "42",
+        "--min-contribution", "0.5",
+    ]);
+    assert!(cli.is_ok(), "should parse crowdloan update-min-contribution: {:?}", cli.err());
+}

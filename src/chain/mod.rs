@@ -1776,6 +1776,324 @@ impl Client {
         );
         self.sign_submit(&tx, pair).await
     }
+
+    // ──────── Auto-Stake ────────
+
+    /// Set the auto-stake hotkey for a subnet (rewards auto-compound to this hotkey).
+    pub async fn set_auto_stake(
+        &self,
+        pair: &sr25519::Pair,
+        netuid: NetUid,
+        hotkey_ss58: &str,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let hotkey_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        self.submit_raw_call(
+            pair,
+            "SubtensorModule",
+            "set_coldkey_auto_stake_hotkey",
+            vec![
+                Value::u128(netuid.0 as u128),
+                Value::from_bytes(hotkey_id.0),
+            ],
+        )
+        .await
+    }
+
+    // ──────── Root Claim Management ────────
+
+    /// Set root claim type: "Swap" (swap alpha→TAO), "Keep" (keep alpha), or KeepSubnets.
+    pub async fn set_root_claim_type(
+        &self,
+        pair: &sr25519::Pair,
+        claim_type: &str,
+        keep_subnets: Option<&[u16]>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let variant = match claim_type {
+            "swap" | "Swap" => Value::unnamed_variant("Swap", []),
+            "keep" | "Keep" => Value::unnamed_variant("Keep", []),
+            "keep-subnets" | "KeepSubnets" => {
+                let subnets = keep_subnets.unwrap_or(&[]);
+                let subnet_vals: Vec<Value> =
+                    subnets.iter().map(|n| Value::u128(*n as u128)).collect();
+                Value::named_variant(
+                    "KeepSubnets",
+                    [("subnets", Value::unnamed_composite(subnet_vals))],
+                )
+            }
+            _ => anyhow::bail!("Invalid claim type: {}. Use 'swap', 'keep', or 'keep-subnets'", claim_type),
+        };
+        self.submit_raw_call(
+            pair,
+            "SubtensorModule",
+            "set_root_claim_type",
+            vec![variant],
+        )
+        .await
+    }
+
+    // ──────── Liquidity Pool (Swap pallet) ────────
+
+    /// Add liquidity to a subnet's AMM pool with a concentrated price range.
+    pub async fn add_liquidity(
+        &self,
+        pair: &sr25519::Pair,
+        hotkey_ss58: &str,
+        netuid: NetUid,
+        tick_low: i32,
+        tick_high: i32,
+        liquidity: u64,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let hotkey_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        self.submit_raw_call(
+            pair,
+            "Swap",
+            "add_liquidity",
+            vec![
+                Value::from_bytes(hotkey_id.0),
+                Value::u128(netuid.0 as u128),
+                Value::i128(tick_low as i128),
+                Value::i128(tick_high as i128),
+                Value::u128(liquidity as u128),
+            ],
+        )
+        .await
+    }
+
+    /// Remove a liquidity position entirely.
+    pub async fn remove_liquidity(
+        &self,
+        pair: &sr25519::Pair,
+        hotkey_ss58: &str,
+        netuid: NetUid,
+        position_id: u128,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let hotkey_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        self.submit_raw_call(
+            pair,
+            "Swap",
+            "remove_liquidity",
+            vec![
+                Value::from_bytes(hotkey_id.0),
+                Value::u128(netuid.0 as u128),
+                Value::u128(position_id),
+            ],
+        )
+        .await
+    }
+
+    /// Modify liquidity in an existing position (positive = add, negative = remove).
+    pub async fn modify_liquidity(
+        &self,
+        pair: &sr25519::Pair,
+        hotkey_ss58: &str,
+        netuid: NetUid,
+        position_id: u128,
+        liquidity_delta: i64,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let hotkey_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        self.submit_raw_call(
+            pair,
+            "Swap",
+            "modify_position",
+            vec![
+                Value::from_bytes(hotkey_id.0),
+                Value::u128(netuid.0 as u128),
+                Value::u128(position_id),
+                Value::i128(liquidity_delta as i128),
+            ],
+        )
+        .await
+    }
+
+    // ──────── MEV Shield ────────
+
+    /// Fetch the current ML-KEM-768 public key for MEV shield from chain storage.
+    pub async fn get_mev_shield_next_key(&self) -> Result<Vec<u8>> {
+        let storage_query = subxt::dynamic::storage("MevShield", "NextKey", ());
+        let result = self.inner.storage().at_latest().await?.fetch(&storage_query).await?;
+        match result {
+            Some(val) => {
+                // Decode the BoundedVec<u8> from the storage value
+                let bytes: Vec<u8> = val.as_type()?;
+                Ok(bytes)
+            }
+            None => anyhow::bail!("MEV shield key not available — the chain may not have MEV shield enabled"),
+        }
+    }
+
+    /// Submit an encrypted extrinsic through the MEV shield.
+    /// Takes a pre-computed commitment (Blake2-256) and ciphertext.
+    pub async fn submit_mev_encrypted(
+        &self,
+        pair: &sr25519::Pair,
+        commitment: [u8; 32],
+        ciphertext: Vec<u8>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "MevShield",
+            "submit_encrypted",
+            vec![
+                Value::from_bytes(commitment),
+                Value::from_bytes(ciphertext),
+            ],
+        )
+        .await
+    }
+
+    /// Toggle user liquidity on a subnet (subnet owner only).
+    pub async fn toggle_user_liquidity(
+        &self,
+        pair: &sr25519::Pair,
+        netuid: NetUid,
+        enable: bool,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "Swap",
+            "toggle_user_liquidity",
+            vec![
+                Value::u128(netuid.0 as u128),
+                Value::bool(enable),
+            ],
+        )
+        .await
+    }
+
+    // ──────── Crowdloan (full) ────────
+
+    /// Create a new crowdloan campaign.
+    pub async fn crowdloan_create(
+        &self,
+        pair: &sr25519::Pair,
+        deposit_rao: u64,
+        min_contribution_rao: u64,
+        cap_rao: u64,
+        end_block: u32,
+        target_ss58: Option<&str>,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        let target = match target_ss58 {
+            Some(ss58) => {
+                let id = Self::ss58_to_account_id(ss58)?;
+                Value::unnamed_variant("Some", [Value::from_bytes(id.0)])
+            }
+            None => Value::unnamed_variant("None", []),
+        };
+        self.submit_raw_call(
+            pair,
+            "Crowdloan",
+            "create",
+            vec![
+                Value::u128(deposit_rao as u128),
+                Value::u128(min_contribution_rao as u128),
+                Value::u128(cap_rao as u128),
+                Value::u128(end_block as u128),
+                Value::unnamed_variant("None", []), // call (None for simple fund)
+                target,
+            ],
+        )
+        .await
+    }
+
+    /// Refund all contributors of a failed/expired crowdloan.
+    pub async fn crowdloan_refund(
+        &self,
+        pair: &sr25519::Pair,
+        crowdloan_id: u32,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "Crowdloan",
+            "refund",
+            vec![Value::u128(crowdloan_id as u128)],
+        )
+        .await
+    }
+
+    /// Dissolve a crowdloan (creator only, after refunding).
+    pub async fn crowdloan_dissolve(
+        &self,
+        pair: &sr25519::Pair,
+        crowdloan_id: u32,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "Crowdloan",
+            "dissolve",
+            vec![Value::u128(crowdloan_id as u128)],
+        )
+        .await
+    }
+
+    /// Update cap of a crowdloan (creator only).
+    pub async fn crowdloan_update_cap(
+        &self,
+        pair: &sr25519::Pair,
+        crowdloan_id: u32,
+        new_cap_rao: u64,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "Crowdloan",
+            "update_cap",
+            vec![
+                Value::u128(crowdloan_id as u128),
+                Value::u128(new_cap_rao as u128),
+            ],
+        )
+        .await
+    }
+
+    /// Update end block of a crowdloan (creator only).
+    pub async fn crowdloan_update_end(
+        &self,
+        pair: &sr25519::Pair,
+        crowdloan_id: u32,
+        new_end: u32,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "Crowdloan",
+            "update_end",
+            vec![
+                Value::u128(crowdloan_id as u128),
+                Value::u128(new_end as u128),
+            ],
+        )
+        .await
+    }
+
+    /// Update minimum contribution of a crowdloan (creator only).
+    pub async fn crowdloan_update_min_contribution(
+        &self,
+        pair: &sr25519::Pair,
+        crowdloan_id: u32,
+        new_min_rao: u64,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        self.submit_raw_call(
+            pair,
+            "Crowdloan",
+            "update_min_contribution",
+            vec![
+                Value::u128(crowdloan_id as u128),
+                Value::u128(new_min_rao as u128),
+            ],
+        )
+        .await
+    }
 }
 
 /// Parse a proxy type string to the on-chain variant name.

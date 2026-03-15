@@ -363,6 +363,53 @@ pub async fn handle_stake(
             println!("Swap limit submitted. Tx: {}", hash);
             Ok(())
         }
+        StakeCommands::SetAuto { netuid, hotkey } => {
+            let (pair, hk) = unlock_and_resolve(
+                wallet_dir,
+                wallet_name,
+                hotkey_name,
+                hotkey,
+                password,
+            )?;
+            println!(
+                "Setting auto-stake on SN{} to hotkey {}...",
+                netuid,
+                crate::utils::short_ss58(&hk)
+            );
+            let hash = client.set_auto_stake(&pair, NetUid(netuid), &hk).await?;
+            println!("Auto-stake set. Tx: {}", hash);
+            Ok(())
+        }
+        StakeCommands::SetClaim {
+            claim_type,
+            subnets,
+        } => {
+            let (pair, _) = unlock_and_resolve(
+                wallet_dir,
+                wallet_name,
+                hotkey_name,
+                None,
+                password,
+            )?;
+            let subnet_ids: Option<Vec<u16>> = subnets.as_ref().map(|s| {
+                s.split(',')
+                    .filter_map(|n| n.trim().parse::<u16>().ok())
+                    .collect()
+            });
+            let keep_subnets = subnet_ids.as_deref();
+            println!(
+                "Setting root claim type to '{}'{}...",
+                claim_type,
+                keep_subnets
+                    .map(|s| format!(" (subnets: {:?})", s))
+                    .unwrap_or_default()
+            );
+            let hash = client
+                .set_root_claim_type(&pair, &claim_type, keep_subnets)
+                .await?;
+            println!("Root claim type set. Tx: {}", hash);
+            Ok(())
+        }
         StakeCommands::Wizard {
             netuid,
             amount,
