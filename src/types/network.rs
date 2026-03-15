@@ -68,15 +68,6 @@ impl Network {
         }
     }
 
-    /// Whether this network points to an archive node.
-    pub fn is_archive(&self) -> bool {
-        matches!(self, Network::Archive)
-    }
-
-    /// SS58 address prefix for this network.
-    pub fn ss58_prefix(&self) -> u16 {
-        42 // Bittensor uses prefix 42
-    }
 }
 
 impl fmt::Display for Network {

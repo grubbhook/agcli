@@ -202,26 +202,7 @@ impl Client {
         let account_id = Self::ss58_to_account_id(ss58)?;
         let addr = api::storage().registry().identity_of(&account_id);
         let result = self.inner.storage().at_latest().await?.fetch(&addr).await?;
-        Ok(result.map(|reg| {
-            let info = reg.info;
-            ChainIdentity {
-                name: decode_identity_data(&info.display),
-                url: decode_identity_data(&info.web),
-                github: String::new(), // Registry pallet doesn't have github field
-                image: decode_identity_data(&info.image),
-                discord: decode_identity_data(&info.riot),
-                description: String::new(),
-                additional: info
-                    .additional
-                    .0
-                    .iter()
-                    .map(|(k, v)| {
-                        format!("{}={}", decode_identity_data(k), decode_identity_data(v))
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            }
-        }))
+        Ok(result.map(|reg| chain_identity_from_registration(reg.info)))
     }
 
     /// Get subnet identity (from SubtensorModule SubnetIdentitiesV3).
@@ -407,26 +388,7 @@ impl Client {
             .fetch(&addr)
             .await
             .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
-        Ok(result.map(|reg| {
-            let info = reg.info;
-            ChainIdentity {
-                name: decode_identity_data(&info.display),
-                url: decode_identity_data(&info.web),
-                github: String::new(),
-                image: decode_identity_data(&info.image),
-                discord: decode_identity_data(&info.riot),
-                description: String::new(),
-                additional: info
-                    .additional
-                    .0
-                    .iter()
-                    .map(|(k, v)| {
-                        format!("{}={}", decode_identity_data(k), decode_identity_data(v))
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            }
-        }))
+        Ok(result.map(|reg| chain_identity_from_registration(reg.info)))
     }
 
     /// Get all subnets at a specific block hash (via runtime API at block).
@@ -644,6 +606,27 @@ impl Client {
             .call(payload)
             .await?;
         Ok((result.tao_amount, result.tao_fee, result.alpha_fee))
+    }
+}
+
+/// Convert a Registry pallet `IdentityInfo` into our `ChainIdentity` struct.
+fn chain_identity_from_registration(
+    info: api::runtime_types::pallet_registry::types::IdentityInfo,
+) -> ChainIdentity {
+    ChainIdentity {
+        name: decode_identity_data(&info.display),
+        url: decode_identity_data(&info.web),
+        github: String::new(), // Registry pallet doesn't have github field
+        image: decode_identity_data(&info.image),
+        discord: decode_identity_data(&info.riot),
+        description: String::new(),
+        additional: info
+            .additional
+            .0
+            .iter()
+            .map(|(k, v)| format!("{}={}", decode_identity_data(k), decode_identity_data(v)))
+            .collect::<Vec<_>>()
+            .join(", "),
     }
 }
 

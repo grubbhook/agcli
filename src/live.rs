@@ -6,6 +6,7 @@
 use crate::chain::Client;
 use crate::types::chain_data::DynamicInfo;
 use crate::types::NetUid;
+use crate::utils::truncate;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::io::Write;
@@ -106,7 +107,7 @@ pub async fn live_dynamic(client: &Client, interval_secs: u64) -> Result<()> {
                 println!(
                     "  SN{:<3} {:<16} {:>10.6} → {:>10.6} τ/α  ({}{:>+.2}%)  pool: {:.2} → {:.2} τ",
                     d.netuid,
-                    truncate_name(&d.name, 16),
+                    truncate(&d.name, 16),
                     d.price_prev,
                     d.price_now,
                     arrow,
@@ -270,19 +271,11 @@ fn print_dynamic_snapshot(subnets: &[DynamicInfo]) {
         println!(
             "{:<5} {:<16} {:>12.6} {:>12.2} {:>12.2} {:>12}",
             d.netuid.0,
-            truncate_name(&d.name, 16),
+            truncate(&d.name, 16),
             d.price,
             d.tao_in.tao(),
             d.alpha_in.raw() as f64 / 1e9,
             d.subnet_volume,
         );
-    }
-}
-
-fn truncate_name(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}…", &s[..max - 1])
     }
 }

@@ -310,7 +310,7 @@ pub async fn handle_wallet(
                 "valid": valid,
             }));
             if !valid {
-                std::process::exit(1);
+                anyhow::bail!("Signature verification failed");
             }
             Ok(())
         }

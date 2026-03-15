@@ -113,20 +113,8 @@ pub(super) async fn handle_weights(
                 println!("Generated salt: {}", s);
                 s
             });
-            use blake2::digest::{Update, VariableOutput};
-            let mut hasher = blake2::Blake2bVar::new(32)
-                .map_err(|e| anyhow::anyhow!("blake2 init error: {:?}", e))?;
-            for u in &uids {
-                hasher.update(&u.to_le_bytes());
-            }
-            for w in &wts {
-                hasher.update(&w.to_le_bytes());
-            }
-            hasher.update(salt_str.as_bytes());
-            let mut hash_out = [0u8; 32];
-            hasher
-                .finalize_variable(&mut hash_out)
-                .map_err(|e| anyhow::anyhow!("blake2 finalize error: {:?}", e))?;
+            let hash_out = crate::extrinsics::compute_weight_commit_hash(&uids, &wts, salt_str.as_bytes())
+                .map_err(|e| anyhow::anyhow!("blake2 hash error: {:?}", e))?;
             println!("Committing weights on SN{}", netuid);
             println!("  Commit hash: 0x{}", hex::encode(hash_out));
             println!("  Save this salt for reveal: {}", salt_str);
@@ -216,24 +204,8 @@ pub(super) async fn handle_weights(
                     .collect()
             };
 
-            // Compute commit hash (blake2b, matching the commit handler)
-            let commit_hash = {
-                use blake2::digest::{Update, VariableOutput};
-                let mut hasher = blake2::Blake2bVar::new(32)
-                    .map_err(|e| anyhow::anyhow!("blake2 init error: {:?}", e))?;
-                for u in &uids {
-                    hasher.update(&u.to_le_bytes());
-                }
-                for w in &wts {
-                    hasher.update(&w.to_le_bytes());
-                }
-                hasher.update(salt_str.as_bytes());
-                let mut hash_out = [0u8; 32];
-                hasher
-                    .finalize_variable(&mut hash_out)
-                    .map_err(|e| anyhow::anyhow!("blake2 finalize error: {:?}", e))?;
-                hash_out
-            };
+            let commit_hash = crate::extrinsics::compute_weight_commit_hash(&uids, &wts, salt_str.as_bytes())
+                .map_err(|e| anyhow::anyhow!("blake2 hash error: {:?}", e))?;
 
             let block_at_commit = client.get_block_number().await?;
 

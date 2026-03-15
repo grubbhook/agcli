@@ -1481,7 +1481,7 @@ async fn handle_subnet_probe(
     let neurons_lite = client.get_neurons_lite(NetUid(netuid)).await?;
     let target_uids: Vec<u16> = neurons_lite
         .iter()
-        .filter(|n| uid_set.as_ref().map_or(true, |s| s.contains(&n.uid)))
+        .filter(|n| uid_set.as_ref().is_none_or(|s| s.contains(&n.uid)))
         .map(|n| n.uid)
         .collect();
 
@@ -1515,7 +1515,7 @@ async fn handle_subnet_probe(
         .filter(|n| {
             n.axon_info
                 .as_ref()
-                .map_or(false, |a| a.port > 0 && a.ip != "0.0.0.0")
+                .is_some_and(|a| a.port > 0 && a.ip != "0.0.0.0")
         })
         .collect();
 
@@ -1889,6 +1889,7 @@ fn current_param_value(h: &crate::types::chain_data::SubnetHyperparameters, name
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_subnet_set_param(
     client: &Client,
     netuid: u16,

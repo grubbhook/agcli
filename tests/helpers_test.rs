@@ -391,11 +391,9 @@ fn ss58_validation_short_address() {
 #[test]
 fn ss58_validation_valid_address() {
     use agcli::wallet::keypair;
-    assert!(keypair::is_valid_ss58(
-        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
-    ));
-    assert!(!keypair::is_valid_ss58("invalid"));
-    assert!(!keypair::is_valid_ss58(""));
+    assert!(keypair::from_ss58("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY").is_ok());
+    assert!(keypair::from_ss58("invalid").is_err());
+    assert!(keypair::from_ss58("").is_err());
 }
 
 #[test]
@@ -677,16 +675,16 @@ fn network_archive_url() {
     use agcli::types::network::Network;
     let net = Network::Archive;
     assert!(net.ws_url().starts_with("wss://"));
-    assert!(net.is_archive());
+    assert!(matches!(net, Network::Archive));
     assert_eq!(format!("{}", net), "archive");
 }
 
 #[test]
 fn network_finney_not_archive() {
     use agcli::types::network::Network;
-    assert!(!Network::Finney.is_archive());
-    assert!(!Network::Test.is_archive());
-    assert!(!Network::Local.is_archive());
+    assert!(!matches!(Network::Finney, Network::Archive));
+    assert!(!matches!(Network::Test, Network::Archive));
+    assert!(!matches!(Network::Local, Network::Archive));
 }
 
 // ──── Sprint 14: CSV escaping ────

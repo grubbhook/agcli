@@ -27,14 +27,13 @@ pub fn format_tao(balance: Balance) -> String {
     }
 }
 
-/// Format a u16 weight as a percentage (0-100%).
-pub fn weight_to_pct(weight: u16) -> f64 {
-    weight as f64 / 65535.0 * 100.0
-}
-
-/// Format a u16 take as a percentage.
-pub fn take_to_pct(take: u16) -> f64 {
-    take as f64 / 65535.0 * 100.0
+/// Truncate a string to `max` chars, appending ellipsis if needed.
+pub fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max - 1])
+    }
 }
 
 /// Normalize u16 weight to f64 in [0, 1].
@@ -84,12 +83,6 @@ mod tests {
     fn weight_clamp() {
         assert_eq!(float_to_u16(-1.0), 0);
         assert_eq!(float_to_u16(2.0), 65535);
-    }
-
-    #[test]
-    fn take_to_pct_boundaries() {
-        assert_eq!(take_to_pct(0), 0.0);
-        assert!((take_to_pct(65535) - 100.0).abs() < 0.01);
     }
 
     #[test]

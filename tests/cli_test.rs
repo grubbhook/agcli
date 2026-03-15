@@ -2030,7 +2030,7 @@ fn resolve_network_archive() {
     assert!(cli.is_ok());
     let cli = cli.unwrap();
     let network = cli.resolve_network();
-    assert!(network.is_archive());
+    assert!(matches!(network, agcli::types::network::Network::Archive));
     assert!(network.ws_url().starts_with("wss://"));
 }
 
@@ -2134,7 +2134,7 @@ fn parse_diff_with_archive_network() {
     ]);
     assert!(cli.is_ok());
     let cli = cli.unwrap();
-    assert!(cli.resolve_network().is_archive());
+    assert!(matches!(cli.resolve_network(), agcli::types::network::Network::Archive));
 }
 
 #[test]

@@ -54,11 +54,6 @@ pub fn from_ss58(address: &str) -> Result<sr25519::Public> {
         })
 }
 
-/// Verify that an SS58 address is valid.
-pub fn is_valid_ss58(address: &str) -> bool {
-    sr25519::Public::from_ss58check(address).is_ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

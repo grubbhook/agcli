@@ -12,18 +12,15 @@ categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
 # Substrate / chain interaction
 subxt = { version = "0.38", features = ["substrate-compat"] }
 sp-core = { version = "34", default-features = false, features = ["std"] }
-sp-runtime = { version = "39", default-features = false, features = ["std"] }
 parity-scale-codec = { version = "3.7", features = ["derive"] }
 
 # Crypto
 bip39 = "2"
 blake2 = "0.10"
-sha2 = "0.10"
 aes-gcm = "0.10"
 argon2 = "0.5"
 crypto_secretbox = "0.1"
 rand = "0.8"
-zeroize = { version = "1", features = ["derive"] }
 ml-kem = "0.2"
 kem = "=0.3.0-pre.0"
 chacha20poly1305 = "0.10"
@@ -54,7 +51,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 # Utilities
-thiserror = "2"
 anyhow = "1"
 chrono = "0.4"
 dirs = "6"

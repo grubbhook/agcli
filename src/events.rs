@@ -7,6 +7,7 @@ use anyhow::Result;
 use subxt::ext::scale_value::{Composite, Primitive, ValueDef};
 use subxt::OnlineClient;
 
+use crate::utils::truncate;
 use crate::SubtensorConfig;
 
 /// Categories of events to filter for.
@@ -324,10 +325,3 @@ pub async fn subscribe_blocks(
     Ok(())
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}…", &s[..max - 1])
-    }
-}

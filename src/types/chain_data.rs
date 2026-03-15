@@ -221,24 +221,3 @@ pub struct Metagraph {
     pub last_update: Vec<u64>,
 }
 
-/// Root claim information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RootClaim {
-    pub coldkey: String,
-    pub amount: Balance,
-    pub claim_type: u8,
-    pub subnet_claims: Vec<(NetUid, u64)>,
-}
-
-/// Crowdloan information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CrowdloanInfo {
-    pub id: u32,
-    pub netuid: NetUid,
-    pub creator: String,
-    pub cap: Balance,
-    pub raised: Balance,
-    pub end_block: u64,
-    pub contributors_count: u32,
-    pub finalized: bool,
-}
