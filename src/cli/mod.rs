@@ -69,6 +69,14 @@ pub struct Cli {
     #[arg(long, global = true, env = "AGCLI_LOG_FILE")]
     pub log_file: Option<String>,
 
+    /// Global operation timeout in seconds (0 or omitted = no timeout)
+    #[arg(long, global = true, env = "AGCLI_TIMEOUT")]
+    pub timeout: Option<u64>,
+
+    /// Print operation timing to stderr
+    #[arg(long, global = true)]
+    pub time: bool,
+
     /// Wallet password (avoids interactive prompt; prefer env var for security)
     #[arg(long, global = true, env = "AGCLI_PASSWORD", hide_env_values = true)]
     pub password: Option<String>,

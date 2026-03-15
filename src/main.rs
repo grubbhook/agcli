@@ -50,8 +50,36 @@ async fn main() {
     cli.apply_config(&cfg);
 
     let json_errors = cli.output == "json" || cli.batch;
+    let show_time = cli.time;
+    let timeout_secs = cli.timeout.filter(|&t| t > 0);
 
-    match agcli::cli::commands::execute(cli).await {
+    let start = std::time::Instant::now();
+
+    // Wrap execution in an optional timeout
+    let result = if let Some(secs) = timeout_secs {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(secs),
+            agcli::cli::commands::execute(cli),
+        )
+        .await
+        {
+            Ok(r) => r,
+            Err(_) => Err(anyhow::anyhow!(
+                "Operation timed out after {}s (--timeout {})",
+                secs,
+                secs
+            )),
+        }
+    } else {
+        agcli::cli::commands::execute(cli).await
+    };
+
+    let elapsed = start.elapsed();
+    if show_time {
+        eprintln!("[time] {:.3}s", elapsed.as_secs_f64());
+    }
+
+    match result {
         Ok(()) => std::process::exit(0),
         Err(e) => {
             let code = agcli::error::classify(&e);

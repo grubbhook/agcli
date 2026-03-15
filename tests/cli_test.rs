@@ -2221,3 +2221,62 @@ fn parse_weights_status() {
         cli.err()
     );
 }
+
+// ──── Sprint 4: --timeout and --time flags ────
+
+#[test]
+fn parse_global_timeout_flag() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--timeout", "30", "balance"]);
+    assert!(cli.is_ok(), "should parse --timeout: {:?}", cli.err());
+    assert_eq!(cli.unwrap().timeout, Some(30));
+}
+
+#[test]
+fn parse_global_timeout_zero_means_no_timeout() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--timeout", "0", "balance"]);
+    assert!(cli.is_ok());
+    let cli = cli.unwrap();
+    assert_eq!(cli.timeout, Some(0));
+    // 0 is treated as "no timeout" in main.rs via .filter(|&t| t > 0)
+}
+
+#[test]
+fn parse_global_timeout_absent() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance"]);
+    assert!(cli.is_ok());
+    assert_eq!(cli.unwrap().timeout, None);
+}
+
+#[test]
+fn parse_global_time_flag() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--time", "balance"]);
+    assert!(cli.is_ok(), "should parse --time: {:?}", cli.err());
+    assert!(cli.unwrap().time);
+}
+
+#[test]
+fn parse_time_flag_absent_defaults_false() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance"]);
+    assert!(cli.is_ok());
+    assert!(!cli.unwrap().time);
+}
+
+#[test]
+fn parse_timeout_with_subcommand() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--timeout", "60", "subnet", "list",
+    ]);
+    assert!(cli.is_ok(), "should parse --timeout with subnet list: {:?}", cli.err());
+    assert_eq!(cli.unwrap().timeout, Some(60));
+}
+
+#[test]
+fn parse_time_and_timeout_together() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--time", "--timeout", "120", "balance",
+    ]);
+    assert!(cli.is_ok());
+    let cli = cli.unwrap();
+    assert!(cli.time);
+    assert_eq!(cli.timeout, Some(120));
+}

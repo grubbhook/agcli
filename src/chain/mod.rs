@@ -11,6 +11,7 @@ use subxt::backend::rpc::RpcClient;
 use subxt::tx::PairSigner;
 use subxt::OnlineClient;
 
+use crate::queries::query_cache::QueryCache;
 use crate::types::balance::Balance;
 use crate::types::chain_data::*;
 use crate::types::network::NetUid;
@@ -26,6 +27,7 @@ pub type Signer = PairSigner<SubtensorConfig, sr25519::Pair>;
 pub struct Client {
     inner: OnlineClient<SubtensorConfig>,
     rpc: LegacyRpcMethods<SubtensorConfig>,
+    cache: QueryCache,
 }
 
 impl Client {
@@ -44,7 +46,7 @@ impl Client {
             .await
             .with_context(|| "Failed to initialize subxt client from RPC connection")?;
         tracing::info!("Connected to {} in {:?}", url, start.elapsed());
-        Ok(Self { inner, rpc })
+        Ok(Self { inner, rpc, cache: QueryCache::new() })
     }
 
     /// Connect to a subtensor node with retry + exponential backoff.
@@ -287,17 +289,23 @@ impl Client {
 
     // ──────── Subnet Queries ────────
 
-    /// List all subnets (via runtime API).
+    /// List all subnets (via runtime API, cached for 30s).
     pub async fn get_all_subnets(&self) -> Result<Vec<SubnetInfo>> {
-        let payload = api::apis().subnet_info_runtime_api().get_subnets_info();
+        let inner = &self.inner;
         let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
+            .cache
+            .get_all_subnets(|| async {
+                let payload = api::apis().subnet_info_runtime_api().get_subnets_info();
+                let result = inner
+                    .runtime_api()
+                    .at_latest()
+                    .await?
+                    .call(payload)
+                    .await?;
+                Ok(result.into_iter().flatten().map(SubnetInfo::from).collect())
+            })
             .await?;
-        Ok(result.into_iter().flatten().map(SubnetInfo::from).collect())
+        Ok((*result).clone())
     }
 
     /// Get info for a specific subnet.
@@ -333,36 +341,48 @@ impl Client {
         Ok(result.map(|h| SubnetHyperparameters::from_gen(h, netuid)))
     }
 
-    /// Get dynamic info for all subnets (real DynamicInfo runtime API).
+    /// Get dynamic info for all subnets (cached for 30s).
     pub async fn get_all_dynamic_info(&self) -> Result<Vec<DynamicInfo>> {
-        let payload = api::apis().subnet_info_runtime_api().get_all_dynamic_info();
+        let inner = &self.inner;
         let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
+            .cache
+            .get_all_dynamic_info(|| async {
+                let payload = api::apis().subnet_info_runtime_api().get_all_dynamic_info();
+                let result = inner
+                    .runtime_api()
+                    .at_latest()
+                    .await?
+                    .call(payload)
+                    .await?;
+                Ok(result
+                    .into_iter()
+                    .flatten()
+                    .map(DynamicInfo::from)
+                    .collect())
+            })
             .await?;
-        Ok(result
-            .into_iter()
-            .flatten()
-            .map(DynamicInfo::from)
-            .collect())
+        Ok((*result).clone())
     }
 
-    /// Get dynamic info for a specific subnet.
+    /// Get dynamic info for a specific subnet (cached for 30s).
     pub async fn get_dynamic_info(&self, netuid: NetUid) -> Result<Option<DynamicInfo>> {
-        let payload = api::apis()
-            .subnet_info_runtime_api()
-            .get_dynamic_info(netuid.0);
+        let inner = &self.inner;
         let result = self
-            .inner
-            .runtime_api()
-            .at_latest()
-            .await?
-            .call(payload)
+            .cache
+            .get_dynamic_info(netuid.0, || async {
+                let payload = api::apis()
+                    .subnet_info_runtime_api()
+                    .get_dynamic_info(netuid.0);
+                let result = inner
+                    .runtime_api()
+                    .at_latest()
+                    .await?
+                    .call(payload)
+                    .await?;
+                Ok(result.map(DynamicInfo::from))
+            })
             .await?;
-        Ok(result.map(DynamicInfo::from))
+        Ok(result.map(|arc| (*arc).clone()))
     }
 
     // ──────── Neuron / Metagraph Queries ────────
