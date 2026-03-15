@@ -34,14 +34,22 @@ pub fn save(metagraph: &Metagraph) -> Result<PathBuf> {
 
     // Update "latest" symlink
     let latest = dir.join("latest.json");
-    let _ = std::fs::remove_file(&latest);
+    if let Err(e) = std::fs::remove_file(&latest) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(path = %latest.display(), error = %e, "Failed to remove old latest symlink");
+        }
+    }
     #[cfg(unix)]
     {
-        let _ = std::os::unix::fs::symlink(&filename, &latest);
+        if let Err(e) = std::os::unix::fs::symlink(&filename, &latest) {
+            tracing::warn!(src = %filename, dst = %latest.display(), error = %e, "Failed to create latest symlink");
+        }
     }
     #[cfg(not(unix))]
     {
-        let _ = std::fs::copy(&path, &latest);
+        if let Err(e) = std::fs::copy(&path, &latest) {
+            tracing::warn!(src = %path.display(), dst = %latest.display(), error = %e, "Failed to copy latest cache");
+        }
     }
 
     Ok(path)

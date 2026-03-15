@@ -95,4 +95,64 @@ mod tests {
         let cfg = Config::load_from(Path::new("/nonexistent/path/config.toml")).unwrap();
         assert!(cfg.network.is_none());
     }
+
+    /// Multiple concurrent writers to the same config file should all succeed.
+    #[test]
+    fn concurrent_config_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        let mut handles = Vec::new();
+        for i in 0..10u32 {
+            let p = path.clone();
+            handles.push(std::thread::spawn(move || {
+                let cfg = Config {
+                    network: Some(format!("net-{}", i)),
+                    wallet: Some(format!("wallet-{}", i)),
+                    ..Default::default()
+                };
+                cfg.save_to(&p)
+            }));
+        }
+
+        let mut errors = 0;
+        for h in handles {
+            if h.join().unwrap().is_err() {
+                errors += 1;
+            }
+        }
+        // All writes should succeed (even if they overwrite each other)
+        assert_eq!(errors, 0);
+
+        // File should be parseable TOML afterward
+        let final_cfg = Config::load_from(&path).unwrap();
+        assert!(final_cfg.network.is_some());
+    }
+
+    /// Config with all fields populated roundtrips correctly.
+    #[test]
+    fn full_config_roundtrip() {
+        let mut limits = std::collections::HashMap::new();
+        limits.insert("1".to_string(), 100.0);
+        limits.insert("18".to_string(), 50.0);
+
+        let cfg = Config {
+            network: Some("finney".into()),
+            endpoint: Some("wss://custom:443".into()),
+            wallet_dir: Some("/home/user/.bt".into()),
+            wallet: Some("mywallet".into()),
+            hotkey: Some("hk1".into()),
+            output: Some("json".into()),
+            proxy: Some("5GrwvaEF...".into()),
+            live_interval: Some(30),
+            batch: Some(true),
+            spending_limits: Some(limits),
+        };
+        let s = toml::to_string_pretty(&cfg).unwrap();
+        let parsed: Config = toml::from_str(&s).unwrap();
+        assert_eq!(parsed.endpoint.as_deref(), Some("wss://custom:443"));
+        assert_eq!(parsed.live_interval, Some(30));
+        assert_eq!(parsed.batch, Some(true));
+        assert!(parsed.spending_limits.as_ref().unwrap().contains_key("18"));
+    }
 }

@@ -71,10 +71,10 @@ pub fn check_spending_limit(netuid: u16, tao_amount: f64) -> Result<()> {
 /// Print a JSON value to stdout. Respects the global pretty-print flag.
 pub fn print_json(value: &serde_json::Value) {
     if is_pretty_mode() {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(value).unwrap_or_default()
-        );
+        match serde_json::to_string_pretty(value) {
+            Ok(s) => println!("{}", s),
+            Err(e) => eprintln!("Error: failed to serialize JSON: {}", e),
+        }
     } else {
         println!("{}", value);
     }
@@ -82,23 +82,24 @@ pub fn print_json(value: &serde_json::Value) {
 
 /// Print a Serialize-able value as JSON. Respects global pretty-print flag.
 pub fn print_json_ser<T: serde::Serialize>(value: &T) {
-    if is_pretty_mode() {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(value).unwrap_or_default()
-        );
+    let result = if is_pretty_mode() {
+        serde_json::to_string_pretty(value)
     } else {
-        println!("{}", serde_json::to_string(value).unwrap_or_default());
+        serde_json::to_string(value)
+    };
+    match result {
+        Ok(s) => println!("{}", s),
+        Err(e) => eprintln!("Error: failed to serialize JSON: {}", e),
     }
 }
 
 /// Print a JSON value to stderr. Respects the global pretty-print flag.
 pub fn eprint_json(value: &serde_json::Value) {
     if is_pretty_mode() {
-        eprintln!(
-            "{}",
-            serde_json::to_string_pretty(value).unwrap_or_default()
-        );
+        match serde_json::to_string_pretty(value) {
+            Ok(s) => eprintln!("{}", s),
+            Err(e) => eprintln!("Error: failed to serialize JSON: {}", e),
+        }
     } else {
         eprintln!("{}", value);
     }
@@ -145,10 +146,13 @@ pub fn resolve_coldkey_address(
     wallet_name: &str,
 ) -> String {
     address.unwrap_or_else(|| {
-        open_wallet(wallet_dir, wallet_name)
-            .ok()
-            .and_then(|w| w.coldkey_ss58().map(|s| s.to_string()))
-            .unwrap_or_default()
+        match open_wallet(wallet_dir, wallet_name) {
+            Ok(w) => w.coldkey_ss58().map(|s| s.to_string()).unwrap_or_default(),
+            Err(e) => {
+                tracing::debug!(wallet = wallet_name, error = %e, "Could not open wallet to resolve coldkey");
+                String::new()
+            }
+        }
     })
 }
 

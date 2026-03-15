@@ -72,7 +72,20 @@ pub async fn execute(cli: Cli) -> Result<()> {
                         .unwrap_or_default()
                 );
                 loop {
-                    let balance = client.get_balance_ss58(&addr).await?;
+                    let balance = match client.get_balance_ss58(&addr).await {
+                        Ok(b) => b,
+                        Err(e) => {
+                            eprintln!("[{}] Warning: balance query failed: {}", chrono::Local::now().format("%H:%M:%S"), e);
+                            tokio::select! {
+                                _ = tokio::time::sleep(tokio::time::Duration::from_secs(interval)) => {},
+                                _ = tokio::signal::ctrl_c() => {
+                                    println!("\nStopping balance watch (received Ctrl+C)");
+                                    return Ok(());
+                                }
+                            }
+                            continue;
+                        }
+                    };
                     let below = threshold_rao
                         .as_ref()
                         .map(|t| balance.rao() < t.rao())
@@ -99,7 +112,13 @@ pub async fn execute(cli: Cli) -> Result<()> {
                             alert
                         );
                     }
-                    tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+                    tokio::select! {
+                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(interval)) => {},
+                        _ = tokio::signal::ctrl_c() => {
+                            println!("\nStopping balance watch (received Ctrl+C)");
+                            return Ok(());
+                        }
+                    }
                 }
             }
 
@@ -472,7 +491,10 @@ async fn handle_subnet(
                 (si, di)
             } else {
                 tokio::try_join!(client.get_subnet_info(nuid), async {
-                    Ok::<_, anyhow::Error>(client.get_dynamic_info(nuid).await.ok().flatten())
+                    Ok::<_, anyhow::Error>(match client.get_dynamic_info(nuid).await {
+                        Ok(v) => v,
+                        Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_dynamic_info failed (non-fatal)"); None }
+                    })
                 })?
             };
             match info {
@@ -516,7 +538,7 @@ async fn handle_subnet(
                         }
                     }
                 }
-                None => anyhow::bail!("Subnet {} not found.", netuid),
+                None => anyhow::bail!("Subnet {} not found.\n  List available subnets: agcli subnet list", netuid),
             }
             Ok(())
         }
@@ -1059,7 +1081,12 @@ async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Res
         let (block, hyperparams, dynamic) = tokio::try_join!(
             client.get_block_number(),
             client.get_subnet_hyperparams(nuid),
-            async { Ok::<_, anyhow::Error>(client.get_dynamic_info(nuid).await.ok().flatten()) },
+            async {
+                Ok::<_, anyhow::Error>(match client.get_dynamic_info(nuid).await {
+                    Ok(v) => v,
+                    Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_dynamic_info failed (non-fatal)"); None }
+                })
+            },
         )?;
 
         let name = dynamic.as_ref().map(|d| d.name.as_str()).unwrap_or("?");
@@ -1724,17 +1751,12 @@ async fn handle_subnet_monitor(
     }
 
     // Snapshot state for diff detection
-    #[allow(dead_code)]
     struct NeuronSnapshot {
         hotkey: String,
         coldkey: String,
-        stake: u64,
         incentive: f64,
         emission: f64,
-        trust: f64,
-        rank: f64,
         active: bool,
-        last_update: u64,
     }
 
     let mut prev_map: HashMap<u16, NeuronSnapshot> = HashMap::new();
@@ -1754,13 +1776,9 @@ async fn handle_subnet_monitor(
                 NeuronSnapshot {
                     hotkey: n.hotkey.clone(),
                     coldkey: n.coldkey.clone(),
-                    stake: n.stake.rao(),
                     incentive: n.incentive,
                     emission: n.emission,
-                    trust: n.trust,
-                    rank: n.rank,
                     active: n.active,
-                    last_update: n.last_update,
                 },
             );
         }
@@ -1948,7 +1966,15 @@ async fn handle_subnet_monitor(
         first = false;
         prev_map = cur_map;
         prev_uids = cur_uids;
-        tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+        tokio::select! {
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(interval)) => {},
+            _ = tokio::signal::ctrl_c() => {
+                if !json_mode {
+                    println!("\nStopping subnet monitor (received Ctrl+C)");
+                }
+                return Ok(());
+            }
+        }
     }
 }
 
@@ -2074,7 +2100,10 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
 async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> Result<()> {
     let nuid = NetUid(netuid);
     let (neurons, dynamic) = tokio::try_join!(client.get_neurons_lite(nuid), async {
-        Ok::<_, anyhow::Error>(client.get_dynamic_info(nuid).await.ok().flatten())
+        Ok::<_, anyhow::Error>(match client.get_dynamic_info(nuid).await {
+            Ok(v) => v,
+            Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_dynamic_info failed (non-fatal)"); None }
+        })
     },)?;
 
     let total_emission: f64 = neurons.iter().map(|n| n.emission).sum();
@@ -2167,8 +2196,18 @@ async fn handle_subnet_cost(client: &Client, netuid: u16, output: &str) -> Resul
     let nuid = NetUid(netuid);
     let (info, hyperparams, dynamic) = tokio::try_join!(
         client.get_subnet_info(nuid),
-        async { Ok::<_, anyhow::Error>(client.get_subnet_hyperparams(nuid).await.ok().flatten()) },
-        async { Ok::<_, anyhow::Error>(client.get_dynamic_info(nuid).await.ok().flatten()) },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_subnet_hyperparams(nuid).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_subnet_hyperparams failed (non-fatal)"); None }
+            })
+        },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_dynamic_info(nuid).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_dynamic_info failed (non-fatal)"); None }
+            })
+        },
     )?;
 
     let burn = info.as_ref().map(|i| i.burn).unwrap_or(Balance::ZERO);
@@ -4130,15 +4169,23 @@ async fn handle_doctor(
 
         // Latency test: 3 quick block queries
         let mut latencies = Vec::new();
+        let mut rpc_failures = 0u32;
         for _ in 0..3 {
             let t = Instant::now();
-            let _ = client.get_block_number().await;
-            latencies.push(t.elapsed().as_millis());
+            match client.get_block_number().await {
+                Ok(_) => latencies.push(t.elapsed().as_millis()),
+                Err(_) => rpc_failures += 1,
+            }
         }
-        let avg: u128 = latencies.iter().sum::<u128>() / latencies.len() as u128;
-        let min = latencies.iter().min().unwrap();
-        let max = latencies.iter().max().unwrap();
-        checks.push(("Latency (3 pings)", format!("avg {avg}ms  min {min}ms  max {max}ms"), true));
+        if latencies.is_empty() {
+            checks.push(("Latency (3 pings)", format!("FAILED: all {} RPC calls failed", rpc_failures), false));
+        } else {
+            let avg: u128 = latencies.iter().sum::<u128>() / latencies.len() as u128;
+            let min = latencies.iter().min().unwrap_or(&0);
+            let max = latencies.iter().max().unwrap_or(&0);
+            let fail_note = if rpc_failures > 0 { format!("  ({} failed)", rpc_failures) } else { String::new() };
+            checks.push(("Latency (3 pings)", format!("avg {avg}ms  min {min}ms  max {max}ms{fail_note}"), rpc_failures == 0));
+        }
     }
 
     // 5. Wallet check

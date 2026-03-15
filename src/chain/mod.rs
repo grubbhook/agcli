@@ -1,8 +1,6 @@
 //! Substrate chain client — connect, query storage, submit extrinsics.
 
-pub mod connection;
 pub mod rpc_types;
-pub mod storage;
 
 use anyhow::{Context, Result};
 use sp_core::{sr25519, Pair as _};

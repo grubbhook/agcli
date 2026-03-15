@@ -687,7 +687,12 @@ async fn handle_account_explorer(
         client.get_stake_for_coldkey(address),
         client.get_identity(address),
         async { Ok::<_, anyhow::Error>(client.get_all_dynamic_info().await.unwrap_or_default()) },
-        async { Ok::<_, anyhow::Error>(client.get_delegate(address).await.ok().flatten()) },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_delegate(address).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(error = %e, "get_delegate failed (non-fatal)"); None }
+            })
+        },
     )?;
     let dynamic_map = build_dynamic_map(&dynamic);
 
@@ -795,10 +800,25 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     let nuid = NetUid(netuid);
     let (info, dynamic, neurons, hyperparams, subnet_identity) = tokio::try_join!(
         client.get_subnet_info(nuid),
-        async { Ok::<_, anyhow::Error>(client.get_dynamic_info(nuid).await.ok().flatten()) },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_dynamic_info(nuid).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_dynamic_info failed (non-fatal)"); None }
+            })
+        },
         client.get_neurons_lite(nuid),
-        async { Ok::<_, anyhow::Error>(client.get_subnet_hyperparams(nuid).await.ok().flatten()) },
-        async { Ok::<_, anyhow::Error>(client.get_subnet_identity(nuid).await.ok().flatten()) },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_subnet_hyperparams(nuid).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_subnet_hyperparams failed (non-fatal)"); None }
+            })
+        },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_subnet_identity(nuid).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(netuid = nuid.0, error = %e, "get_subnet_identity failed (non-fatal)"); None }
+            })
+        },
     )?;
 
     let name = dynamic
@@ -1261,16 +1281,23 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
         client.get_stake_for_coldkey(address),
         client.get_identity(address),
         client.list_proxies(address),
-        async { Ok::<_, anyhow::Error>(client.get_delegate(address).await.ok().flatten()) },
-        async { Ok::<_, anyhow::Error>(client.get_all_dynamic_info().await.unwrap_or_default()) },
         async {
-            Ok::<_, anyhow::Error>(
-                client
-                    .get_coldkey_swap_scheduled(address)
-                    .await
-                    .ok()
-                    .flatten(),
-            )
+            Ok::<_, anyhow::Error>(match client.get_delegate(address).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(error = %e, "get_delegate failed (non-fatal)"); None }
+            })
+        },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_all_dynamic_info().await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(error = %e, "get_all_dynamic_info failed (non-fatal)"); Vec::new() }
+            })
+        },
+        async {
+            Ok::<_, anyhow::Error>(match client.get_coldkey_swap_scheduled(address).await {
+                Ok(v) => v,
+                Err(e) => { tracing::debug!(error = %e, "get_coldkey_swap_scheduled failed (non-fatal)"); None }
+            })
         },
     )?;
     let dynamic_map = build_dynamic_map(&dynamic);

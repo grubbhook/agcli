@@ -241,4 +241,139 @@ mod tests {
 
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
     }
+
+    /// Stress test: sequential reads should coalesce to a single fetch.
+    /// Concurrent reads may each miss, but the final cached value is consistent.
+    #[tokio::test]
+    async fn cache_concurrent_readers_consistent() {
+        let cache = Arc::new(QueryCache::new());
+        let call_count = Arc::new(AtomicU32::new(0));
+
+        // Warm the cache with one fetch
+        let count = call_count.clone();
+        cache
+            .get_all_subnets(|| {
+                let c = count.clone();
+                async move {
+                    c.fetch_add(1, Ordering::SeqCst);
+                    Ok(vec![])
+                }
+            })
+            .await
+            .unwrap();
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+
+        // Now 50 concurrent readers should all hit cache
+        let mut handles = Vec::new();
+        for _ in 0..50 {
+            let c = cache.clone();
+            let count = call_count.clone();
+            handles.push(tokio::spawn(async move {
+                c.get_all_subnets(|| {
+                    let cc = count.clone();
+                    async move {
+                        cc.fetch_add(1, Ordering::SeqCst);
+                        Ok(vec![])
+                    }
+                })
+                .await
+            }));
+        }
+
+        let mut results = Vec::new();
+        for h in handles {
+            results.push(h.await.unwrap().unwrap());
+        }
+
+        // All 50 reads should hit cache — no additional fetches
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+        // All results should point to the same Arc
+        for r in &results {
+            assert!(Arc::ptr_eq(&results[0], r));
+        }
+    }
+
+    fn make_dynamic_info(netuid: u16, name: &str) -> DynamicInfo {
+        use crate::types::balance::{AlphaBalance, Balance};
+        use crate::types::network::NetUid;
+        DynamicInfo {
+            netuid: NetUid(netuid),
+            name: name.into(),
+            symbol: String::new(),
+            tempo: 360,
+            emission: 0,
+            tao_in: Balance::ZERO,
+            alpha_in: AlphaBalance::ZERO,
+            alpha_out: AlphaBalance::ZERO,
+            price: 0.0,
+            owner_hotkey: String::new(),
+            owner_coldkey: String::new(),
+            last_step: 0,
+            blocks_since_last_step: 0,
+            alpha_out_emission: 0,
+            alpha_in_emission: 0,
+            tao_in_emission: 0,
+            pending_alpha_emission: 0,
+            pending_root_emission: 0,
+            subnet_volume: 0,
+            network_registered_at: 0,
+        }
+    }
+
+    /// Stress test: per-netuid cache populated from all_dynamic fetch.
+    #[tokio::test]
+    async fn cache_per_netuid_stress() {
+        let cache = QueryCache::new();
+
+        // Bulk-fetch populates per-netuid cache
+        let infos: Vec<DynamicInfo> = (0..64u16)
+            .map(|i| make_dynamic_info(i, &format!("SN{}", i)))
+            .collect();
+        cache
+            .get_all_dynamic_info(|| {
+                let data = infos.clone();
+                async move { Ok(data) }
+            })
+            .await
+            .unwrap();
+
+        // All per-netuid lookups should hit cache (no fetch)
+        for i in 0..64u16 {
+            let result = cache
+                .get_dynamic_info(i, || async { Err(anyhow::anyhow!("should not be called")) })
+                .await
+                .unwrap()
+                .expect("should be cached");
+            assert_eq!(result.netuid.0, i);
+            assert_eq!(result.name, format!("SN{}", i));
+        }
+
+        // Non-existent netuid should call the fetch function
+        let fetched = cache
+            .get_dynamic_info(999, || async {
+                Ok(Some(make_dynamic_info(999, "fetched")))
+            })
+            .await
+            .unwrap()
+            .expect("should have fetched");
+        assert_eq!(fetched.name, "fetched");
+    }
+
+    /// Cache handles fetch failures gracefully — error propagates, no poisoning.
+    #[tokio::test]
+    async fn cache_fetch_error_does_not_poison() {
+        let cache = QueryCache::new();
+
+        // First call: fetch fails
+        let result = cache
+            .get_all_subnets(|| async { Err(anyhow::anyhow!("network error")) })
+            .await;
+        assert!(result.is_err());
+
+        // Second call: fetch succeeds — cache should not be poisoned
+        let result = cache
+            .get_all_subnets(|| async { Ok(vec![]) })
+            .await;
+        assert!(result.is_ok());
+    }
 }

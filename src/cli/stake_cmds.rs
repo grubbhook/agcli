@@ -399,9 +399,16 @@ pub async fn handle_stake(
                 password,
             )?;
             let subnet_ids: Option<Vec<u16>> = subnets.as_ref().map(|s| {
-                s.split(',')
-                    .filter_map(|n| n.trim().parse::<u16>().ok())
-                    .collect()
+                let mut ids = Vec::new();
+                for n in s.split(',') {
+                    let trimmed = n.trim();
+                    if trimmed.is_empty() { continue; }
+                    match trimmed.parse::<u16>() {
+                        Ok(id) => ids.push(id),
+                        Err(_) => eprintln!("Warning: ignoring invalid subnet ID '{}'", trimmed),
+                    }
+                }
+                ids
             });
             let keep_subnets = subnet_ids.as_deref();
             println!(

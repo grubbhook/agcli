@@ -10,6 +10,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::io::Write;
 use std::time::Duration;
+use tokio::signal;
 
 /// Default poll interval (12 seconds = 1 Bittensor block).
 pub const DEFAULT_POLL_SECS: u64 = 12;
@@ -75,9 +76,21 @@ pub async fn live_dynamic(client: &Client, interval_secs: u64) -> Result<()> {
     print_dynamic_snapshot(&prev);
 
     loop {
-        tokio::time::sleep(interval).await;
+        tokio::select! {
+            _ = tokio::time::sleep(interval) => {},
+            _ = signal::ctrl_c() => {
+                println!("\nStopping live dynamic polling (received Ctrl+C)");
+                return Ok(());
+            }
+        }
         poll_count += 1;
-        let curr = client.get_all_dynamic_info().await?;
+        let curr = match client.get_all_dynamic_info().await {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Warning: poll #{} failed: {} (retrying next interval)", poll_count, e);
+                continue;
+            }
+        };
         let deltas = compute_dynamic_deltas(&prev, &curr);
 
         if !deltas.is_empty() {
@@ -102,7 +115,7 @@ pub async fn live_dynamic(client: &Client, interval_secs: u64) -> Result<()> {
                     d.tao_in_now as f64 / 1e9,
                 );
             }
-            std::io::stdout().flush().ok();
+            let _ = std::io::stdout().flush();
         }
         prev = curr;
     }
@@ -126,9 +139,21 @@ pub async fn live_metagraph(client: &Client, netuid: NetUid, interval_secs: u64)
     println!("Tracking {} neurons...", prev_neurons.len());
 
     loop {
-        tokio::time::sleep(interval).await;
+        tokio::select! {
+            _ = tokio::time::sleep(interval) => {},
+            _ = signal::ctrl_c() => {
+                println!("\nStopping live metagraph polling (received Ctrl+C)");
+                return Ok(());
+            }
+        }
         poll_count += 1;
-        let curr_neurons = client.get_neurons_lite(netuid).await?;
+        let curr_neurons = match client.get_neurons_lite(netuid).await {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Warning: poll #{} failed: {} (retrying next interval)", poll_count, e);
+                continue;
+            }
+        };
         let mut changes = Vec::new();
 
         let prev_map: HashMap<u16, &crate::types::chain_data::NeuronInfoLite> =
@@ -166,7 +191,7 @@ pub async fn live_metagraph(client: &Client, netuid: NetUid, interval_secs: u64)
             for ch in &changes {
                 println!("{}", ch);
             }
-            std::io::stdout().flush().ok();
+            let _ = std::io::stdout().flush();
         }
         prev_neurons = curr_neurons;
     }
@@ -195,9 +220,21 @@ pub async fn live_portfolio(client: &Client, coldkey_ss58: &str, interval_secs: 
     );
 
     loop {
-        tokio::time::sleep(interval).await;
+        tokio::select! {
+            _ = tokio::time::sleep(interval) => {},
+            _ = signal::ctrl_c() => {
+                println!("\nStopping live portfolio polling (received Ctrl+C)");
+                return Ok(());
+            }
+        }
         poll_count += 1;
-        let curr = crate::queries::portfolio::fetch_portfolio(client, coldkey_ss58).await?;
+        let curr = match crate::queries::portfolio::fetch_portfolio(client, coldkey_ss58).await {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Warning: poll #{} failed: {} (retrying next interval)", poll_count, e);
+                continue;
+            }
+        };
 
         let free_diff = curr.free_balance.rao() as i64 - prev.free_balance.rao() as i64;
         let staked_diff = curr.total_staked.rao() as i64 - prev.total_staked.rao() as i64;

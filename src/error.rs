@@ -151,4 +151,62 @@ mod tests {
         let err = anyhow::anyhow!("Something unexpected happened");
         assert_eq!(classify(&err), exit_code::GENERIC);
     }
+
+    #[test]
+    fn classify_chained_io_error() {
+        use std::io;
+        let io_err = io::Error::new(io::ErrorKind::PermissionDenied, "cannot write keyfile");
+        let err = anyhow::Error::new(io_err).context("Writing wallet coldkey");
+        assert_eq!(classify(&err), exit_code::IO);
+    }
+
+    #[test]
+    fn classify_chained_connection_error() {
+        use std::io;
+        let io_err = io::Error::new(io::ErrorKind::ConnectionRefused, "connection refused");
+        let err = anyhow::Error::new(io_err).context("Connecting to finney");
+        assert_eq!(classify(&err), exit_code::NETWORK);
+    }
+
+    #[test]
+    fn classify_nonce_error() {
+        let err = anyhow::anyhow!("Nonce already used for this account");
+        assert_eq!(classify(&err), exit_code::CHAIN);
+    }
+
+    #[test]
+    fn classify_dns_error() {
+        let err = anyhow::anyhow!("DNS resolution failed for entrypoint-finney.opentensor.ai");
+        assert_eq!(classify(&err), exit_code::NETWORK);
+    }
+
+    #[test]
+    fn classify_rate_limit() {
+        let err = anyhow::anyhow!("Rate limit exceeded: too many staking operations");
+        assert_eq!(classify(&err), exit_code::CHAIN);
+    }
+
+    #[test]
+    fn classify_no_such_file() {
+        let err = anyhow::anyhow!("No such file or directory: ~/.bittensor/wallets/default");
+        assert_eq!(classify(&err), exit_code::IO);
+    }
+
+    #[test]
+    fn classify_websocket() {
+        let err = anyhow::anyhow!("WebSocket connection dropped unexpectedly");
+        assert_eq!(classify(&err), exit_code::NETWORK);
+    }
+
+    #[test]
+    fn classify_empty_error() {
+        let err = anyhow::anyhow!("");
+        assert_eq!(classify(&err), exit_code::GENERIC);
+    }
+
+    #[test]
+    fn classify_case_insensitive() {
+        let err = anyhow::anyhow!("TIMEOUT waiting for block finalization");
+        assert_eq!(classify(&err), exit_code::TIMEOUT);
+    }
 }
