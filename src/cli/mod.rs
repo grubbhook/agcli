@@ -117,6 +117,10 @@ pub struct Cli {
     #[arg(long, global = true, env = "AGCLI_DRY_RUN")]
     pub dry_run: bool,
 
+    /// Test all endpoints concurrently and use the fastest one
+    #[arg(long, global = true, env = "AGCLI_BEST")]
+    pub best: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -37,6 +37,9 @@ pub fn classify(err: &anyhow::Error) -> i32 {
             }
             return exit_code::NETWORK;
         }
+        if cause.downcast_ref::<serde_json::Error>().is_some() {
+            return exit_code::VALIDATION;
+        }
         if let Some(io) = cause.downcast_ref::<std::io::Error>() {
             match io.kind() {
                 std::io::ErrorKind::NotFound
@@ -255,6 +258,13 @@ mod tests {
     }
 
     // ──── hint() tests ────
+
+    #[test]
+    fn classify_serde_json_error() {
+        let json_err: serde_json::Error = serde_json::from_str::<String>("not valid json").unwrap_err();
+        let err = anyhow::Error::new(json_err).context("Failed to deserialize chain data");
+        assert_eq!(classify(&err), exit_code::VALIDATION);
+    }
 
     #[test]
     fn hint_network_dns() {

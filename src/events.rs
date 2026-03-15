@@ -197,7 +197,11 @@ pub async fn subscribe_events(
     subscribe_events_filtered(client, filter, json_output, None, None).await
 }
 
+/// Maximum consecutive reconnection attempts before giving up.
+const MAX_RECONNECT_ATTEMPTS: u32 = 5;
+
 /// Subscribe to events with optional netuid and account filters.
+/// Auto-reconnects on WebSocket drops with exponential backoff.
 pub async fn subscribe_events_filtered(
     client: &OnlineClient<SubtensorConfig>,
     filter: EventFilter,
@@ -205,8 +209,6 @@ pub async fn subscribe_events_filtered(
     netuid_filter: Option<u16>,
     account_filter: Option<&str>,
 ) -> Result<()> {
-    let mut block_sub = client.blocks().subscribe_finalized().await?;
-
     if !json_output {
         let mut desc = format!("filter: {:?}", filter);
         if let Some(n) = netuid_filter {
@@ -221,107 +223,241 @@ pub async fn subscribe_events_filtered(
         );
     }
 
-    while let Some(block_result) = block_sub.next().await {
-        let block = block_result?;
-        let block_number = block.number() as u64;
-        let block_hash = format!("{:?}", block.hash());
-
-        let events = block.events().await?;
-        for event in events.iter() {
-            let event = event?;
-            let pallet = event.pallet_name().to_string();
-            let variant = event.variant_name().to_string();
-
-            if !filter.matches(&pallet, &variant) {
+    let mut reconnect_attempts = 0u32;
+    loop {
+        let sub_result = client.blocks().subscribe_finalized().await;
+        let mut block_sub = match sub_result {
+            Ok(s) => {
+                if reconnect_attempts > 0 {
+                    tracing::info!("Event subscription reconnected after {} attempts", reconnect_attempts);
+                    if !json_output {
+                        eprintln!("Reconnected to block stream.");
+                    }
+                }
+                reconnect_attempts = 0;
+                s
+            }
+            Err(e) => {
+                reconnect_attempts += 1;
+                if reconnect_attempts > MAX_RECONNECT_ATTEMPTS {
+                    return Err(anyhow::anyhow!(
+                        "Event subscription failed after {} reconnection attempts: {}",
+                        MAX_RECONNECT_ATTEMPTS, e
+                    ));
+                }
+                let delay = std::time::Duration::from_secs(1 << reconnect_attempts.min(5));
+                tracing::warn!(
+                    attempt = reconnect_attempts,
+                    delay_secs = delay.as_secs(),
+                    error = %e,
+                    "Event subscription failed, reconnecting"
+                );
+                if !json_output {
+                    eprintln!("Warning: subscription failed ({}), retrying in {}s...", e, delay.as_secs());
+                }
+                tokio::time::sleep(delay).await;
                 continue;
             }
+        };
 
-            let field_values = event.field_values()?;
-
-            // Structured netuid filtering — try structured extraction first, then debug fallback
-            if let Some(target_netuid) = netuid_filter {
-                if let Some(found) = extract_netuid(&field_values) {
-                    if found != target_netuid {
-                        continue;
+        while let Some(block_result) = block_sub.next().await {
+            let block = match block_result {
+                Ok(b) => b,
+                Err(e) => {
+                    let msg = format!("{}", e);
+                    // Transient stream errors: log and break to reconnect
+                    tracing::warn!(error = %msg, "Block stream error, will reconnect");
+                    if !json_output {
+                        eprintln!("Warning: block stream interrupted ({}), reconnecting...", msg);
                     }
-                } else {
-                    // Fallback: check debug string for netuid references
-                    let debug_str = format!("{:?}", field_values);
-                    if !debug_str.contains(&format!("netuid: {}", target_netuid))
-                        && !debug_str.contains(&format!("Unnamed({})", target_netuid))
-                    {
-                        continue;
-                    }
+                    break; // break inner loop to reconnect
                 }
-            }
+            };
+            let block_number = block.number() as u64;
+            let block_hash = format!("{:?}", block.hash());
 
-            // Account filtering via debug string (SS58 addresses are reliably present in debug output)
-            if let Some(target_account) = account_filter {
-                let debug_str = format!("{:?}", field_values);
-                if !debug_str.contains(target_account) {
+            let events = match block.events().await {
+                Ok(ev) => ev,
+                Err(e) => {
+                    tracing::warn!(block = block_number, error = %e, "Failed to decode events, skipping block");
+                    if !json_output {
+                        eprintln!("Warning: failed to decode events in block #{}: {}", block_number, e);
+                    }
                     continue;
                 }
-            }
-
-            if json_output {
-                let structured_fields = composite_to_json(&field_values);
-                println!(
-                    "{}",
-                    serde_json::json!({
-                        "block": block_number,
-                        "hash": block_hash,
-                        "pallet": pallet,
-                        "event": variant,
-                        "fields": structured_fields,
-                    })
-                );
-            } else {
-                let fields_str = format!("{:?}", field_values);
-                let ce = ChainEvent {
-                    block_number,
-                    block_hash: block_hash.clone(),
-                    pallet: pallet.clone(),
-                    variant: variant.clone(),
-                    fields: truncate(&fields_str, 200),
+            };
+            for event in events.iter() {
+                let event = match event {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::debug!(error = %e, "Skipping undecodable event");
+                        continue;
+                    }
                 };
-                println!("{}", ce);
+                let pallet = event.pallet_name().to_string();
+                let variant = event.variant_name().to_string();
+
+                if !filter.matches(&pallet, &variant) {
+                    continue;
+                }
+
+                let field_values = match event.field_values() {
+                    Ok(fv) => fv,
+                    Err(e) => {
+                        tracing::debug!(pallet = %pallet, variant = %variant, error = %e, "Failed to decode event fields");
+                        continue;
+                    }
+                };
+
+                // Structured netuid filtering — try structured extraction first, then debug fallback
+                if let Some(target_netuid) = netuid_filter {
+                    if let Some(found) = extract_netuid(&field_values) {
+                        if found != target_netuid {
+                            continue;
+                        }
+                    } else {
+                        // Fallback: check debug string for netuid references
+                        let debug_str = format!("{:?}", field_values);
+                        if !debug_str.contains(&format!("netuid: {}", target_netuid))
+                            && !debug_str.contains(&format!("Unnamed({})", target_netuid))
+                        {
+                            continue;
+                        }
+                    }
+                }
+
+                // Account filtering via debug string (SS58 addresses are reliably present in debug output)
+                if let Some(target_account) = account_filter {
+                    let debug_str = format!("{:?}", field_values);
+                    if !debug_str.contains(target_account) {
+                        continue;
+                    }
+                }
+
+                if json_output {
+                    let structured_fields = composite_to_json(&field_values);
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "block": block_number,
+                            "hash": block_hash,
+                            "pallet": pallet,
+                            "event": variant,
+                            "fields": structured_fields,
+                        })
+                    );
+                } else {
+                    let fields_str = format!("{:?}", field_values);
+                    let ce = ChainEvent {
+                        block_number,
+                        block_hash: block_hash.clone(),
+                        pallet: pallet.clone(),
+                        variant: variant.clone(),
+                        fields: truncate(&fields_str, 200),
+                    };
+                    println!("{}", ce);
+                }
             }
         }
+        // Inner loop exited — block_sub stream ended or errored. Reconnect.
+        reconnect_attempts += 1;
+        if reconnect_attempts > MAX_RECONNECT_ATTEMPTS {
+            return Err(anyhow::anyhow!(
+                "Event subscription ended after {} consecutive reconnection failures",
+                MAX_RECONNECT_ATTEMPTS
+            ));
+        }
+        let delay = std::time::Duration::from_secs(1 << reconnect_attempts.min(5));
+        tracing::warn!(attempt = reconnect_attempts, delay_secs = delay.as_secs(), "Block stream ended, reconnecting");
+        if !json_output {
+            eprintln!("Block stream ended, reconnecting in {}s...", delay.as_secs());
+        }
+        tokio::time::sleep(delay).await;
     }
-    Ok(())
 }
 
 /// Subscribe to new blocks only (no event decoding).
+/// Auto-reconnects on WebSocket drops with exponential backoff.
 pub async fn subscribe_blocks(
     client: &OnlineClient<SubtensorConfig>,
     json_output: bool,
 ) -> Result<()> {
-    let mut block_sub = client.blocks().subscribe_finalized().await?;
-
     println!("Subscribed to finalized blocks. Ctrl+C to stop.\n");
 
-    while let Some(block_result) = block_sub.next().await {
-        let block = block_result?;
-        let number = block.number() as u64;
-        let hash = format!("{:?}", block.hash());
-        let extrinsic_count = block.extrinsics().await?.len();
+    let mut reconnect_attempts = 0u32;
+    loop {
+        let sub_result = client.blocks().subscribe_finalized().await;
+        let mut block_sub = match sub_result {
+            Ok(s) => {
+                if reconnect_attempts > 0 && !json_output {
+                    eprintln!("Reconnected to block stream.");
+                }
+                reconnect_attempts = 0;
+                s
+            }
+            Err(e) => {
+                reconnect_attempts += 1;
+                if reconnect_attempts > MAX_RECONNECT_ATTEMPTS {
+                    return Err(anyhow::anyhow!(
+                        "Block subscription failed after {} reconnection attempts: {}",
+                        MAX_RECONNECT_ATTEMPTS, e
+                    ));
+                }
+                let delay = std::time::Duration::from_secs(1 << reconnect_attempts.min(5));
+                if !json_output {
+                    eprintln!("Warning: subscription failed ({}), retrying in {}s...", e, delay.as_secs());
+                }
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+        };
 
-        if json_output {
-            println!(
-                "{}",
-                serde_json::json!({
-                    "block": number,
-                    "hash": hash,
-                    "extrinsics": extrinsic_count,
-                })
-            );
-        } else {
-            println!(
-                "Block #{} hash={} extrinsics={}",
-                number, hash, extrinsic_count
-            );
+        while let Some(block_result) = block_sub.next().await {
+            let block = match block_result {
+                Ok(b) => b,
+                Err(e) => {
+                    if !json_output {
+                        eprintln!("Warning: block stream interrupted ({}), reconnecting...", e);
+                    }
+                    break;
+                }
+            };
+            let number = block.number() as u64;
+            let hash = format!("{:?}", block.hash());
+            let extrinsic_count = match block.extrinsics().await {
+                Ok(exts) => exts.len(),
+                Err(_) => 0,
+            };
+
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "block": number,
+                        "hash": hash,
+                        "extrinsics": extrinsic_count,
+                    })
+                );
+            } else {
+                println!(
+                    "Block #{} hash={} extrinsics={}",
+                    number, hash, extrinsic_count
+                );
+            }
         }
+
+        reconnect_attempts += 1;
+        if reconnect_attempts > MAX_RECONNECT_ATTEMPTS {
+            return Err(anyhow::anyhow!(
+                "Block subscription ended after {} consecutive reconnection failures",
+                MAX_RECONNECT_ATTEMPTS
+            ));
+        }
+        let delay = std::time::Duration::from_secs(1 << reconnect_attempts.min(5));
+        if !json_output {
+            eprintln!("Block stream ended, reconnecting in {}s...", delay.as_secs());
+        }
+        tokio::time::sleep(delay).await;
     }
-    Ok(())
 }
 

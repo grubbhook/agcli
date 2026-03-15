@@ -1028,6 +1028,73 @@ fn parallel_error_classification_all_types() {
     }
 }
 
+/// Disk cache pruning does not crash under concurrent writes.
+#[test]
+fn disk_cache_concurrent_put_prune() {
+    let key_prefix = "stress_prune_test";
+    // Write many entries to exercise pruning logic
+    let threads: Vec<_> = (0..8)
+        .map(|i| {
+            std::thread::spawn(move || {
+                for j in 0..15u32 {
+                    let key = format!("{}_{}_{}",  key_prefix, i, j);
+                    let _ = agcli::queries::disk_cache::put(&key, &(i * 100 + j));
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+    // Cleanup
+    for i in 0..8u32 {
+        for j in 0..15u32 {
+            agcli::queries::disk_cache::remove(&format!("{}_{}_{}", key_prefix, i, j));
+        }
+    }
+}
+
+/// Stale-while-error cache should be readable event after TTL expires.
+#[test]
+fn disk_cache_stale_after_expiry() {
+    let key = "stress_stale_test";
+    agcli::queries::disk_cache::put(key, &"stale_data").unwrap();
+    // Regular get with 0 TTL returns None
+    let fresh: Option<String> = agcli::queries::disk_cache::get(key, std::time::Duration::ZERO);
+    assert!(fresh.is_none(), "Should be expired with 0 TTL");
+    // Stale get still returns the data
+    let stale: Option<String> = agcli::queries::disk_cache::get_stale(key);
+    assert_eq!(stale, Some("stale_data".to_string()));
+    agcli::queries::disk_cache::remove(key);
+}
+
+/// Error classification handles serde_json errors correctly.
+#[test]
+fn error_classify_serde_json() {
+    let json_err: serde_json::Error = serde_json::from_str::<Vec<u32>>("not json").unwrap_err();
+    let err = anyhow::Error::new(json_err).context("Decoding chain response");
+    let code = agcli::error::classify(&err);
+    assert_eq!(code, agcli::error::exit_code::VALIDATION, "serde_json errors should be VALIDATION");
+}
+
+/// The --best flag should be parseable.
+#[test]
+fn best_flag_parse() {
+    use clap::Parser;
+    let cli = agcli::cli::Cli::try_parse_from(&["agcli", "--best", "balance"]).unwrap();
+    assert!(cli.best, "--best flag should be parsed");
+}
+
+/// event filter parsing covers all known variants.
+#[test]
+fn event_filter_parsing_all_variants() {
+    for input in &["staking", "stake", "registration", "register", "reg",
+                   "transfer", "transfers", "weights", "weight",
+                   "subnet", "subnets", "all", "unknown"] {
+        let _: agcli::events::EventFilter = input.parse().unwrap();
+    }
+}
+
 /// Concurrent config file creation and destruction.
 #[test]
 fn config_create_destroy_concurrent() {
