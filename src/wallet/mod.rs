@@ -91,12 +91,13 @@ impl Wallet {
         hotkey_name: &str,
     ) -> Result<Self> {
         let dir = expand_tilde(wallet_dir.as_ref()).join(name);
+        // Create directory structure first (idempotent, needed so lock file can be placed)
         std::fs::create_dir_all(dir.join("hotkeys"))?;
 
         // Acquire directory-level lock to prevent concurrent wallet creation
         let _dir_lock = keyfile::lock_wallet_dir(&dir)?;
 
-        // Check if wallet already exists (under the lock)
+        // Check if wallet already exists (under the lock — prevents TOCTOU race)
         if dir.join("coldkey").exists() {
             anyhow::bail!(
                 "Wallet '{}' already exists at {}.\n  Use a different name or remove it first.",
@@ -134,6 +135,8 @@ impl Wallet {
     }
 
     /// Import wallet from mnemonic.
+    ///
+    /// Uses a directory-level lock to prevent concurrent imports from corrupting files.
     pub fn import_from_mnemonic(
         wallet_dir: impl AsRef<Path>,
         name: &str,
@@ -142,6 +145,9 @@ impl Wallet {
     ) -> Result<Self> {
         let dir = expand_tilde(wallet_dir.as_ref()).join(name);
         std::fs::create_dir_all(dir.join("hotkeys"))?;
+
+        // Acquire directory-level lock to prevent concurrent imports
+        let _dir_lock = keyfile::lock_wallet_dir(&dir)?;
 
         let pair = keypair::pair_from_mnemonic(mnemonic)?;
         let ss58 = keypair::to_ss58(&pair.public(), 42);

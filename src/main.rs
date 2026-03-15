@@ -93,6 +93,13 @@ async fn main() {
         Err(e) => {
             let code = agcli::error::classify(&e);
             let msg = format!("{:#}", e);
+            // Log error to tracing (persisted in log file for diagnostics)
+            tracing::error!(
+                exit_code = code,
+                elapsed_ms = elapsed.as_millis() as u64,
+                error_chain = %msg,
+                "Command failed"
+            );
             if json_errors {
                 // Structured error JSON on stderr for agents
                 let mut payload = serde_json::json!({

@@ -3,7 +3,7 @@
 use crate::chain::Client;
 use crate::cli::helpers::*;
 use crate::cli::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::CommandFactory;
 
 pub(super) async fn handle_config(cmd: ConfigCommands) -> Result<()> {
@@ -128,41 +128,50 @@ pub(super) fn generate_completions(shell: &str) {
     generate(shell_enum, &mut cmd, "agcli", &mut std::io::stdout());
 }
 
-pub(super) fn handle_explain(topic: Option<&str>, output: OutputFormat) -> Result<()> {
+pub(super) fn handle_explain(topic: Option<&str>, output: OutputFormat, full: bool) -> Result<()> {
     match topic {
-        Some(t) => match crate::utils::explain::explain(t) {
-            Some(text) => {
-                if output.is_json() {
-                    print_json(&serde_json::json!({
-                        "topic": t,
-                        "content": text,
-                    }));
-                } else {
-                    println!("{}", text);
-                }
+        Some(t) => {
+            // --full: load from docs/commands/<topic>.md on disk
+            if full {
+                return load_full_doc(t, output);
             }
-            None => {
-                let topics: Vec<serde_json::Value> = crate::utils::explain::list_topics()
-                    .iter()
-                    .map(|(k, d)| serde_json::json!({"topic": k, "description": d}))
-                    .collect();
-                if output.is_json() {
-                    eprint_json(&serde_json::json!({
-                        "error": true,
-                        "message": format!("Unknown topic '{}'", t),
-                        "available_topics": topics,
-                    }));
-                } else {
-                    eprintln!("Unknown topic '{}'. Available topics:\n", t);
-                    for (key, desc) in crate::utils::explain::list_topics() {
-                        eprintln!("  {:<16} {}", key, desc);
+            match crate::utils::explain::explain(t) {
+                Some(text) => {
+                    if output.is_json() {
+                        print_json(&serde_json::json!({
+                            "topic": t,
+                            "content": text,
+                        }));
+                    } else {
+                        println!("{}", text);
                     }
-                    eprintln!("\nUsage: agcli explain --topic <topic>");
                 }
-                anyhow::bail!("Unknown topic '{}'", t);
+                None => {
+                    let topics: Vec<serde_json::Value> = crate::utils::explain::list_topics()
+                        .iter()
+                        .map(|(k, d)| serde_json::json!({"topic": k, "description": d}))
+                        .collect();
+                    if output.is_json() {
+                        eprint_json(&serde_json::json!({
+                            "error": true,
+                            "message": format!("Unknown topic '{}'", t),
+                            "available_topics": topics,
+                        }));
+                    } else {
+                        eprintln!("Unknown topic '{}'. Available topics:\n", t);
+                        for (key, desc) in crate::utils::explain::list_topics() {
+                            eprintln!("  {:<16} {}", key, desc);
+                        }
+                        eprintln!("\nUsage: agcli explain --topic <topic>");
+                    }
+                    anyhow::bail!("Unknown topic '{}'", t);
+                }
             }
         },
         None => {
+            if full {
+                return list_full_docs(output);
+            }
             let topics: Vec<serde_json::Value> = crate::utils::explain::list_topics()
                 .iter()
                 .map(|(k, d)| serde_json::json!({"topic": k, "description": d}))
@@ -175,8 +184,120 @@ pub(super) fn handle_explain(topic: Option<&str>, output: OutputFormat) -> Resul
                     println!("  {:<16} {}", key, desc);
                 }
                 println!("\nUsage: agcli explain --topic <topic>");
+                println!("       agcli explain --topic <topic> --full   (full agent docs)");
             }
         }
+    }
+    Ok(())
+}
+
+/// Resolve the docs/ directory — checks next to the binary first, then CWD.
+fn find_docs_dir() -> Option<std::path::PathBuf> {
+    // 1. Next to the binary (production install)
+    if let Ok(exe) = std::env::current_exe() {
+        let dir = exe.parent().map(|p| p.join("docs/commands"));
+        if let Some(ref d) = dir {
+            if d.is_dir() {
+                return dir;
+            }
+        }
+    }
+    // 2. Repo root (development)
+    let cwd = std::path::PathBuf::from("docs/commands");
+    if cwd.is_dir() {
+        return Some(cwd);
+    }
+    // 3. Try CARGO_MANIFEST_DIR (cargo run)
+    if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+        let dir = std::path::PathBuf::from(manifest).join("docs/commands");
+        if dir.is_dir() {
+            return Some(dir);
+        }
+    }
+    None
+}
+
+/// Load full documentation from docs/commands/<topic>.md
+fn load_full_doc(topic: &str, output: OutputFormat) -> Result<()> {
+    let docs_dir = find_docs_dir()
+        .ok_or_else(|| anyhow::anyhow!("docs/commands/ directory not found. Run from the agcli repo root or install docs alongside the binary."))?;
+
+    // Normalize topic to filename: "commit-reveal" → "commit-reveal", "stake" → "stake"
+    let normalized = topic.to_lowercase().replace('_', "-");
+    let path = docs_dir.join(format!("{}.md", normalized));
+    if !path.exists() {
+        // Try common aliases: if topic matches a command group, use that
+        let aliases = [
+            ("cr", "weights"), ("dtao", "subnet"), ("amm", "subnet"),
+            ("nominate", "delegate"), ("delegation", "delegate"),
+        ];
+        for (alias, target) in &aliases {
+            if normalized == *alias {
+                let alt = docs_dir.join(format!("{}.md", target));
+                if alt.exists() {
+                    return load_doc_file(&alt, topic, output);
+                }
+            }
+        }
+        // List available docs
+        let available = list_doc_files(&docs_dir);
+        if output.is_json() {
+            eprint_json(&serde_json::json!({
+                "error": true,
+                "message": format!("No full doc for '{}'. Available: {}", topic, available.join(", ")),
+            }));
+        } else {
+            eprintln!("No full documentation for '{}'. Available doc files:", topic);
+            for name in &available {
+                eprintln!("  {}", name);
+            }
+        }
+        anyhow::bail!("No full doc for '{}'", topic);
+    }
+    load_doc_file(&path, topic, output)
+}
+
+fn load_doc_file(path: &std::path::Path, topic: &str, output: OutputFormat) -> Result<()> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    if output.is_json() {
+        print_json(&serde_json::json!({
+            "topic": topic,
+            "source": path.display().to_string(),
+            "content": content,
+        }));
+    } else {
+        println!("{}", content);
+    }
+    Ok(())
+}
+
+fn list_doc_files(dir: &std::path::Path) -> Vec<String> {
+    let mut names = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.path().file_stem() {
+                names.push(name.to_string_lossy().to_string());
+            }
+        }
+    }
+    names.sort();
+    names
+}
+
+/// List all available full doc files.
+fn list_full_docs(output: OutputFormat) -> Result<()> {
+    let docs_dir = find_docs_dir()
+        .ok_or_else(|| anyhow::anyhow!("docs/commands/ directory not found."))?;
+    let names = list_doc_files(&docs_dir);
+    if output.is_json() {
+        print_json(&serde_json::json!(names));
+    } else {
+        println!("Available full documentation files:\n");
+        for name in &names {
+            println!("  {:<20} docs/commands/{}.md", name, name);
+        }
+        println!("\nUsage: agcli explain --topic <name> --full");
     }
     Ok(())
 }

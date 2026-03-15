@@ -150,13 +150,9 @@ async fn handle_network(client: &Client, output: OutputFormat, at_block: Option<
         return Ok(());
     }
 
-    let (block, total_stake, total_networks, total_issuance, emission) = tokio::try_join!(
-        client.get_block_number(),
-        client.get_total_stake(),
-        client.get_total_networks(),
-        client.get_total_issuance(),
-        client.get_block_emission(),
-    )?;
+    // Single pinned block: saves 4 redundant at_latest() RPC round-trips
+    let (block, total_stake, total_networks, total_issuance, emission) =
+        client.get_network_overview().await?;
     let staking_ratio = if total_issuance.rao() > 0 {
         total_stake.tao() / total_issuance.tao() * 100.0
     } else {

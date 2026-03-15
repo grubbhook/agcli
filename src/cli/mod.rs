@@ -264,6 +264,9 @@ pub enum Commands {
         /// Omit to list all available topics.
         #[arg(long)]
         topic: Option<String>,
+        /// Show full agent-friendly documentation from docs/commands/ instead of the built-in summary
+        #[arg(long)]
+        full: bool,
     },
 
     // ──── Audit ────

@@ -365,8 +365,8 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::Doctor => {
             system_cmds::handle_doctor(&network, ctx.wallet_dir, ctx.wallet_name, ctx.output).await
         }
-        Commands::Explain { topic } => {
-            system_cmds::handle_explain(topic.as_deref(), ctx.output)
+        Commands::Explain { topic, full } => {
+            system_cmds::handle_explain(topic.as_deref(), ctx.output, full)
         }
         Commands::Audit { address } => {
             let client = connect(&network, dry_run).await?;

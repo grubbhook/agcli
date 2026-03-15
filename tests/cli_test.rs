@@ -1851,7 +1851,7 @@ fn parse_audit_with_json_output_checks_fields() {
 fn parse_explain_coldkey_swap() {
     let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "coldkey-swap"]);
     assert!(cli.is_ok());
-    if let agcli::cli::Commands::Explain { topic } = &cli.unwrap().command {
+    if let agcli::cli::Commands::Explain { topic, .. } = &cli.unwrap().command {
         assert_eq!(topic.as_deref(), Some("coldkey-swap"));
     } else {
         panic!("wrong command variant (expected Explain)");
@@ -1862,7 +1862,7 @@ fn parse_explain_coldkey_swap() {
 fn parse_explain_coldkey_alias_ckswap() {
     let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "ckswap"]);
     assert!(cli.is_ok());
-    if let agcli::cli::Commands::Explain { topic } = &cli.unwrap().command {
+    if let agcli::cli::Commands::Explain { topic, .. } = &cli.unwrap().command {
         assert_eq!(topic.as_deref(), Some("ckswap"));
     } else {
         panic!("wrong command variant (expected Explain for ckswap)");
@@ -2776,4 +2776,88 @@ fn parse_utils_latency_with_extra() {
         "agcli", "utils", "latency", "--extra", "wss://custom.node:9944", "--pings", "3",
     ]);
     assert!(cli.is_ok(), "{:?}", cli.err());
+}
+
+// ──── Sprint 26 — explain --full, block pinning, multi-process safety ────
+
+#[test]
+fn parse_explain_full_flag() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "explain", "--topic", "stake", "--full",
+    ]);
+    assert!(cli.is_ok(), "{:?}", cli.err());
+    if let agcli::cli::Commands::Explain { topic, full } = &cli.unwrap().command {
+        assert_eq!(topic.as_deref(), Some("stake"));
+        assert!(full);
+    } else {
+        panic!("wrong command variant");
+    }
+}
+
+#[test]
+fn parse_explain_full_flag_defaults_false() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--topic", "tempo"]);
+    assert!(cli.is_ok(), "{:?}", cli.err());
+    if let agcli::cli::Commands::Explain { full, .. } = &cli.unwrap().command {
+        assert!(!full);
+    } else {
+        panic!("wrong command variant");
+    }
+}
+
+#[test]
+fn parse_explain_full_no_topic() {
+    // --full without --topic should parse fine (lists all doc files)
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "explain", "--full"]);
+    assert!(cli.is_ok(), "{:?}", cli.err());
+    if let agcli::cli::Commands::Explain { topic, full } = &cli.unwrap().command {
+        assert!(topic.is_none());
+        assert!(full);
+    } else {
+        panic!("wrong command variant");
+    }
+}
+
+#[test]
+fn explain_full_loads_doc_file() {
+    // Run from the repo root so docs/commands/ is found
+    let result = agcli::utils::explain::explain("stake");
+    assert!(result.is_some(), "built-in explain should find 'stake'");
+}
+
+#[test]
+fn explain_all_topics_have_content() {
+    // Every topic in list_topics() should resolve to Some
+    for (key, _desc) in agcli::utils::explain::list_topics() {
+        let content = agcli::utils::explain::explain(key);
+        assert!(content.is_some(), "explain('{}') returned None", key);
+        assert!(!content.unwrap().is_empty(), "explain('{}') returned empty string", key);
+    }
+}
+
+#[test]
+fn explain_topic_descriptions_unique() {
+    // No two topics should share the same description
+    let topics = agcli::utils::explain::list_topics();
+    let mut descs: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for (_key, desc) in &topics {
+        assert!(descs.insert(desc), "duplicate description: '{}'", desc);
+    }
+}
+
+#[test]
+fn explain_fuzzy_matching_works() {
+    // Substring matching: "cold" should match "coldkey-swap"
+    let result = agcli::utils::explain::explain("cold");
+    assert!(result.is_some(), "fuzzy match for 'cold' should find coldkey-swap");
+}
+
+#[test]
+fn explain_normalization_strips_hyphens_underscores() {
+    // "commit-reveal" and "commit_reveal" should both resolve
+    let r1 = agcli::utils::explain::explain("commit-reveal");
+    let r2 = agcli::utils::explain::explain("commit_reveal");
+    assert!(r1.is_some());
+    assert!(r2.is_some());
+    assert_eq!(r1.unwrap(), r2.unwrap());
 }

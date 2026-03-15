@@ -510,6 +510,58 @@ impl Client {
         }
         Ok(results)
     }
+
+    // ──────── Pinned Network Params ────────
+
+    /// Total TAO issuance at a pinned block hash.
+    pub async fn get_total_issuance_at(&self, hash: subxt::utils::H256) -> Result<Balance> {
+        let addr = api::storage().balances().total_issuance();
+        let val = self.inner.storage().at(hash).fetch(&addr).await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(Balance::from_rao(val.unwrap_or(0) as u64))
+    }
+
+    /// Total staked TAO at a pinned block hash.
+    pub async fn get_total_stake_at(&self, hash: subxt::utils::H256) -> Result<Balance> {
+        let addr = api::storage().subtensor_module().total_stake();
+        let val = self.inner.storage().at(hash).fetch(&addr).await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(Balance::from_rao(val.unwrap_or(0)))
+    }
+
+    /// Total number of subnets at a pinned block hash.
+    pub async fn get_total_networks_at(&self, hash: subxt::utils::H256) -> Result<u16> {
+        let addr = api::storage().subtensor_module().total_networks();
+        let val = self.inner.storage().at(hash).fetch(&addr).await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(val.unwrap_or(0))
+    }
+
+    /// Block emission rate at a pinned block hash.
+    pub async fn get_block_emission_at(&self, hash: subxt::utils::H256) -> Result<Balance> {
+        let addr = api::storage().subtensor_module().block_emission();
+        let val = self.inner.storage().at(hash).fetch(&addr).await
+            .map_err(|e| Self::annotate_at_block_error(e.into(), None))?;
+        Ok(Balance::from_rao(val.unwrap_or(0)))
+    }
+
+    /// Fetch all network overview stats using a single pinned block.
+    /// Returns (block_number, total_stake, total_networks, total_issuance, emission).
+    /// Saves 4 redundant `at_latest()` RPC round-trips compared to individual queries.
+    pub async fn get_network_overview(&self) -> Result<(u64, Balance, u16, Balance, Balance)> {
+        let hash = self.pin_latest_block().await?;
+        // Block number comes from the pinned block itself
+        let block = self.inner.blocks().at(hash).await
+            .context("Failed to fetch pinned block")?;
+        let block_number = block.number() as u64;
+        let (stake, networks, issuance, emission) = tokio::try_join!(
+            self.get_total_stake_at(hash),
+            self.get_total_networks_at(hash),
+            self.get_total_issuance_at(hash),
+            self.get_block_emission_at(hash),
+        )?;
+        Ok((block_number, stake, networks, issuance, emission))
+    }
 }
 
 /// Format submission errors (before tx reaches chain) with actionable hints.
