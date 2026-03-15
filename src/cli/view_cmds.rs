@@ -2,7 +2,7 @@
 
 use crate::chain::Client;
 use crate::cli::helpers::*;
-use crate::cli::ViewCommands;
+use crate::cli::{OutputFormat, ViewCommands};
 use crate::types::{Balance, NetUid};
 use anyhow::Result;
 
@@ -66,12 +66,12 @@ pub async fn handle_view(
     }
 }
 
-async fn handle_portfolio(client: &Client, addr: &str, output: &str) -> Result<()> {
+async fn handle_portfolio(client: &Client, addr: &str, output: OutputFormat) -> Result<()> {
     let portfolio = crate::queries::portfolio::fetch_portfolio(client, addr).await?;
-    if output == "json" {
+    if output.is_json() {
         print_json_ser(&portfolio);
     } else {
-        if output != "csv" {
+        if !output.is_csv() {
             println!("Portfolio for {}", crate::utils::short_ss58(addr));
             println!("  Free:   {}", portfolio.free_balance.display_tao());
             println!("  Staked: {}", portfolio.total_staked.display_tao());
@@ -114,7 +114,7 @@ async fn handle_portfolio(client: &Client, addr: &str, output: &str) -> Result<(
     Ok(())
 }
 
-async fn handle_network(client: &Client, output: &str, at_block: Option<u32>) -> Result<()> {
+async fn handle_network(client: &Client, output: OutputFormat, at_block: Option<u32>) -> Result<()> {
     // Historical wayback mode
     if let Some(block_num) = at_block {
         let block_hash = client.get_block_hash(block_num).await?;
@@ -130,7 +130,7 @@ async fn handle_network(client: &Client, output: &str, at_block: Option<u32>) ->
         } else {
             0.0
         };
-        if output == "json" {
+        if output.is_json() {
             print_json(&serde_json::json!({
                 "block": block_num,
                 "block_hash": format!("{:?}", block_hash),
@@ -162,7 +162,7 @@ async fn handle_network(client: &Client, output: &str, at_block: Option<u32>) ->
     } else {
         0.0
     };
-    if output == "json" {
+    if output.is_json() {
         print_json(&serde_json::json!({
             "block": block,
             "subnets": total_networks,
@@ -185,7 +185,7 @@ async fn handle_network(client: &Client, output: &str, at_block: Option<u32>) ->
     Ok(())
 }
 
-async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
+async fn handle_dynamic(client: &Client, output: OutputFormat) -> Result<()> {
     let dynamic = client.get_all_dynamic_info().await?;
     render_rows(
         output,
@@ -238,7 +238,7 @@ async fn handle_dynamic(client: &Client, output: &str) -> Result<()> {
 async fn handle_portfolio_at_block(
     client: &Client,
     addr: &str,
-    output: &str,
+    output: OutputFormat,
     block_num: u32,
 ) -> Result<()> {
     let block_hash = client.get_block_hash(block_num).await?;
@@ -247,7 +247,7 @@ async fn handle_portfolio_at_block(
         client.get_stake_for_coldkey_at_block(addr, block_hash),
     )?;
     let total_staked: u64 = stakes.iter().map(|s| s.stake.rao()).sum();
-    if output == "json" {
+    if output.is_json() {
         print_json(&serde_json::json!({
             "address": addr,
             "block": block_num,
@@ -298,7 +298,7 @@ async fn handle_portfolio_at_block(
     Ok(())
 }
 
-async fn handle_dynamic_at_block(client: &Client, output: &str, block_num: u32) -> Result<()> {
+async fn handle_dynamic_at_block(client: &Client, output: OutputFormat, block_num: u32) -> Result<()> {
     let block_hash = client.get_block_hash(block_num).await?;
     let dynamic = client.get_all_dynamic_info_at_block(block_hash).await?;
     render_rows(
@@ -402,7 +402,7 @@ async fn handle_neuron(
 
 async fn handle_validators(
     client: &Client,
-    output: &str,
+    output: OutputFormat,
     netuid: Option<u16>,
     limit: usize,
     at_block: Option<u32>,
@@ -515,7 +515,7 @@ async fn handle_validators(
     Ok(())
 }
 
-async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()> {
+async fn handle_history(address: &str, output: OutputFormat, limit: usize) -> Result<()> {
     println!(
         "Fetching transaction history for {}...",
         crate::utils::short_ss58(address)
@@ -605,7 +605,7 @@ async fn handle_history(address: &str, output: &str, limit: usize) -> Result<()>
 async fn handle_account_explorer(
     client: &Client,
     address: &str,
-    output: &str,
+    output: OutputFormat,
     at_block: Option<u32>,
 ) -> Result<()> {
     // Historical wayback mode
@@ -619,7 +619,7 @@ async fn handle_account_explorer(
         let total_staked: f64 = stakes.iter().map(|s| s.stake.tao()).sum();
         let total_value = balance.tao() + total_staked;
 
-        if output == "json" {
+        if output.is_json() {
             let positions: Vec<serde_json::Value> = stakes
                 .iter()
                 .map(|s| {
@@ -662,7 +662,7 @@ async fn handle_account_explorer(
 
         if !stakes.is_empty() {
             render_rows(
-                "table",
+                OutputFormat::Table,
                 &stakes,
                 "",
                 |_| String::new(),
@@ -700,7 +700,7 @@ async fn handle_account_explorer(
     )?;
     let dynamic_map = build_dynamic_map(&dynamic);
 
-    if output == "json" {
+    if output.is_json() {
         let total_staked: u64 = stakes.iter().map(|s| s.stake.rao()).sum();
         let positions: Vec<serde_json::Value> = stakes
             .iter()
@@ -776,7 +776,7 @@ async fn handle_account_explorer(
             })
             .collect();
         render_rows(
-            "table",
+            OutputFormat::Table,
             &rows,
             "",
             |_| String::new(),
@@ -800,7 +800,7 @@ async fn handle_account_explorer(
     Ok(())
 }
 
-async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> Result<()> {
+async fn handle_subnet_analytics(client: &Client, netuid: u16, output: OutputFormat) -> Result<()> {
     let nuid = NetUid(netuid);
     let (info, dynamic, neurons, hyperparams, subnet_identity) = tokio::try_join!(
         client.get_subnet_info(nuid),
@@ -870,7 +870,7 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     let unique_coldkeys: std::collections::HashSet<&String> =
         neurons.iter().map(|n| &n.coldkey).collect();
 
-    if output == "json" {
+    if output.is_json() {
         print_json(&serde_json::json!({
             "netuid": netuid,
             "name": name,
@@ -967,7 +967,7 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     if !top_miners.is_empty() {
         let miners_top: Vec<_> = top_miners.into_iter().take(5).collect();
         render_rows(
-            "table",
+            OutputFormat::Table,
             &miners_top,
             "",
             |_| String::new(),
@@ -988,7 +988,7 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     if !top_vals.is_empty() {
         let vals_top: Vec<_> = top_vals.into_iter().take(5).collect();
         render_rows(
-            "table",
+            OutputFormat::Table,
             &vals_top,
             "",
             |_| String::new(),
@@ -1010,7 +1010,7 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: &str) -> 
     Ok(())
 }
 
-async fn handle_staking_analytics(client: &Client, address: &str, output: &str) -> Result<()> {
+async fn handle_staking_analytics(client: &Client, address: &str, output: OutputFormat) -> Result<()> {
     let (stakes, dynamic, block_emission) = tokio::try_join!(
         client.get_stake_for_coldkey(address),
         async {
@@ -1083,7 +1083,7 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
         0.0
     };
 
-    if output == "json" {
+    if output.is_json() {
         let pos_json: Vec<serde_json::Value> = positions
             .iter()
             .map(|p| {
@@ -1121,7 +1121,7 @@ async fn handle_staking_analytics(client: &Client, address: &str, output: &str) 
 
     if !positions.is_empty() {
         render_rows(
-            "table",
+            OutputFormat::Table,
             &positions,
             "",
             |_| String::new(),
@@ -1153,7 +1153,7 @@ async fn handle_swap_sim(
     netuid: u16,
     tao: Option<f64>,
     alpha: Option<f64>,
-    output: &str,
+    output: OutputFormat,
 ) -> Result<()> {
     use crate::types::NetUid;
     let price_raw = client.current_alpha_price(NetUid(netuid)).await?;
@@ -1204,7 +1204,7 @@ async fn handle_swap_sim(
 
     match sim {
         Some((dir, dir_label, amt_in, sym_in, amt_out, sym_out, tao_fee, alpha_fee, eff_price)) => {
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({
                     "direction": dir, "netuid": netuid,
                     "amount_in": amt_in, "amount_out": amt_out,
@@ -1229,7 +1229,7 @@ async fn handle_swap_sim(
             }
         }
         None => {
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({"netuid": netuid, "current_price": price}));
             } else {
                 println!("SN{} current alpha price: {:.6} τ/α", netuid, price);
@@ -1242,9 +1242,9 @@ async fn handle_swap_sim(
     Ok(())
 }
 
-async fn handle_nominations(client: &Client, hotkey: &str, output: &str) -> Result<()> {
+async fn handle_nominations(client: &Client, hotkey: &str, output: OutputFormat) -> Result<()> {
     let delegates = client.get_delegated(hotkey).await?;
-    if output == "json" {
+    if output.is_json() {
         print_json_ser(&delegates);
         return Ok(());
     }
@@ -1284,7 +1284,7 @@ async fn handle_nominations(client: &Client, hotkey: &str, output: &str) -> Resu
 }
 
 /// Full security audit of an account: proxies, delegates, stake exposure, permissions.
-pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Result<()> {
+pub async fn handle_audit(client: &Client, address: &str, output: OutputFormat) -> Result<()> {
     let (balance, stakes, identity, proxies, delegate, dynamic, coldkey_swap) = tokio::try_join!(
         client.get_balance_ss58(address),
         client.get_stake_for_coldkey(address),
@@ -1470,7 +1470,7 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
         }));
     }
 
-    if output == "json" {
+    if output.is_json() {
         let positions: Vec<serde_json::Value> = stakes
             .iter()
             .map(|s| {
@@ -1561,7 +1561,7 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
 
     if !proxies.is_empty() {
         render_rows(
-            "table",
+            OutputFormat::Table,
             &proxies,
             "",
             |_| String::new(),
@@ -1599,7 +1599,7 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
             })
             .collect();
         render_rows(
-            "table",
+            OutputFormat::Table,
             &exposure_rows,
             "",
             |_| String::new(),
@@ -1644,7 +1644,7 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
         .collect();
     if !child_rows.is_empty() {
         render_rows(
-            "table",
+            OutputFormat::Table,
             &child_rows,
             "",
             |_| String::new(),
@@ -1677,7 +1677,7 @@ pub async fn handle_audit(client: &Client, address: &str, output: &str) -> Resul
         .collect();
     if !pending_rows.is_empty() {
         render_rows(
-            "table",
+            OutputFormat::Table,
             &pending_rows,
             "",
             |_| String::new(),

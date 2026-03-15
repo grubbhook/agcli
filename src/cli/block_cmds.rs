@@ -6,7 +6,7 @@ use crate::cli::*;
 use crate::types::{Balance, NetUid};
 use anyhow::Result;
 
-pub(super) async fn handle_block(cmd: BlockCommands, client: &Client, output: &str) -> Result<()> {
+pub(super) async fn handle_block(cmd: BlockCommands, client: &Client, output: OutputFormat) -> Result<()> {
     match cmd {
         BlockCommands::Info { number } => {
             let block_hash = client.get_block_hash(number).await?;
@@ -16,7 +16,7 @@ pub(super) async fn handle_block(cmd: BlockCommands, client: &Client, output: &s
                 client.get_block_timestamp(block_hash),
             )?;
 
-            if output == "json" {
+            if output.is_json() {
                 let mut obj = serde_json::json!({
                     "block_number": block_num,
                     "block_hash": format!("{:?}", hash),
@@ -114,7 +114,7 @@ pub(super) async fn handle_block(cmd: BlockCommands, client: &Client, output: &s
                 client.get_block_timestamp(block_hash),
             )?;
 
-            if output == "json" {
+            if output.is_json() {
                 let mut obj = serde_json::json!({
                     "block_number": block_num,
                     "block_hash": format!("{:?}", block_hash),
@@ -147,7 +147,7 @@ pub(super) async fn handle_block(cmd: BlockCommands, client: &Client, output: &s
 pub(super) async fn handle_diff(
     cmd: DiffCommands,
     client: &Client,
-    output: &str,
+    output: OutputFormat,
     wallet_dir: &str,
     wallet_name: &str,
 ) -> Result<()> {
@@ -177,7 +177,7 @@ pub(super) async fn handle_diff(
             let total1 = bal1.rao() + total_stake1;
             let total2 = bal2.rao() + total_stake2;
 
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({
                     "address": addr,
                     "block1": block1,
@@ -267,7 +267,7 @@ pub(super) async fn handle_diff(
                 anyhow::anyhow!("Subnet {} not found at block {}", netuid, block2)
             })?;
 
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({
                     "netuid": netuid,
                     "name": d2.name,
@@ -373,7 +373,7 @@ pub(super) async fn handle_diff(
                 0.0
             };
 
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({
                     "block1": block1,
                     "block2": block2,

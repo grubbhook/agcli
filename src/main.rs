@@ -57,7 +57,7 @@ async fn main() {
         );
     }
 
-    let json_errors = cli.output == "json" || cli.batch;
+    let json_errors = cli.output.is_json() || cli.batch;
     let show_time = cli.time;
     let timeout_secs = cli.timeout.filter(|&t| t > 0);
 

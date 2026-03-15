@@ -29,7 +29,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
         wallet_dir: &cli.wallet_dir,
         wallet_name: &cli.wallet,
         hotkey_name: &cli.hotkey,
-        output: cli.output.as_str(),
+        output: cli.output,
         password: password.as_deref(),
         yes: cli.yes,
         mev: cli.mev,
@@ -54,7 +54,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let swap = client.get_coldkey_swap_scheduled(&addr).await?;
             match swap {
                 Some((block, new_ss58)) => {
-                    if ctx.output == "json" {
+                    if ctx.output.is_json() {
                         print_json(&serde_json::json!({
                             "address": addr,
                             "swap_scheduled": true,
@@ -68,7 +68,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
                     }
                 }
                 None => {
-                    if ctx.output == "json" {
+                    if ctx.output.is_json() {
                         print_json(&serde_json::json!({
                             "address": addr,
                             "swap_scheduled": false,
@@ -103,7 +103,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
             if let Some(block_num) = at_block {
                 let block_hash = client.get_block_hash(block_num).await?;
                 let balance = client.get_balance_at_block(&addr, block_hash).await?;
-                if ctx.output == "json" {
+                if ctx.output.is_json() {
                     print_json(
                         &serde_json::json!({"address": addr, "block": block_num, "block_hash": format!("{:?}", block_hash), "balance_rao": balance.rao(), "balance_tao": balance.tao()}),
                     );
@@ -153,7 +153,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
                         .as_ref()
                         .map(|t| balance.rao() < t.rao())
                         .unwrap_or(false);
-                    if ctx.output == "json" {
+                    if ctx.output.is_json() {
                         print_json(&serde_json::json!({
                             "address": addr,
                             "balance_rao": balance.rao(),
@@ -186,7 +186,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
             }
 
             let balance = client.get_balance_ss58(&addr).await?;
-            if ctx.output == "json" {
+            if ctx.output.is_json() {
                 print_json(
                     &serde_json::json!({"address": addr, "balance_rao": balance.rao(), "balance_tao": balance.tao()}),
                 );

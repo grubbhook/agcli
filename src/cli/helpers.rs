@@ -3,6 +3,8 @@
 use crate::wallet::Wallet;
 use anyhow::Result;
 
+use crate::cli::OutputFormat;
+
 /// Common context passed to all command handlers, reducing parameter sprawl.
 ///
 /// Instead of passing 6-9 individual parameters to every handler,
@@ -11,7 +13,7 @@ pub struct Ctx<'a> {
     pub wallet_dir: &'a str,
     pub wallet_name: &'a str,
     pub hotkey_name: &'a str,
-    pub output: &'a str,
+    pub output: OutputFormat,
     pub password: Option<&'a str>,
     pub yes: bool,
     pub mev: bool,
@@ -41,7 +43,7 @@ pub fn spinner(msg: &str) -> indicatif::ProgressBar {
     let pb = indicatif::ProgressBar::new_spinner();
     pb.set_style(
         indicatif::ProgressStyle::with_template("{spinner:.cyan} {msg}")
-            .unwrap()
+            .expect("static spinner template is valid")
             .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
     );
     pb.set_message(msg.to_string());
@@ -156,8 +158,8 @@ pub fn eprint_json(value: &serde_json::Value) {
 }
 
 /// Print transaction result in both json and table modes.
-pub fn print_tx_result(output: &str, hash: &str, label: &str) {
-    if output == "json" {
+pub fn print_tx_result(output: OutputFormat, hash: &str, label: &str) {
+    if output.is_json() {
         print_json(&serde_json::json!({"tx_hash": hash}));
     } else {
         println!("{} Tx: {}", label, hash);
@@ -288,7 +290,7 @@ pub fn parse_children(children_str: &str) -> Result<Vec<(u64, String)>> {
 /// - `table`: Prints optional `preamble`, then builds a comfy_table
 ///   with `table_headers` and `table_row` per item.
 pub fn render_rows<T: serde::Serialize>(
-    output: &str,
+    output: OutputFormat,
     data: &[T],
     csv_header: &str,
     csv_row: impl Fn(&T) -> String,
@@ -296,9 +298,9 @@ pub fn render_rows<T: serde::Serialize>(
     table_row: impl Fn(&T) -> Vec<String>,
     preamble: Option<&str>,
 ) {
-    if output == "json" {
+    if output.is_json() {
         print_json_ser(&data);
-    } else if output == "csv" {
+    } else if output.is_csv() {
         println!("{}", csv_header);
         for item in data {
             println!("{}", csv_row(item));

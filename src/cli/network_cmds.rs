@@ -51,14 +51,12 @@ pub(super) async fn handle_delegate(
     client: &Client,
     ctx: &Ctx<'_>,
 ) -> Result<()> {
-    let (wallet_dir, wallet_name, hotkey_name) = (ctx.wallet_dir, ctx.wallet_name, ctx.hotkey_name);
-    let (output, password) = (ctx.output, ctx.password);
     match cmd {
         DelegateCommands::List => {
             let delegates = client.get_delegates().await?;
             let top: Vec<_> = delegates.into_iter().take(50).collect();
             render_rows(
-                output,
+                ctx.output,
                 &top,
                 "hotkey,owner,take_pct,total_stake_rao,nominators",
                 |d| {
@@ -89,8 +87,8 @@ pub(super) async fn handle_delegate(
             let hotkey_ss58 = match hotkey {
                 Some(hk) => hk,
                 None => {
-                    let mut wallet = open_wallet(wallet_dir, wallet_name)?;
-                    resolve_hotkey_ss58(None, &mut wallet, hotkey_name)?
+                    let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+                    resolve_hotkey_ss58(None, &mut wallet, ctx.hotkey_name)?
                 }
             };
             let delegate = client.get_delegate(&hotkey_ss58).await?;
@@ -121,46 +119,22 @@ pub(super) async fn handle_delegate(
             Ok(())
         }
         DelegateCommands::DecreaseTake { take, hotkey } => {
-            change_take(
-                client,
-                wallet_dir,
-                wallet_name,
-                hotkey_name,
-                hotkey,
-                password,
-                take,
-                false,
-            )
-            .await
+            change_take(client, ctx, hotkey, take, false).await
         }
         DelegateCommands::IncreaseTake { take, hotkey } => {
-            change_take(
-                client,
-                wallet_dir,
-                wallet_name,
-                hotkey_name,
-                hotkey,
-                password,
-                take,
-                true,
-            )
-            .await
+            change_take(client, ctx, hotkey, take, true).await
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn change_take(
     client: &Client,
-    wallet_dir: &str,
-    wallet_name: &str,
-    hotkey_name: &str,
+    ctx: &Ctx<'_>,
     hotkey: Option<String>,
-    password: Option<&str>,
     take: f64,
     increase: bool,
 ) -> Result<()> {
-    let (pair, hk) = unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, hotkey, password)?;
+    let (pair, hk) = unlock_and_resolve(ctx.wallet_dir, ctx.wallet_name, ctx.hotkey_name, hotkey, ctx.password)?;
     let take_u16 = (take / 100.0 * 65535.0).min(65535.0) as u16;
     let dir = if increase { "Increasing" } else { "Decreasing" };
     tracing::info!(hotkey = %crate::utils::short_ss58(&hk), take_pct = take, direction = dir, "Changing delegate take");
@@ -310,10 +284,10 @@ pub(super) async fn handle_swap(
 pub(super) async fn handle_subscribe(
     cmd: SubscribeCommands,
     client: &Client,
-    output: &str,
+    output: OutputFormat,
     _batch: bool,
 ) -> Result<()> {
-    let json = output == "json";
+    let json = output.is_json();
     match cmd {
         SubscribeCommands::Blocks => crate::events::subscribe_blocks(client.subxt(), json).await,
         SubscribeCommands::Events {
@@ -607,14 +581,14 @@ pub(super) async fn handle_proxy(
         ProxyCommands::List { address } => {
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             let proxies = client.list_proxies(&addr).await?;
-            if output == "json" {
+            if output.is_json() {
                 let json: Vec<serde_json::Value> = proxies.iter().map(|(d, t, delay)| {
                     serde_json::json!({"delegate": d, "proxy_type": t, "delay": delay})
                 }).collect();
                 print_json_ser(&json);
             } else {
                 render_rows(
-                    "table",
+                    OutputFormat::Table,
                     &proxies,
                     "",
                     |_| String::new(),
@@ -895,7 +869,6 @@ fn price_to_tick(price: f64) -> i32 {
     tick.clamp(MIN_TICK, MAX_TICK)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_liquidity(
     cmd: LiquidityCommands,
     client: &Client,

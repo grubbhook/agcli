@@ -128,11 +128,11 @@ pub(super) fn generate_completions(shell: &str) {
     generate(shell_enum, &mut cmd, "agcli", &mut std::io::stdout());
 }
 
-pub(super) fn handle_explain(topic: Option<&str>, output: &str) -> Result<()> {
+pub(super) fn handle_explain(topic: Option<&str>, output: OutputFormat) -> Result<()> {
     match topic {
         Some(t) => match crate::utils::explain::explain(t) {
             Some(text) => {
-                if output == "json" {
+                if output.is_json() {
                     print_json(&serde_json::json!({
                         "topic": t,
                         "content": text,
@@ -146,7 +146,7 @@ pub(super) fn handle_explain(topic: Option<&str>, output: &str) -> Result<()> {
                     .iter()
                     .map(|(k, d)| serde_json::json!({"topic": k, "description": d}))
                     .collect();
-                if output == "json" {
+                if output.is_json() {
                     eprint_json(&serde_json::json!({
                         "error": true,
                         "message": format!("Unknown topic '{}'", t),
@@ -167,7 +167,7 @@ pub(super) fn handle_explain(topic: Option<&str>, output: &str) -> Result<()> {
                 .iter()
                 .map(|(k, d)| serde_json::json!({"topic": k, "description": d}))
                 .collect();
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!(topics));
             } else {
                 println!("Available topics:\n");
@@ -184,14 +184,14 @@ pub(super) fn handle_explain(topic: Option<&str>, output: &str) -> Result<()> {
 pub(super) async fn handle_utils(
     cmd: crate::cli::UtilsCommands,
     network: &crate::types::Network,
-    output: &str,
+    output: OutputFormat,
 ) -> Result<()> {
     use crate::cli::UtilsCommands;
     match cmd {
         UtilsCommands::Convert { amount, to_rao } => {
             if to_rao {
                 let rao = (amount * 1e9) as u64;
-                if output == "json" {
+                if output.is_json() {
                     print_json(&serde_json::json!({
                         "tao": amount,
                         "rao": rao,
@@ -201,7 +201,7 @@ pub(super) async fn handle_utils(
                 }
             } else {
                 let tao = amount / 1e9;
-                if output == "json" {
+                if output.is_json() {
                     print_json(&serde_json::json!({
                         "rao": amount as u64,
                         "tao": tao,
@@ -280,8 +280,8 @@ pub(super) async fn handle_utils(
                             println!("  Connect: {}ms, pings: all {} failed\n", connect_ms, pings);
                         } else {
                             let avg = latencies.iter().sum::<u128>() / latencies.len() as u128;
-                            let min = *latencies.iter().min().unwrap();
-                            let max = *latencies.iter().max().unwrap();
+                            let min = latencies.iter().copied().min().unwrap_or_default();
+                            let max = latencies.iter().copied().max().unwrap_or_default();
                             results.push(EndpointResult {
                                 label: label.clone(),
                                 url: url.clone(),
@@ -291,7 +291,7 @@ pub(super) async fn handle_utils(
                                 max_ms: Some(max),
                                 failures,
                             });
-                            if output != "json" {
+                            if !output.is_json() {
                                 println!("{:<12} {}", label, url);
                                 let fail_note = if failures > 0 { format!(" ({} failed)", failures) } else { String::new() };
                                 println!(
@@ -311,7 +311,7 @@ pub(super) async fn handle_utils(
                             max_ms: None,
                             failures: pings as u32,
                         });
-                        if output != "json" {
+                        if !output.is_json() {
                             println!("{:<12} {}", label, url);
                             println!("  FAILED to connect: {}\n", e);
                         }
@@ -319,7 +319,7 @@ pub(super) async fn handle_utils(
                 }
             }
 
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({"latency": results}));
             }
 
@@ -356,7 +356,7 @@ pub(super) async fn handle_batch(
     pair: &sp_core::sr25519::Pair,
     file_path: &str,
     no_atomic: bool,
-    output: &str,
+    output: OutputFormat,
 ) -> Result<()> {
     let content = std::fs::read_to_string(file_path)
         .map_err(|e| anyhow::anyhow!("Failed to read batch file '{}': {}", file_path, e))?;
@@ -440,7 +440,7 @@ pub(super) async fn handle_doctor(
     network: &crate::types::Network,
     wallet_dir: &str,
     wallet_name: &str,
-    output: &str,
+    output: OutputFormat,
 ) -> Result<()> {
     use std::time::Instant;
 
@@ -506,8 +506,8 @@ pub(super) async fn handle_doctor(
             checks.push(("Latency (3 pings)", format!("FAILED: all {} RPC calls failed", rpc_failures), false));
         } else {
             let avg: u128 = latencies.iter().sum::<u128>() / latencies.len() as u128;
-            let min = latencies.iter().min().unwrap_or(&0);
-            let max = latencies.iter().max().unwrap_or(&0);
+            let min = latencies.iter().min().copied().unwrap_or_default();
+            let max = latencies.iter().max().copied().unwrap_or_default();
             let fail_note = if rpc_failures > 0 { format!("  ({} failed)", rpc_failures) } else { String::new() };
             checks.push(("Latency (3 pings)", format!("avg {avg}ms  min {min}ms  max {max}ms{fail_note}"), rpc_failures == 0));
         }
@@ -532,7 +532,7 @@ pub(super) async fn handle_doctor(
     }
 
     // Output
-    if output == "json" {
+    if output.is_json() {
         let items: Vec<serde_json::Value> = checks
             .iter()
             .map(|(name, detail, ok)| {

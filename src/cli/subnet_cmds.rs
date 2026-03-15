@@ -146,7 +146,7 @@ pub(super) async fn handle_subnet(
                         .map(|d| d.total_emission())
                         .unwrap_or(s.emission_value);
                     s.emission_value = emission_rao;
-                    if output == "json" {
+                    if output.is_json() {
                         print_json_ser(&s);
                     } else {
                         println!("Subnet {} ({})", s.netuid, s.name);
@@ -183,7 +183,7 @@ pub(super) async fn handle_subnet(
             let params = client.get_subnet_hyperparams(NetUid(netuid)).await?;
             match params {
                 Some(h) => {
-                    if output == "json" {
+                    if output.is_json() {
                         print_json_ser(&h);
                         return Ok(());
                     }
@@ -280,7 +280,7 @@ pub(super) async fn handle_subnet(
                 };
                 match neuron {
                     Some(n) => {
-                        if output == "json" {
+                        if output.is_json() {
                             print_json_ser(&n);
                         } else {
                             println!("Neuron UID {} on SN{}", target_uid, netuid);
@@ -312,7 +312,7 @@ pub(super) async fn handle_subnet(
                         }
                     }
                     None => {
-                        if output == "json" {
+                        if output.is_json() {
                             print_json(
                                 &serde_json::json!({"error": format!("UID {} not found on SN{}", target_uid, netuid)}),
                             );
@@ -582,7 +582,7 @@ pub(super) async fn handle_subnet(
             };
             match mg {
                 Some(mg) => {
-                    if output == "json" {
+                    if output.is_json() {
                         print_json_ser(&mg);
                     } else {
                         let n_count = mg.neurons.len();
@@ -622,7 +622,7 @@ pub(super) async fn handle_subnet(
                     } else {
                         format!("No cached snapshots for SN{}", netuid)
                     };
-                    if output == "json" {
+                    if output.is_json() {
                         print_json(&serde_json::json!({"error": msg}));
                     } else {
                         println!("{}", msg);
@@ -635,14 +635,14 @@ pub(super) async fn handle_subnet(
         SubnetCommands::CacheList { netuid } => {
             let blocks = crate::queries::cache::list_cached_blocks(netuid)?;
             if blocks.is_empty() {
-                if output == "json" {
+                if output.is_json() {
                     print_json(&serde_json::json!({"netuid": netuid, "snapshots": []}));
                 } else {
                     println!("No cached snapshots for SN{}", netuid);
                     println!("  Tip: run `agcli subnet metagraph --netuid {} --save` to create one", netuid);
                 }
             } else {
-                if output == "json" {
+                if output.is_json() {
                     print_json(&serde_json::json!({"netuid": netuid, "snapshots": blocks}));
                 } else {
                     println!("Cached snapshots for SN{} ({} total):", netuid, blocks.len());
@@ -681,7 +681,7 @@ pub(super) async fn handle_subnet(
             };
 
             let deltas = crate::queries::cache::diff(&from_mg, &to_mg);
-            if output == "json" {
+            if output.is_json() {
                 print_json_ser(&deltas);
             } else {
                 println!(
@@ -703,7 +703,7 @@ pub(super) async fn handle_subnet(
         }
         SubnetCommands::CachePrune { netuid, keep } => {
             let removed = crate::queries::cache::prune(netuid, keep)?;
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({"netuid": netuid, "removed": removed, "kept": keep}));
             } else {
                 println!("Pruned {} old snapshots for SN{} (kept {})", removed, netuid, keep);
@@ -731,10 +731,7 @@ pub(super) async fn handle_subnet(
                 netuid,
                 &param,
                 value.as_deref(),
-                wallet_dir,
-                wallet_name,
-                output,
-                password,
+                ctx,
             )
             .await
         }
@@ -802,7 +799,7 @@ pub(super) async fn handle_subnet(
             let hyperparams = client.get_subnet_hyperparams(nuid).await?;
             let neurons = client.get_neurons_lite(nuid).await?;
             let n_neurons = neurons.len();
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({
                     "netuid": netuid,
                     "active": is_active,
@@ -839,7 +836,7 @@ pub(super) async fn handle_subnet(
         SubnetCommands::MechanismCount { netuid } => {
             let nuid = NetUid(netuid);
             let count = client.get_mechanism_count(nuid).await?;
-            if output == "json" {
+            if output.is_json() {
                 print_json(&serde_json::json!({"netuid": netuid, "mechanism_count": count}));
             } else {
                 println!("SN{} mechanism count: {}", netuid, count);
@@ -1015,7 +1012,7 @@ async fn handle_subnet_watch(client: &Client, netuid: u16, interval: u64) -> Res
 
 // ──────── Subnet Liquidity ────────
 
-async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u16>) -> Result<()> {
+async fn handle_subnet_liquidity(client: &Client, output: OutputFormat, netuid: Option<u16>) -> Result<()> {
     let dynamic: Vec<crate::types::chain_data::DynamicInfo> = match netuid {
         Some(n) => match client.get_dynamic_info(NetUid(n)).await? {
             Some(d) => vec![d],
@@ -1027,7 +1024,7 @@ async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u
     // Common trade sizes for slippage estimation
     let trade_sizes_tao: &[f64] = &[0.1, 1.0, 10.0, 100.0];
 
-    if output == "json" {
+    if output.is_json() {
         let mut results = Vec::new();
         for d in &dynamic {
             if d.tao_in.rao() == 0 {
@@ -1063,7 +1060,7 @@ async fn handle_subnet_liquidity(client: &Client, output: &str, netuid: Option<u
     sorted.sort_by(|a, b| b.tao_in.rao().cmp(&a.tao_in.rao()));
 
     render_rows(
-        "table",
+        OutputFormat::Table,
         &sorted,
         "",
         |_| String::new(),
@@ -1345,7 +1342,7 @@ async fn handle_subnet_monitor(
 
 // ──────── Subnet Health ────────
 
-async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Result<()> {
+async fn handle_subnet_health(client: &Client, netuid: u16, output: OutputFormat) -> Result<()> {
     let nuid = NetUid(netuid);
     let (neurons, dynamic, hyperparams, block) = tokio::try_join!(
         client.get_neurons_lite(nuid),
@@ -1364,7 +1361,7 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
         .filter(|n| block.saturating_sub(n.last_update) > 1000)
         .count();
 
-    if output == "json" {
+    if output.is_json() {
         let neuron_json: Vec<serde_json::Value> = neurons
             .iter()
             .map(|n| {
@@ -1425,7 +1422,7 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
     }
 
     render_rows(
-        "table",
+        OutputFormat::Table,
         &neurons,
         "",
         |_| String::new(),
@@ -1462,7 +1459,7 @@ async fn handle_subnet_health(client: &Client, netuid: u16, output: &str) -> Res
 
 // ──────── Subnet Emissions ────────
 
-async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> Result<()> {
+async fn handle_subnet_emissions(client: &Client, netuid: u16, output: OutputFormat) -> Result<()> {
     let nuid = NetUid(netuid);
     let (neurons, dynamic) = tokio::try_join!(client.get_neurons_lite(nuid), async {
         Ok::<_, anyhow::Error>(match client.get_dynamic_info(nuid).await {
@@ -1486,7 +1483,7 @@ async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> 
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    if output == "json" {
+    if output.is_json() {
         let entries: Vec<serde_json::Value> = sorted
             .iter()
             .map(|n| {
@@ -1522,7 +1519,7 @@ async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> 
 
     let top: Vec<_> = sorted.into_iter().take(50).collect();
     render_rows(
-        "table",
+        OutputFormat::Table,
         &top,
         "",
         |_| String::new(),
@@ -1557,7 +1554,7 @@ async fn handle_subnet_emissions(client: &Client, netuid: u16, output: &str) -> 
 
 // ──────── Subnet Cost ────────
 
-async fn handle_subnet_cost(client: &Client, netuid: u16, output: &str) -> Result<()> {
+async fn handle_subnet_cost(client: &Client, netuid: u16, output: OutputFormat) -> Result<()> {
     let nuid = NetUid(netuid);
     let (info, hyperparams, dynamic) = tokio::try_join!(
         client.get_subnet_info(nuid),
@@ -1580,7 +1577,7 @@ async fn handle_subnet_cost(client: &Client, netuid: u16, output: &str) -> Resul
     let n = info.as_ref().map(|i| i.n).unwrap_or(0);
     let max_n = info.as_ref().map(|i| i.max_n).unwrap_or(0);
 
-    if output == "json" {
+    if output.is_json() {
         print_json(&serde_json::json!({
             "netuid": netuid,
             "burn_rao": burn.rao(),
@@ -1642,7 +1639,7 @@ async fn handle_subnet_probe(
     uids_filter: Option<String>,
     timeout_ms: u64,
     concurrency: usize,
-    output: &str,
+    output: OutputFormat,
 ) -> Result<()> {
     use futures::stream::{self, StreamExt};
     use std::time::Instant;
@@ -1663,7 +1660,7 @@ async fn handle_subnet_probe(
         .collect();
 
     if target_uids.is_empty() {
-        if output == "json" {
+        if output.is_json() {
             print_json(&serde_json::json!({"error": "No neurons to probe", "netuid": netuid}));
         } else {
             println!("No neurons to probe on SN{}", netuid);
@@ -1696,7 +1693,7 @@ async fn handle_subnet_probe(
         })
         .collect();
 
-    if output != "json" {
+    if !output.is_json() {
         println!(
             "Probing {} axon endpoints on SN{} ({} total neurons, {}ms timeout, {} concurrent)...\n",
             probeable.len(),
@@ -1810,7 +1807,7 @@ async fn handle_subnet_commits(
     client: &Client,
     netuid: u16,
     hotkey: Option<String>,
-    output: &str,
+    output: OutputFormat,
 ) -> Result<()> {
     let nuid = NetUid(netuid);
 
@@ -1826,7 +1823,7 @@ async fn handle_subnet_commits(
         .unwrap_or(false);
 
     if !cr_enabled {
-        if output == "json" {
+        if output.is_json() {
             print_json(&serde_json::json!({
                 "netuid": netuid,
                 "commit_reveal_enabled": false,
@@ -1899,7 +1896,7 @@ async fn handle_subnet_commits(
             .then(a.first_reveal.cmp(&b.first_reveal))
     });
 
-    if output == "json" {
+    if output.is_json() {
         print_json(&serde_json::json!({
             "netuid": netuid,
             "block": block,
@@ -2066,20 +2063,20 @@ fn current_param_value(h: &crate::types::chain_data::SubnetHyperparameters, name
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn handle_subnet_set_param(
     client: &Client,
     netuid: u16,
     param: &str,
     value: Option<&str>,
-    wallet_dir: &str,
-    wallet_name: &str,
-    output: &str,
-    password: Option<&str>,
+    ctx: &Ctx<'_>,
 ) -> Result<()> {
+    let output = ctx.output;
+    let wallet_dir = ctx.wallet_dir;
+    let wallet_name = ctx.wallet_name;
+    let password = ctx.password;
     // List mode
     if param == "list" || param == "help" {
-        if output == "json" {
+        if output.is_json() {
             let params: Vec<serde_json::Value> = SUBNET_PARAMS
                 .iter()
                 .map(|p| {

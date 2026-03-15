@@ -1,5 +1,6 @@
 //! Wallet command handlers.
 
+use crate::cli::OutputFormat;
 use crate::cli::WalletCommands;
 use crate::wallet::Wallet;
 use anyhow::Result;
@@ -10,7 +11,7 @@ pub async fn handle_wallet(
     wallet_dir: &str,
     wallet_name: &str,
     global_password: Option<&str>,
-    output: &str,
+    output: OutputFormat,
 ) -> Result<()> {
     match cmd {
         WalletCommands::Create {
@@ -20,7 +21,7 @@ pub async fn handle_wallet(
             let password =
                 crate::cli::helpers::require_password(cmd_password, global_password, true)?;
             let wallet = Wallet::create(wallet_dir, &name, &password, "default")?;
-            if output == "json" {
+            if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
                     "name": name,
                     "coldkey": wallet.coldkey_ss58().unwrap_or(""),
@@ -53,13 +54,13 @@ pub async fn handle_wallet(
                     (name.clone(), addr)
                 })
                 .collect();
-            if output == "json" {
+            if output.is_json() {
                 let items: Vec<serde_json::Value> = entries
                     .iter()
                     .map(|(n, a)| serde_json::json!({"name": n, "coldkey": a}))
                     .collect();
                 crate::cli::helpers::print_json(&serde_json::json!(items));
-            } else if output == "csv" {
+            } else if output.is_csv() {
                 println!("name,coldkey");
                 for (name, addr) in &entries {
                     println!("{},{}", crate::cli::helpers::csv_escape(name), addr);
@@ -120,7 +121,7 @@ pub async fn handle_wallet(
                     });
                 }
             }
-            if output == "json" {
+            if output.is_json() {
                 let items: Vec<serde_json::Value> = entries
                     .iter()
                     .map(|e| {
@@ -136,7 +137,7 @@ pub async fn handle_wallet(
                     })
                     .collect();
                 crate::cli::helpers::print_json(&serde_json::json!(items));
-            } else if output == "csv" {
+            } else if output.is_csv() {
                 if all {
                     println!("wallet,coldkey,hotkey_name,hotkey_address");
                     for e in &entries {
@@ -176,7 +177,7 @@ pub async fn handle_wallet(
             let password =
                 crate::cli::helpers::require_password(cmd_password, global_password, true)?;
             let wallet = Wallet::import_from_mnemonic(wallet_dir, &name, &mnemonic, &password)?;
-            if output == "json" {
+            if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
                     "name": name,
                     "coldkey": wallet.coldkey_ss58().unwrap_or(""),
@@ -197,7 +198,7 @@ pub async fn handle_wallet(
             let password =
                 crate::cli::helpers::require_password(cmd_password, global_password, true)?;
             let wallet = Wallet::import_from_mnemonic(wallet_dir, "default", &mnemonic, &password)?;
-            if output == "json" {
+            if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
                     "coldkey": wallet.coldkey_ss58().unwrap_or(""),
                 }));
@@ -224,7 +225,7 @@ pub async fn handle_wallet(
                 std::fs::create_dir_all(parent)?;
             }
             crate::wallet::keyfile::write_keyfile(&hotkey_path, &mnemonic)?;
-            if output == "json" {
+            if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
                     "name": name,
                     "hotkey": ss58,
@@ -245,7 +246,7 @@ pub async fn handle_wallet(
                 std::fs::create_dir_all(parent)?;
             }
             crate::wallet::keyfile::write_keyfile(&hotkey_path, &mnemonic)?;
-            if output == "json" {
+            if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
                     "name": name,
                     "hotkey": ss58,

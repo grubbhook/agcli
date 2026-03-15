@@ -13,7 +13,29 @@ mod system_cmds;
 mod weights_cmds;
 
 use crate::types::network::Network;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+/// Output format for command results.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputFormat {
+    Table,
+    Json,
+    Csv,
+}
+
+impl OutputFormat {
+    /// True if JSON output was requested.
+    #[inline]
+    pub fn is_json(self) -> bool {
+        self == Self::Json
+    }
+
+    /// True if CSV output was requested.
+    #[inline]
+    pub fn is_csv(self) -> bool {
+        self == Self::Csv
+    }
+}
 
 /// agcli — Rust CLI for the Bittensor network
 #[derive(Parser, Debug)]
@@ -40,8 +62,8 @@ pub struct Cli {
     pub hotkey: String,
 
     /// Output format
-    #[arg(long, default_value = "table", value_parser = ["table", "json", "csv"])]
-    pub output: String,
+    #[arg(long, default_value = "table", value_enum)]
+    pub output: OutputFormat,
 
     /// Enable live polling mode (interval in seconds, default 12)
     #[arg(long)]
@@ -1574,9 +1596,13 @@ impl Cli {
                 self.hotkey = h.clone();
             }
         }
-        if self.output == "table" {
+        if self.output == OutputFormat::Table {
             if let Some(ref o) = cfg.output {
-                self.output = o.clone();
+                match o.as_str() {
+                    "json" => self.output = OutputFormat::Json,
+                    "csv" => self.output = OutputFormat::Csv,
+                    _ => {} // keep Table for unknown values
+                }
             }
         }
         if self.proxy.is_none() {

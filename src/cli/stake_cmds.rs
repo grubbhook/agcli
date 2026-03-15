@@ -2,7 +2,7 @@
 
 use crate::chain::Client;
 use crate::cli::helpers::*;
-use crate::cli::StakeCommands;
+use crate::cli::{OutputFormat, StakeCommands};
 use crate::types::{Balance, NetUid};
 use anyhow::Result;
 
@@ -23,7 +23,7 @@ pub async fn handle_stake(
                 let stakes = client
                     .get_stake_for_coldkey_at_block(&addr, block_hash)
                     .await?;
-                if output == "json" {
+                if output.is_json() {
                     print_json(&serde_json::json!({
                         "address": addr,
                         "block": block_num,
@@ -43,7 +43,7 @@ pub async fn handle_stake(
                     );
                 } else {
                     render_rows(
-                        "table",
+                        OutputFormat::Table,
                         &stakes,
                         "",
                         |_| String::new(),
@@ -67,7 +67,7 @@ pub async fn handle_stake(
             }
 
             let stakes = client.get_stake_for_coldkey(&addr).await?;
-            if stakes.is_empty() && output != "json" && output != "csv" {
+            if stakes.is_empty() && !output.is_json() && !output.is_csv() {
                 println!("No stakes found for {}", crate::utils::short_ss58(&addr));
             } else {
                 render_rows(
@@ -556,18 +556,7 @@ pub async fn handle_stake(
             amount,
             hotkey,
         } => {
-            staking_wizard(
-                client,
-                wallet_dir,
-                wallet_name,
-                hotkey_name,
-                password,
-                ctx.yes,
-                netuid,
-                amount,
-                hotkey,
-            )
-            .await
+            staking_wizard(client, ctx, netuid, amount, hotkey).await
         }
     }
 }
@@ -635,18 +624,15 @@ async fn check_slippage(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn staking_wizard(
     client: &Client,
-    wallet_dir: &str,
-    wallet_name: &str,
-    hotkey_name: &str,
-    password: Option<&str>,
-    yes: bool,
+    ctx: &Ctx<'_>,
     netuid_arg: Option<u16>,
     amount_arg: Option<f64>,
     hotkey_arg: Option<String>,
 ) -> Result<()> {
+    let (wallet_dir, wallet_name, hotkey_name, password, yes) =
+        (ctx.wallet_dir, ctx.wallet_name, ctx.hotkey_name, ctx.password, ctx.yes);
     println!("=== Staking Wizard ===\n");
 
     let mut wallet = open_wallet(wallet_dir, wallet_name)?;

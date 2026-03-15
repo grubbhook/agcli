@@ -39,13 +39,31 @@ where
     F: Fn() -> Fut,
     Fut: std::future::Future<Output = Result<T>>,
 {
+    let start = std::time::Instant::now();
     let mut last_err = None;
     for attempt in 0..=max_retries {
         match f().await {
-            Ok(val) => return Ok(val),
+            Ok(val) => {
+                let elapsed = start.elapsed();
+                tracing::debug!(
+                    elapsed_ms = elapsed.as_millis() as u64,
+                    attempts = attempt + 1,
+                    label,
+                    "RPC query succeeded"
+                );
+                return Ok(val);
+            }
             Err(e) => {
                 let msg = format!("{:#}", e);
                 if !is_transient_error(&msg) || attempt == max_retries {
+                    let elapsed = start.elapsed();
+                    tracing::debug!(
+                        elapsed_ms = elapsed.as_millis() as u64,
+                        attempts = attempt + 1,
+                        label,
+                        error = %msg,
+                        "RPC query failed"
+                    );
                     return Err(e);
                 }
                 let delay = std::time::Duration::from_millis(500 * (1 << attempt));

@@ -1,6 +1,7 @@
 //! CLI parsing and non-interactive flag tests.
 //! Run with: cargo test --test cli_test
 
+use agcli::cli::OutputFormat;
 use clap::Parser;
 
 /// Verify that --yes flag is parsed globally.
@@ -88,7 +89,7 @@ fn default_network_is_finney() {
 fn parse_output_json() {
     let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "balance"]);
     assert!(cli.is_ok());
-    assert_eq!(cli.unwrap().output, "json");
+    assert_eq!(cli.unwrap().output, OutputFormat::Json);
 }
 
 /// Verify --output csv is accepted.
@@ -96,7 +97,7 @@ fn parse_output_json() {
 fn parse_output_csv() {
     let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "csv", "balance"]);
     assert!(cli.is_ok());
-    assert_eq!(cli.unwrap().output, "csv");
+    assert_eq!(cli.unwrap().output, OutputFormat::Csv);
 }
 
 /// Invalid output format is rejected.
@@ -365,7 +366,7 @@ fn parse_global_pretty_flag() {
     assert!(cli.is_ok());
     let cli = cli.unwrap();
     assert!(cli.pretty);
-    assert_eq!(cli.output, "json");
+    assert_eq!(cli.output, OutputFormat::Json);
 }
 
 /// Verify wallet sign parses.
@@ -507,7 +508,7 @@ fn parse_wallet_list_csv() {
         "should parse wallet list --output csv: {:?}",
         cli.err()
     );
-    assert_eq!(cli.unwrap().output, "csv");
+    assert_eq!(cli.unwrap().output, OutputFormat::Csv);
 }
 
 /// Verify wallet show --all with --output csv parses.
@@ -521,7 +522,7 @@ fn parse_wallet_show_all_csv() {
         cli.err()
     );
     let cli = cli.unwrap();
-    assert_eq!(cli.output, "csv");
+    assert_eq!(cli.output, OutputFormat::Csv);
 }
 
 /// Verify wallet show --all with --output json parses.
@@ -534,7 +535,7 @@ fn parse_wallet_show_all_json() {
         "should parse wallet show --all --output json: {:?}",
         cli.err()
     );
-    assert_eq!(cli.unwrap().output, "json");
+    assert_eq!(cli.unwrap().output, OutputFormat::Json);
 }
 
 /// Verify explain without topic parses (lists all topics).
@@ -565,7 +566,7 @@ fn parse_explain_json() {
         "should parse explain --output json: {:?}",
         cli.err()
     );
-    assert_eq!(cli.unwrap().output, "json");
+    assert_eq!(cli.unwrap().output, OutputFormat::Json);
 }
 
 /// Verify subnet liquidity without netuid parses (all subnets).
@@ -639,7 +640,7 @@ fn parse_stake_list_csv() {
         "should parse stake list --output csv: {:?}",
         cli.err()
     );
-    assert_eq!(cli.unwrap().output, "csv");
+    assert_eq!(cli.unwrap().output, OutputFormat::Csv);
 }
 
 /// Verify view portfolio with --output json parses.
@@ -651,7 +652,7 @@ fn parse_view_portfolio_json() {
         "should parse view portfolio --output json: {:?}",
         cli.err()
     );
-    assert_eq!(cli.unwrap().output, "json");
+    assert_eq!(cli.unwrap().output, OutputFormat::Json);
 }
 
 /// Verify view account parses.
@@ -700,7 +701,7 @@ fn parse_all_global_flags_combined() {
         cli.err()
     );
     let cli = cli.unwrap();
-    assert_eq!(cli.output, "json");
+    assert_eq!(cli.output, OutputFormat::Json);
     assert!(cli.pretty);
     assert!(cli.yes);
     assert!(cli.batch);
@@ -1833,7 +1834,7 @@ fn parse_audit_with_json_output_checks_fields() {
     ]);
     assert!(cli.is_ok());
     let parsed = cli.unwrap();
-    assert_eq!(parsed.output, "json");
+    assert_eq!(parsed.output, OutputFormat::Json);
     if let agcli::cli::Commands::Audit { address } = &parsed.command {
         assert_eq!(
             address.as_deref(),
@@ -2154,7 +2155,7 @@ fn parse_diff_with_json_output() {
     ]);
     assert!(cli.is_ok());
     let cli = cli.unwrap();
-    assert_eq!(cli.output, "json");
+    assert_eq!(cli.output, OutputFormat::Json);
 }
 
 #[test]
