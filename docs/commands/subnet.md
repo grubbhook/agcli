@@ -40,13 +40,6 @@ agcli subnet metagraph --netuid 1 [--uid 0] [--at-block N] [--full] [--save]
 # CSV: uid,hotkey,coldkey,stake,trust,consensus,incentive,dividends,emission
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--uid` | Show only one neuron (returns JSON object) |
-| `--full` | Include axon/prometheus endpoint info |
-| `--save` | Cache snapshot to disk (~/.agcli/metagraph/) |
-| `--at-block` | Historical query (use `--network archive`) |
-
 ### subnet cache-load / cache-list / cache-diff / cache-prune
 Manage cached metagraph snapshots for offline comparison.
 

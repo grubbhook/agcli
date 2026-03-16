@@ -1252,6 +1252,40 @@ impl Client {
         self.sign_submit(&tx, pair).await
     }
 
+    // ──────── Commitments ────────
+
+    /// Set commitment data on a subnet (miners use this to publish endpoints).
+    pub async fn set_commitment(
+        &self,
+        pair: &sr25519::Pair,
+        netuid: u16,
+        data: &str,
+    ) -> Result<String> {
+        use subxt::dynamic::Value;
+        // Build the Data fields — each comma-separated entry becomes a Raw field.
+        // The commitment pallet uses the same Data enum as identity (Raw0..Raw128).
+        // We encode each field as a named variant "RawN" with the byte array.
+        let fields: Vec<Value> = data
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                let bytes = s.as_bytes();
+                let len = bytes.len().min(128);
+                let variant_name = format!("Raw{}", len);
+                Value::unnamed_variant(variant_name, [Value::from_bytes(&bytes[..len])])
+            })
+            .collect();
+        let info = Value::named_composite([("fields", Value::unnamed_composite(fields))]);
+        self.submit_raw_call(
+            pair,
+            "Commitments",
+            "set_commitment",
+            vec![Value::u128(netuid as u128), info],
+        )
+        .await
+    }
+
     // ──────── Multisig ────────
 
     /// Submit a multisig call (propose via approve_as_multi).

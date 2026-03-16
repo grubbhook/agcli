@@ -11,12 +11,6 @@ Add a proxy delegate.
 agcli proxy add --delegate SS58 [--proxy-type staking] [--delay 0]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--delegate` | SS58 address to grant proxy access |
-| `--proxy-type` | Restrict to: any, owner, staking, non_transfer, non_critical, governance, senate |
-| `--delay` | Announcement delay in blocks (0 = instant) |
-
 **On-chain**: `Proxy::add_proxy(origin, delegate, proxy_type, delay)`
 
 ### proxy remove

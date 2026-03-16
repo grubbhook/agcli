@@ -245,6 +245,11 @@ pub enum Commands {
     #[command(subcommand)]
     Config(ConfigCommands),
 
+    // ──── Commitment ────
+    /// Miner commitment operations (set/get/list endpoint data)
+    #[command(subcommand)]
+    Commitment(CommitmentCommands),
+
     // ──── Completions ────
     /// Generate shell completions (bash, zsh, fish, powershell)
     Completions {
@@ -306,6 +311,34 @@ pub enum Commands {
         /// Use batch (fail-safe, continues on error) instead of batch_all (atomic)
         #[arg(long)]
         no_atomic: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CommitmentCommands {
+    /// Set commitment data for a miner on a subnet (publishes endpoint info)
+    Set {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Commitment data as key:value pairs (e.g., "endpoint:http://...,version:1.0")
+        #[arg(long)]
+        data: String,
+    },
+    /// Get commitment for a specific hotkey on a subnet
+    Get {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Hotkey SS58 address
+        #[arg(long)]
+        hotkey: String,
+    },
+    /// List all commitments on a subnet
+    List {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
     },
 }
 
@@ -929,7 +962,9 @@ pub enum WeightCommands {
         /// Subnet UID
         #[arg(long)]
         netuid: u16,
-        /// Weights as "uid:weight" pairs, comma-separated
+        /// Weights as "uid:weight" pairs, comma-separated.
+        /// Use "-" to read from stdin, or "@path" to read from a JSON file.
+        /// JSON format: [{"uid": 0, "weight": 100}, ...] or {"0": 100, "1": 200}
         #[arg(long)]
         weights: String,
         /// Version key
@@ -966,6 +1001,18 @@ pub enum WeightCommands {
         #[arg(long, default_value = "0")]
         version_key: u64,
     },
+    /// Show on-chain weights set by validators on a subnet
+    Show {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Show only weights set by this hotkey
+        #[arg(long)]
+        hotkey: Option<String>,
+        /// Limit output to top N validators
+        #[arg(long)]
+        limit: Option<usize>,
+    },
     /// Check commit status for your hotkey on a subnet
     Status {
         /// Subnet UID
@@ -977,7 +1024,9 @@ pub enum WeightCommands {
         /// Subnet UID
         #[arg(long)]
         netuid: u16,
-        /// Weights as "uid:weight" pairs, comma-separated
+        /// Weights as "uid:weight" pairs, comma-separated.
+        /// Use "-" to read from stdin, or "@path" to read from a JSON file.
+        /// JSON format: [{"uid": 0, "weight": 100}, ...] or {"0": 100, "1": 200}
         #[arg(long)]
         weights: String,
         /// Version key
@@ -1126,6 +1175,51 @@ pub enum ViewCommands {
         #[arg(long)]
         hotkey: String,
     },
+    /// Show metagraph with optional diff against a previous block
+    Metagraph {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Compare against this block number (shows only changed neurons)
+        #[arg(long)]
+        since_block: Option<u32>,
+        /// Show only the top N neurons by emission
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Look up axon endpoint for a specific UID or hotkey
+    Axon {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Neuron UID
+        #[arg(long)]
+        uid: Option<u16>,
+        /// Hotkey SS58 address
+        #[arg(long)]
+        hotkey: Option<String>,
+    },
+    /// Subnet health: neuron count, active %, axon reachability
+    Health {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// TCP-probe each axon to check reachability (slower but thorough)
+        #[arg(long)]
+        tcp_check: bool,
+        /// Timeout per TCP probe in milliseconds
+        #[arg(long, default_value = "2000")]
+        probe_timeout_ms: u64,
+    },
+    /// Per-UID emission breakdown for a subnet
+    Emissions {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Show only top N UIDs by emission
+        #[arg(long)]
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1193,6 +1287,13 @@ pub enum ServeCommands {
         /// Subnet UID
         #[arg(long)]
         netuid: u16,
+    },
+    /// Batch update axon endpoints from a JSON file
+    BatchAxon {
+        /// Path to JSON file with axon updates.
+        /// Format: [{"netuid": 1, "ip": "1.2.3.4", "port": 8091, "protocol": 4, "version": 0}, ...]
+        #[arg(long)]
+        file: String,
     },
 }
 
@@ -1529,18 +1630,39 @@ pub enum DiffCommands {
         #[arg(long)]
         block2: u32,
     },
+    /// Compare metagraph neurons between two blocks (shows changed neurons only)
+    Metagraph {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// First block number
+        #[arg(long)]
+        block1: u32,
+        /// Second block number
+        #[arg(long)]
+        block2: u32,
+    },
 }
 
 #[derive(Subcommand, Debug)]
 pub enum UtilsCommands {
-    /// Convert between TAO and RAO
+    /// Convert between TAO/RAO, or TAO/Alpha (requires --netuid for Alpha)
     Convert {
         /// Amount to convert
         #[arg(long)]
-        amount: f64,
+        amount: Option<f64>,
         /// Convert from TAO to RAO (default: RAO to TAO)
         #[arg(long)]
         to_rao: bool,
+        /// TAO amount to convert to Alpha (fetches current price)
+        #[arg(long)]
+        tao: Option<f64>,
+        /// Alpha amount to convert to TAO (fetches current price)
+        #[arg(long)]
+        alpha: Option<f64>,
+        /// Subnet UID (required for TAO↔Alpha conversion)
+        #[arg(long)]
+        netuid: Option<u16>,
     },
     /// Benchmark latency to network endpoints
     Latency {

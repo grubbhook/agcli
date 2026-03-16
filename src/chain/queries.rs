@@ -1126,6 +1126,46 @@ impl Client {
         results.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by amount descending
         Ok(results)
     }
+
+    // ──────── Weight Reads ────────
+
+    /// Read the on-chain weights set by a specific UID on a subnet.
+    /// Returns Vec<(target_uid, weight_value)>.
+    pub async fn get_weights_for_uid(&self, netuid: NetUid, uid: u16) -> Result<Vec<(u16, u16)>> {
+        let addr = api::storage().subtensor_module().weights(netuid.0, uid);
+        let val = self
+            .inner
+            .storage()
+            .at_latest()
+            .await?
+            .fetch(&addr)
+            .await
+            .with_context(|| {
+                format!("Failed to fetch weights for UID {} on SN{}", uid, netuid.0)
+            })?;
+        Ok(val.unwrap_or_default())
+    }
+
+    /// Read all on-chain weights for a subnet (all UIDs).
+    /// Returns Vec<(setting_uid, Vec<(target_uid, weight)>)>.
+    pub async fn get_all_weights(&self, netuid: NetUid) -> Result<Vec<(u16, Vec<(u16, u16)>)>> {
+        let addr = api::storage().subtensor_module().weights_iter1(netuid.0);
+        let mut results = Vec::new();
+        let mut iter = self.inner.storage().at_latest().await?.iter(addr).await?;
+        while let Some(Ok(kv)) = iter.next().await {
+            // Extract UID from the storage key (last 2 bytes before key suffix)
+            let key_bytes = &kv.key_bytes;
+            if key_bytes.len() >= 2 {
+                let uid_bytes: [u8; 2] = key_bytes[key_bytes.len() - 2..]
+                    .try_into()
+                    .unwrap_or([0u8; 2]);
+                let uid = u16::from_le_bytes(uid_bytes);
+                results.push((uid, kv.value));
+            }
+        }
+        results.sort_by_key(|(uid, _)| *uid);
+        Ok(results)
+    }
 }
 
 /// Convert a Registry pallet `IdentityInfo` into our `ChainIdentity` struct.
@@ -1149,8 +1189,119 @@ fn chain_identity_from_registration(
     }
 }
 
-/// Decode the Registry pallet `Data` enum to a string.
-/// Uses a macro to collapse the 33 Raw variants into a single pattern.
+// ──────── Commitments ────────
+
+impl Client {
+    /// Get commitment for a specific hotkey on a subnet.
+    /// Returns (block_number, decoded_fields) or None.
+    pub async fn get_commitment(
+        &self,
+        netuid: u16,
+        hotkey_ss58: &str,
+    ) -> Result<Option<(u32, Vec<String>)>> {
+        let account_id = Self::ss58_to_account_id(hotkey_ss58)?;
+        let addr = api::storage()
+            .commitments()
+            .commitment_of(netuid, &account_id);
+        let inner = &self.inner;
+        let result = retry_on_transient("get_commitment", RPC_RETRIES, || async {
+            inner
+                .storage()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for commitment query")?
+                .fetch(&addr)
+                .await
+                .context("Failed to query commitment")
+        })
+        .await?;
+
+        Ok(result.map(|reg| {
+            let block = reg.block;
+            let fields: Vec<String> = reg
+                .info
+                .fields
+                .0
+                .iter()
+                .map(decode_commitment_data)
+                .collect();
+            (block, fields)
+        }))
+    }
+
+    /// List all commitments on a subnet.
+    /// Returns Vec<(ss58, block, fields)>.
+    pub async fn get_all_commitments(
+        &self,
+        netuid: u16,
+    ) -> Result<Vec<(String, u32, Vec<String>)>> {
+        let addr = api::storage().commitments().commitment_of_iter1(netuid);
+        let inner = &self.inner;
+        let mut entries = retry_on_transient("get_all_commitments", RPC_RETRIES, || async {
+            let stream = inner
+                .storage()
+                .at_latest()
+                .await
+                .context("Failed to get latest block for commitment list")?
+                .iter(addr.clone())
+                .await
+                .context("Failed to iterate commitments")?;
+            Ok(stream)
+        })
+        .await?;
+
+        let mut result = Vec::new();
+        while let Some(Ok(kv)) = entries.next().await {
+            // Extract the account_id from the storage key (last 32 bytes)
+            let key_bytes = kv.key_bytes;
+            if key_bytes.len() >= 32 {
+                let account_bytes: [u8; 32] = key_bytes[key_bytes.len() - 32..]
+                    .try_into()
+                    .unwrap_or([0u8; 32]);
+                let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+                let ss58 = account_id.to_string();
+                let block = kv.value.block;
+                let fields: Vec<String> = kv
+                    .value
+                    .info
+                    .fields
+                    .0
+                    .iter()
+                    .map(decode_commitment_data)
+                    .collect();
+                result.push((ss58, block, fields));
+            }
+        }
+        Ok(result)
+    }
+}
+
+fn decode_commitment_data(data: &api::runtime_types::pallet_commitments::types::Data) -> String {
+    use api::runtime_types::pallet_commitments::types::Data;
+    macro_rules! raw_to_string {
+        ($($variant:ident),+) => {
+            match data {
+                Data::None => String::new(),
+                $(Data::$variant(b) => String::from_utf8_lossy(b).into_owned(),)+
+                _ => format!("{:?}", data),
+            }
+        }
+    }
+    raw_to_string!(
+        Raw0, Raw1, Raw2, Raw3, Raw4, Raw5, Raw6, Raw7, Raw8, Raw9, Raw10, Raw11, Raw12, Raw13,
+        Raw14, Raw15, Raw16, Raw17, Raw18, Raw19, Raw20, Raw21, Raw22, Raw23, Raw24, Raw25, Raw26,
+        Raw27, Raw28, Raw29, Raw30, Raw31, Raw32, Raw33, Raw34, Raw35, Raw36, Raw37, Raw38, Raw39,
+        Raw40, Raw41, Raw42, Raw43, Raw44, Raw45, Raw46, Raw47, Raw48, Raw49, Raw50, Raw51, Raw52,
+        Raw53, Raw54, Raw55, Raw56, Raw57, Raw58, Raw59, Raw60, Raw61, Raw62, Raw63, Raw64, Raw65,
+        Raw66, Raw67, Raw68, Raw69, Raw70, Raw71, Raw72, Raw73, Raw74, Raw75, Raw76, Raw77, Raw78,
+        Raw79, Raw80, Raw81, Raw82, Raw83, Raw84, Raw85, Raw86, Raw87, Raw88, Raw89, Raw90, Raw91,
+        Raw92, Raw93, Raw94, Raw95, Raw96, Raw97, Raw98, Raw99, Raw100, Raw101, Raw102, Raw103,
+        Raw104, Raw105, Raw106, Raw107, Raw108, Raw109, Raw110, Raw111, Raw112, Raw113, Raw114,
+        Raw115, Raw116, Raw117, Raw118, Raw119, Raw120, Raw121, Raw122, Raw123, Raw124, Raw125,
+        Raw126, Raw127, Raw128
+    )
+}
+
 fn decode_identity_data(data: &api::runtime_types::pallet_registry::types::Data) -> String {
     use api::runtime_types::pallet_registry::types::Data;
     macro_rules! raw_to_string {

@@ -11,11 +11,6 @@ Send a specific amount of TAO to another account.
 agcli transfer --dest 5Dest... --amount 10.0 [--password PW] [--yes]
 ```
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--dest` | yes | Destination SS58 address |
-| `--amount` | yes | TAO to send (decimal, e.g. 10.5) |
-
 **On-chain**: `Balances::transfer_keep_alive(origin, dest, value)` — ensures sender stays above existential deposit.
 - 1 TAO = 1,000,000,000 RAO (u64)
 - Events: `Transfer { from, to, amount }`
@@ -34,10 +29,6 @@ Send entire balance to another account (minus transaction fees).
 ```bash
 agcli transfer-all --dest 5Dest... [--keep-alive] [--password PW] [--yes]
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--keep-alive` | Keep sender account alive (leave existential deposit) |
 
 **On-chain**: `Balances::transfer_all(origin, dest, keep_alive)`
 - If `keep_alive=false`: sends everything, account may be reaped

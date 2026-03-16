@@ -30,10 +30,6 @@ agcli wallet show [--all]
 # JSON: [{"name", "coldkey", "hotkeys": [...]}]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--all` | Show all hotkeys (not just default) |
-
 ### wallet import
 Import wallet from mnemonic phrase.
 

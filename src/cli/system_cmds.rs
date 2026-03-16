@@ -346,10 +346,66 @@ pub(super) async fn handle_utils(
     cmd: crate::cli::UtilsCommands,
     network: &crate::types::Network,
     output: OutputFormat,
+    client: Option<&crate::chain::Client>,
 ) -> Result<()> {
     use crate::cli::UtilsCommands;
     match cmd {
-        UtilsCommands::Convert { amount, to_rao } => {
+        UtilsCommands::Convert {
+            amount,
+            to_rao,
+            tao,
+            alpha,
+            netuid,
+        } => {
+            // Alpha↔TAO conversion (requires chain connection for price)
+            if let Some(tao_amount) = tao {
+                let nid = netuid.ok_or_else(|| {
+                    anyhow::anyhow!("--netuid is required for TAO↔Alpha conversion")
+                })?;
+                let c = client.ok_or_else(|| anyhow::anyhow!("Chain connection required"))?;
+                let (alpha_out, _, _) = c
+                    .sim_swap_tao_for_alpha(crate::types::NetUid(nid), (tao_amount * 1e9) as u64)
+                    .await?;
+                let alpha_display = alpha_out as f64 / 1e9;
+                if output.is_json() {
+                    print_json(&serde_json::json!({
+                        "netuid": nid,
+                        "tao_in": tao_amount,
+                        "alpha_out": alpha_display,
+                    }));
+                } else {
+                    println!(
+                        "{:.4} TAO → {:.4} Alpha (SN{})",
+                        tao_amount, alpha_display, nid
+                    );
+                }
+                return Ok(());
+            }
+            if let Some(alpha_amount) = alpha {
+                let nid = netuid.ok_or_else(|| {
+                    anyhow::anyhow!("--netuid is required for TAO↔Alpha conversion")
+                })?;
+                let c = client.ok_or_else(|| anyhow::anyhow!("Chain connection required"))?;
+                let (tao_out, _, _) = c
+                    .sim_swap_alpha_for_tao(crate::types::NetUid(nid), (alpha_amount * 1e9) as u64)
+                    .await?;
+                let tao_display = tao_out as f64 / 1e9;
+                if output.is_json() {
+                    print_json(&serde_json::json!({
+                        "netuid": nid,
+                        "alpha_in": alpha_amount,
+                        "tao_out": tao_display,
+                    }));
+                } else {
+                    println!(
+                        "{:.4} Alpha (SN{}) → {:.4} TAO",
+                        alpha_amount, nid, tao_display
+                    );
+                }
+                return Ok(());
+            }
+            // TAO↔RAO conversion
+            let amount = amount.unwrap_or(0.0);
             if to_rao {
                 let rao = (amount * 1e9) as u64;
                 if output.is_json() {

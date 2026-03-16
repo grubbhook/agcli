@@ -18,12 +18,6 @@ Stream chain events with optional filtering.
 agcli subscribe events [--filter staking] [--netuid 1] [--account SS58]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--filter` | Event category: all, staking, registration, transfer, weights, subnet |
-| `--netuid` | Only show events for this subnet |
-| `--account` | Only show events involving this address |
-
 ## Filter Categories
 | Filter | Events Included |
 |--------|----------------|

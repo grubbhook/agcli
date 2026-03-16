@@ -10,10 +10,6 @@ agcli balance [--address SS58]
 # JSON: {"address", "balance_rao", "balance_tao"}
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--address` | SS58 address to query (defaults to wallet coldkey) |
-
 **On-chain**: reads `System::Account` storage for the account's free balance.
 
 ### Historical balance (wayback)
@@ -28,11 +24,6 @@ Requires `--network archive` for blocks beyond the ~256 block pruning window.
 ```bash
 agcli balance --watch [60] --threshold 10.0 [--address SS58]
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--watch [N]` | Poll every N seconds (default: 60) |
-| `--threshold T` | Alert when balance drops below T TAO |
 
 **JSON streaming** (one object per poll):
 ```json

@@ -478,6 +478,56 @@ pub(super) async fn handle_serve(cmd: ServeCommands, client: &Client, ctx: &Ctx<
             println!("Axon served. Tx: {}", hash);
             Ok(())
         }
+        ServeCommands::BatchAxon { file } => {
+            let (pair, _hk) =
+                unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
+            let content = std::fs::read_to_string(&file)
+                .map_err(|e| anyhow::anyhow!("Failed to read batch axon file '{}': {}", file, e))?;
+            let entries: Vec<serde_json::Value> = serde_json::from_str(&content)
+                .map_err(|e| anyhow::anyhow!("Invalid JSON in '{}': {}", file, e))?;
+
+            println!("Batch serving {} axon updates", entries.len());
+            for (i, entry) in entries.iter().enumerate() {
+                let netuid = entry["netuid"]
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("Entry {}: missing 'netuid'", i))?
+                    as u16;
+                let ip = entry["ip"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Entry {}: missing 'ip'", i))?;
+                let port = entry["port"]
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("Entry {}: missing 'port'", i))?
+                    as u16;
+                let protocol = entry["protocol"].as_u64().unwrap_or(4) as u8;
+                let version = entry["version"].as_u64().unwrap_or(0) as u32;
+
+                let ip_u128: u128 = {
+                    let parts: Vec<u8> = ip.split('.').filter_map(|p| p.parse().ok()).collect();
+                    if parts.len() == 4 {
+                        ((parts[0] as u128) << 24)
+                            | ((parts[1] as u128) << 16)
+                            | ((parts[2] as u128) << 8)
+                            | (parts[3] as u128)
+                    } else {
+                        anyhow::bail!("Entry {}: invalid IPv4 address: {}", i, ip);
+                    }
+                };
+
+                let axon = crate::types::chain_data::AxonInfo {
+                    block: 0,
+                    version,
+                    ip: ip_u128.to_string(),
+                    port,
+                    ip_type: 4,
+                    protocol,
+                };
+                let hash = client.serve_axon(&pair, NetUid(netuid), &axon).await?;
+                println!("  [{}] SN{} {}:{} — Tx: {}", i + 1, netuid, ip, port, hash);
+            }
+            println!("Batch axon update complete ({} entries).", entries.len());
+            Ok(())
+        }
         ServeCommands::Reset { netuid } => {
             let (pair, hk) =
                 unlock_and_resolve(wallet_dir, wallet_name, hotkey_name, None, password)?;
@@ -1029,4 +1079,91 @@ fn parse_sorted_signatories(csv: &str) -> Result<Vec<crate::AccountId>> {
         .collect::<Result<_>>()?;
     ids.sort();
     Ok(ids)
+}
+
+// ──────── Commitment ────────
+
+pub(super) async fn handle_commitment(
+    cmd: CommitmentCommands,
+    client: &Client,
+    ctx: &Ctx<'_>,
+) -> Result<()> {
+    match cmd {
+        CommitmentCommands::Set { netuid, data } => {
+            let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
+            unlock_coldkey(&mut wallet, ctx.password)?;
+            println!("Setting commitment on SN{}: {}", netuid, data);
+            let hash = client
+                .set_commitment(wallet.coldkey()?, netuid, &data)
+                .await?;
+            print_tx_result(ctx.output, &hash, "Commitment set.");
+            Ok(())
+        }
+        CommitmentCommands::Get { netuid, hotkey } => {
+            let reg = client.get_commitment(netuid, &hotkey).await?;
+            match reg {
+                Some((block, fields)) => {
+                    if ctx.output.is_json() {
+                        print_json(&serde_json::json!({
+                            "hotkey": hotkey,
+                            "netuid": netuid,
+                            "block": block,
+                            "fields": fields,
+                        }));
+                    } else {
+                        println!(
+                            "Commitment for {} on SN{} (block {})",
+                            crate::utils::short_ss58(&hotkey),
+                            netuid,
+                            block
+                        );
+                        for (i, f) in fields.iter().enumerate() {
+                            println!("  [{}] {}", i, f);
+                        }
+                    }
+                }
+                None => {
+                    if ctx.output.is_json() {
+                        print_json(&serde_json::json!({
+                            "hotkey": hotkey,
+                            "netuid": netuid,
+                            "found": false,
+                        }));
+                    } else {
+                        println!(
+                            "No commitment found for {} on SN{}",
+                            crate::utils::short_ss58(&hotkey),
+                            netuid
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
+        CommitmentCommands::List { netuid } => {
+            let commitments = client.get_all_commitments(netuid).await?;
+            if ctx.output.is_json() {
+                let arr: Vec<_> = commitments
+                    .iter()
+                    .map(|(ss58, block, fields)| {
+                        serde_json::json!({
+                            "hotkey": ss58,
+                            "block": block,
+                            "fields": fields,
+                        })
+                    })
+                    .collect();
+                print_json(&serde_json::Value::Array(arr));
+            } else {
+                println!("Commitments on SN{} ({} total):", netuid, commitments.len());
+                for (ss58, block, fields) in &commitments {
+                    println!("  {} (block {})", crate::utils::short_ss58(ss58), block);
+                    for (i, f) in fields.iter().enumerate() {
+                        println!("    [{}] {}", i, f);
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
 }

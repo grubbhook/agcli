@@ -21,10 +21,6 @@ Set root weights to influence subnet emission distribution.
 agcli root weights --weights "1:500,2:300,3:200"
 ```
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--weights` | yes | `netuid:weight` pairs (u16 values) |
-
 **On-chain**: `SubtensorModule::set_root_weights(origin, netuid, hotkey, dests, weights, version_key)`
 - Weights determine relative emission share per subnet
 - Events: `WeightsSet(0, uid)` (netuid=0 for root)

@@ -11,13 +11,6 @@ Stake TAO on a subnet. Converts TAO → alpha via the subnet's AMM pool.
 agcli stake add --amount 10.0 --netuid 1 [--hotkey SS58] [--max-slippage 2.0] [--password PW] [--yes]
 ```
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--amount` | yes | TAO to stake (decimal, e.g. 10.5) |
-| `--netuid` | yes | Subnet UID (u16) |
-| `--hotkey` | no | Hotkey SS58 (defaults to wallet hotkey) |
-| `--max-slippage` | no | Max slippage % — aborts if AMM price impact exceeds this |
-
 **On-chain**: `SubtensorModule::add_stake(origin, hotkey, netuid, amount_staked)`
 - Flow: withdraw TAO from coldkey → `stake_into_subnet()` → `swap_tao_for_alpha()` via AMM → increase alpha shares
 - Storage: `Alpha(hotkey, coldkey, netuid)` shares, `TotalHotkeyAlpha`, `SubnetTAO`, `SubnetAlphaIn/Out`, `TotalStake`
@@ -83,11 +76,6 @@ agcli stake add-limit --amount 10.0 --netuid 1 --price 0.5 [--partial] [--hotkey
 agcli stake remove-limit --amount 5.0 --netuid 1 --price 0.8 [--partial] [--hotkey SS58]
 agcli stake swap-limit --amount 5.0 --from 1 --to 2 --price 0.5 [--partial] [--hotkey SS58]
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--price` | Target price in TAO per alpha (decimal) |
-| `--partial` | Allow partial fill at target price |
 
 ### stake childkey-take
 Set the childkey take percentage for a hotkey on a subnet.

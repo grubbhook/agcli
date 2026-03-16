@@ -6,6 +6,87 @@ use crate::cli::*;
 use crate::types::{Balance, NetUid};
 use anyhow::Result;
 
+/// Parse weights from string, stdin ("-"), or file ("@path").
+/// Supports:
+/// - "uid:weight,uid:weight" format
+/// - "-" reads JSON from stdin
+/// - "@path" reads JSON from file
+/// - JSON formats: [{"uid": 0, "weight": 100}] or {"0": 100, "1": 200}
+fn resolve_weights(weights_str: &str) -> Result<(Vec<u16>, Vec<u16>)> {
+    let trimmed = weights_str.trim();
+
+    // stdin
+    if trimmed == "-" {
+        let mut buf = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
+        return parse_json_weights(&buf);
+    }
+
+    // file
+    if let Some(path) = trimmed.strip_prefix('@') {
+        let buf = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read weights file '{}': {}", path, e))?;
+        return parse_json_weights(&buf);
+    }
+
+    // Try JSON first (starts with '[' or '{')
+    if trimmed.starts_with('[') || trimmed.starts_with('{') {
+        return parse_json_weights(trimmed);
+    }
+
+    // Fallback: uid:weight pairs
+    parse_weight_pairs(trimmed)
+}
+
+/// Parse JSON weight formats:
+/// - Array of objects: [{"uid": 0, "weight": 100}, ...]
+/// - Object map: {"0": 100, "1": 200}
+fn parse_json_weights(json_str: &str) -> Result<(Vec<u16>, Vec<u16>)> {
+    let value: serde_json::Value = serde_json::from_str(json_str.trim())
+        .map_err(|e| anyhow::anyhow!("Invalid JSON weight input: {}", e))?;
+
+    let mut uids = Vec::new();
+    let mut weights = Vec::new();
+
+    match value {
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                let uid = item
+                    .get("uid")
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| anyhow::anyhow!("Missing 'uid' field in weight entry"))?
+                    as u16;
+                let weight = item
+                    .get("weight")
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| anyhow::anyhow!("Missing 'weight' field in weight entry"))?
+                    as u16;
+                uids.push(uid);
+                weights.push(weight);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                let uid: u16 = k
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Invalid UID key '{}' — must be 0–65535", k))?;
+                let weight = v
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid weight value for UID {}", uid))?
+                    as u16;
+                uids.push(uid);
+                weights.push(weight);
+            }
+        }
+        _ => anyhow::bail!("JSON weights must be an array or object"),
+    }
+
+    if uids.is_empty() {
+        anyhow::bail!("No weights found in input");
+    }
+    Ok((uids, weights))
+}
+
 pub(super) async fn handle_weights(
     cmd: WeightCommands,
     client: &Client,
@@ -18,13 +99,20 @@ pub(super) async fn handle_weights(
         ctx.password,
     );
     match cmd {
+        WeightCommands::Show {
+            netuid,
+            hotkey,
+            limit,
+        } => {
+            handle_weights_show(client, NetUid(netuid), hotkey.as_deref(), limit, ctx.output).await
+        }
         WeightCommands::Set {
             netuid,
             weights,
             version_key,
             dry_run,
         } => {
-            let (uids, wts) = parse_weight_pairs(&weights)?;
+            let (uids, wts) = resolve_weights(&weights)?;
 
             // Pre-flight checks (always run these)
             let hyperparams = match client.get_subnet_hyperparams(NetUid(netuid)).await {
@@ -110,7 +198,7 @@ pub(super) async fn handle_weights(
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
-            let (uids, wts) = parse_weight_pairs(&weights)?;
+            let (uids, wts) = resolve_weights(&weights)?;
             let salt_str = salt.unwrap_or_else(|| {
                 use rand::Rng;
                 let s: String = rand::thread_rng()
@@ -142,7 +230,7 @@ pub(super) async fn handle_weights(
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
-            let (uids, wts) = parse_weight_pairs(&weights)?;
+            let (uids, wts) = resolve_weights(&weights)?;
             let salt_u16: Vec<u16> = salt
                 .as_bytes()
                 .chunks(2)
@@ -180,7 +268,7 @@ pub(super) async fn handle_weights(
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             wallet.load_hotkey(hotkey_name)?;
-            let (uids, wts) = parse_weight_pairs(&weights)?;
+            let (uids, wts) = resolve_weights(&weights)?;
 
             // Pre-flight: check commit-reveal is enabled
             let hyperparams = client.get_subnet_hyperparams(NetUid(netuid)).await?;
@@ -360,4 +448,101 @@ pub(super) async fn handle_weights(
             Ok(())
         }
     }
+}
+
+/// Show on-chain weights for a subnet.
+async fn handle_weights_show(
+    client: &Client,
+    netuid: NetUid,
+    hotkey_filter: Option<&str>,
+    limit: Option<usize>,
+    output: OutputFormat,
+) -> Result<()> {
+    // If filtering by hotkey, find the UID first
+    if let Some(hk) = hotkey_filter {
+        let neurons = client.get_neurons_lite(netuid).await?;
+        let neuron = neurons.iter().find(|n| n.hotkey == hk);
+        match neuron {
+            Some(n) => {
+                let weights = client.get_weights_for_uid(netuid, n.uid).await?;
+                if output.is_json() {
+                    print_json(&serde_json::json!({
+                        "netuid": netuid.0,
+                        "uid": n.uid,
+                        "hotkey": hk,
+                        "weights": weights.iter().map(|(u, w)| serde_json::json!({"uid": u, "weight": w})).collect::<Vec<_>>(),
+                    }));
+                } else {
+                    println!(
+                        "Weights set by UID {} ({}) on SN{}",
+                        n.uid,
+                        crate::utils::short_ss58(hk),
+                        netuid.0
+                    );
+                    println!("  {} target UIDs\n", weights.len());
+                    let show = limit.unwrap_or(weights.len());
+                    for (u, w) in weights.iter().take(show) {
+                        println!("  UID {:>5} → weight {:>5}", u, w);
+                    }
+                }
+                return Ok(());
+            }
+            None => anyhow::bail!("Hotkey {} not found on SN{}", hk, netuid.0),
+        }
+    }
+
+    // Show all weights
+    let all_weights = client.get_all_weights(netuid).await?;
+    let neurons = client.get_neurons_lite(netuid).await?;
+    let hotkey_map: std::collections::HashMap<u16, &str> =
+        neurons.iter().map(|n| (n.uid, n.hotkey.as_str())).collect();
+
+    // Only show validators (UIDs that have set weights)
+    let validators: Vec<_> = all_weights.iter().filter(|(_, w)| !w.is_empty()).collect();
+
+    let show = limit.unwrap_or(validators.len());
+
+    if output.is_json() {
+        let entries: Vec<_> = validators.iter().take(show).map(|(uid, weights)| {
+            serde_json::json!({
+                "uid": uid,
+                "hotkey": hotkey_map.get(uid).unwrap_or(&""),
+                "num_weights": weights.len(),
+                "weights": weights.iter().map(|(u, w)| serde_json::json!({"uid": u, "weight": w})).collect::<Vec<serde_json::Value>>(),
+            })
+        }).collect();
+        print_json(&serde_json::json!({
+            "netuid": netuid.0,
+            "validators_with_weights": validators.len(),
+            "entries": entries,
+        }));
+    } else {
+        println!(
+            "On-chain weights for SN{} ({} validators with weights)\n",
+            netuid.0,
+            validators.len()
+        );
+        for (uid, weights) in validators.iter().take(show) {
+            let hk = hotkey_map.get(uid).unwrap_or(&"");
+            let top5: Vec<String> = weights
+                .iter()
+                .take(5)
+                .map(|(u, w)| format!("{}:{}", u, w))
+                .collect();
+            let suffix = if weights.len() > 5 {
+                format!(" ... (+{} more)", weights.len() - 5)
+            } else {
+                String::new()
+            };
+            println!(
+                "  UID {:>4} ({}) → {} targets [{}{}]",
+                uid,
+                crate::utils::short_ss58(hk),
+                weights.len(),
+                top5.join(", "),
+                suffix
+            );
+        }
+    }
+    Ok(())
 }

@@ -74,6 +74,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::Doctor => "doctor",
         Commands::Explain { .. } => "explain",
         Commands::Audit { .. } => "audit",
+        Commands::Commitment(_) => "commitment",
         Commands::Block(_) => "block",
         Commands::Diff(_) => "diff",
         Commands::Batch { .. } => "batch",
@@ -379,7 +380,20 @@ pub async fn execute(cli: Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Utils(cmd) => system_cmds::handle_utils(cmd, &network, ctx.output).await,
+        Commands::Utils(cmd) => {
+            // Alpha↔TAO conversion may need a chain connection
+            let needs_chain = matches!(
+                &cmd,
+                UtilsCommands::Convert { tao: Some(_), .. }
+                    | UtilsCommands::Convert { alpha: Some(_), .. }
+            );
+            if needs_chain {
+                let client = connect(&network, dry_run, best).await?;
+                system_cmds::handle_utils(cmd, &network, ctx.output, Some(&client)).await
+            } else {
+                system_cmds::handle_utils(cmd, &network, ctx.output, None).await
+            }
+        }
         Commands::Config(cmd) => system_cmds::handle_config(cmd).await,
         Commands::Completions { shell } => {
             system_cmds::generate_completions(&shell);
@@ -396,6 +410,10 @@ pub async fn execute(cli: Cli) -> Result<()> {
             let client = connect(&network, dry_run, best).await?;
             let addr = resolve_coldkey_address(address, ctx.wallet_dir, ctx.wallet_name);
             view_cmds::handle_audit(&client, &addr, ctx.output).await
+        }
+        Commands::Commitment(cmd) => {
+            let client = connect(&network, dry_run, best).await?;
+            network_cmds::handle_commitment(cmd, &client, &ctx).await
         }
         Commands::Block(cmd) => {
             let client = connect(&network, dry_run, best).await?;

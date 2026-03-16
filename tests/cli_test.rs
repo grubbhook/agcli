@@ -3086,3 +3086,203 @@ fn explain_normalization_strips_hyphens_underscores() {
     assert!(r2.is_some());
     assert_eq!(r1.unwrap(), r2.unwrap());
 }
+
+// ──────── New Feature CLI Parsing Tests ────────
+
+#[test]
+fn parse_weights_show() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "weights", "show", "--netuid", "97"]);
+    assert!(cli.is_ok(), "weights show: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_show_with_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "weights",
+        "show",
+        "--netuid",
+        "97",
+        "--hotkey",
+        "5Cai123abc",
+    ]);
+    assert!(cli.is_ok(), "weights show --hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_show_with_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "weights", "show", "--netuid", "97", "--limit", "10",
+    ]);
+    assert!(cli.is_ok(), "weights show --limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_metagraph() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "metagraph", "--netuid", "97"]);
+    assert!(cli.is_ok(), "view metagraph: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_metagraph_with_since_block() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "metagraph",
+        "--netuid",
+        "97",
+        "--since-block",
+        "1000000",
+    ]);
+    assert!(cli.is_ok(), "view metagraph --since-block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_axon_by_uid() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "view", "axon", "--netuid", "97", "--uid", "42"]);
+    assert!(cli.is_ok(), "view axon --uid: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_axon_by_hotkey() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "axon", "--netuid", "97", "--hotkey", "5Cai123",
+    ]);
+    assert!(cli.is_ok(), "view axon --hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_health() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "health", "--netuid", "97"]);
+    assert!(cli.is_ok(), "view health: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_health_with_tcp_check() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "health",
+        "--netuid",
+        "97",
+        "--tcp-check",
+        "--probe-timeout-ms",
+        "5000",
+    ]);
+    assert!(cli.is_ok(), "view health --tcp-check: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_emissions() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "emissions",
+        "--netuid",
+        "97",
+        "--limit",
+        "20",
+    ]);
+    assert!(cli.is_ok(), "view emissions: {:?}", cli.err());
+}
+
+#[test]
+fn parse_serve_batch_axon() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "serve",
+        "batch-axon",
+        "--file",
+        "/tmp/axons.json",
+    ]);
+    assert!(cli.is_ok(), "serve batch-axon: {:?}", cli.err());
+}
+
+#[test]
+fn parse_diff_metagraph() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "diff",
+        "metagraph",
+        "--netuid",
+        "97",
+        "--block1",
+        "1000000",
+        "--block2",
+        "1000100",
+    ]);
+    assert!(cli.is_ok(), "diff metagraph: {:?}", cli.err());
+}
+
+// ──── Commitment Commands ────
+
+#[test]
+fn parse_commitment_set() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "commitment",
+        "set",
+        "--netuid",
+        "97",
+        "--data",
+        "endpoint:http://1.2.3.4:8091,version:1.0",
+    ]);
+    assert!(cli.is_ok(), "commitment set: {:?}", cli.err());
+}
+
+#[test]
+fn parse_commitment_get() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "commitment",
+        "get",
+        "--netuid",
+        "97",
+        "--hotkey",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "commitment get: {:?}", cli.err());
+}
+
+#[test]
+fn parse_commitment_list() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "commitment",
+        "list",
+        "--netuid",
+        "97",
+    ]);
+    assert!(cli.is_ok(), "commitment list: {:?}", cli.err());
+}
+
+// ──── Utils Convert Alpha/TAO ────
+
+#[test]
+fn parse_utils_convert_tao_to_alpha() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert", "--tao", "10.0", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "utils convert --tao: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_convert_alpha_to_tao() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert", "--alpha", "500.0", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "utils convert --alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_utils_convert_tao_to_rao() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "utils", "convert", "--amount", "10.0", "--to-rao",
+    ]);
+    assert!(cli.is_ok(), "utils convert --to-rao: {:?}", cli.err());
+}

@@ -59,6 +59,31 @@ pub async fn handle_view(cmd: ViewCommands, client: &Client, ctx: &Ctx<'_>) -> R
             handle_swap_sim(client, netuid, tao, alpha, output).await
         }
         ViewCommands::Nominations { hotkey } => handle_nominations(client, &hotkey, output).await,
+        ViewCommands::Metagraph {
+            netuid,
+            since_block,
+            limit,
+        } => {
+            if let Some(interval) = live_interval {
+                return crate::live::live_metagraph(client, NetUid(netuid), interval).await;
+            }
+            handle_metagraph_view(client, NetUid(netuid), since_block, limit, output).await
+        }
+        ViewCommands::Axon {
+            netuid,
+            uid,
+            hotkey,
+        } => handle_axon_lookup(client, NetUid(netuid), uid, hotkey.as_deref(), output).await,
+        ViewCommands::Health {
+            netuid,
+            tcp_check,
+            probe_timeout_ms,
+        } => {
+            handle_subnet_health(client, NetUid(netuid), tcp_check, probe_timeout_ms, output).await
+        }
+        ViewCommands::Emissions { netuid, limit } => {
+            handle_emissions(client, NetUid(netuid), limit, output).await
+        }
     }
 }
 
@@ -1751,5 +1776,481 @@ pub async fn handle_audit(client: &Client, address: &str, output: OutputFormat) 
         println!("\n  No findings — account looks clean.");
     }
 
+    Ok(())
+}
+
+// ──────── Metagraph View ────────
+
+async fn handle_metagraph_view(
+    client: &Client,
+    netuid: NetUid,
+    since_block: Option<u32>,
+    limit: Option<usize>,
+    output: OutputFormat,
+) -> Result<()> {
+    let neurons = client.get_neurons_lite(netuid).await?;
+
+    if let Some(block_num) = since_block {
+        // Diff mode: compare current vs historical
+        let block_hash = client.get_block_hash(block_num).await?;
+        let old_neurons = client.get_neurons_lite_at_block(netuid, block_hash).await?;
+        let current_block = client.get_block_number().await?;
+
+        let old_map: std::collections::HashMap<u16, &crate::types::chain_data::NeuronInfoLite> =
+            old_neurons.iter().map(|n| (n.uid, n)).collect();
+
+        #[derive(serde::Serialize)]
+        struct NeuronDiff {
+            uid: u16,
+            hotkey: String,
+            change: String,
+            stake_diff: f64,
+            emission_diff: f64,
+            incentive_diff: f64,
+            trust_diff: f64,
+        }
+
+        let mut diffs = Vec::new();
+        for n in neurons.iter() {
+            if let Some(old) = old_map.get(&n.uid) {
+                let stake_diff = n.stake.tao() - old.stake.tao();
+                let emission_diff = n.emission - old.emission;
+                let incentive_diff = n.incentive - old.incentive;
+                let trust_diff = n.trust - old.trust;
+                if stake_diff.abs() > 0.001
+                    || emission_diff.abs() > 0.0001
+                    || incentive_diff.abs() > 0.0001
+                    || trust_diff.abs() > 0.0001
+                    || n.hotkey != old.hotkey
+                {
+                    diffs.push(NeuronDiff {
+                        uid: n.uid,
+                        hotkey: n.hotkey.clone(),
+                        change: if n.hotkey != old.hotkey {
+                            "replaced".into()
+                        } else {
+                            "changed".into()
+                        },
+                        stake_diff,
+                        emission_diff,
+                        incentive_diff,
+                        trust_diff,
+                    });
+                }
+            } else {
+                diffs.push(NeuronDiff {
+                    uid: n.uid,
+                    hotkey: n.hotkey.clone(),
+                    change: "new".into(),
+                    stake_diff: n.stake.tao(),
+                    emission_diff: n.emission,
+                    incentive_diff: n.incentive,
+                    trust_diff: n.trust,
+                });
+            }
+        }
+
+        let show = limit.unwrap_or(diffs.len());
+
+        if output.is_json() {
+            print_json(&serde_json::json!({
+                "netuid": netuid.0,
+                "since_block": block_num,
+                "current_block": current_block,
+                "total_neurons": neurons.len(),
+                "changed": diffs.len(),
+                "diffs": diffs.iter().take(show).collect::<Vec<_>>(),
+            }));
+        } else {
+            println!(
+                "Metagraph diff SN{} (block {} → {}): {} changed out of {}\n",
+                netuid.0,
+                block_num,
+                current_block,
+                diffs.len(),
+                neurons.len()
+            );
+            for d in diffs.iter().take(show) {
+                println!("  UID {:>4} [{}] ({}) stake:{:>+.4}τ emission:{:>+.4} incentive:{:>+.4} trust:{:>+.4}",
+                    d.uid, d.change, crate::utils::short_ss58(&d.hotkey),
+                    d.stake_diff, d.emission_diff, d.incentive_diff, d.trust_diff);
+            }
+        }
+    } else {
+        // Full metagraph dump
+        let show = limit.unwrap_or(neurons.len());
+        let block = client.get_block_number().await?;
+
+        if output.is_json() {
+            let entries: Vec<serde_json::Value> = neurons
+                .iter()
+                .take(show)
+                .map(|n| {
+                    serde_json::json!({
+                        "uid": n.uid, "hotkey": n.hotkey, "coldkey": n.coldkey,
+                        "stake_tao": n.stake.tao(), "emission": n.emission,
+                        "incentive": n.incentive, "consensus": n.consensus,
+                        "trust": n.trust, "dividends": n.dividends,
+                        "validator_trust": n.validator_trust,
+                        "validator_permit": n.validator_permit,
+                        "last_update": n.last_update, "active": n.active,
+                    })
+                })
+                .collect();
+            print_json(&serde_json::json!({
+                "netuid": netuid.0, "block": block, "n": neurons.len(), "neurons": entries,
+            }));
+        } else {
+            println!(
+                "Metagraph SN{} at block {} ({} neurons)\n",
+                netuid.0,
+                block,
+                neurons.len()
+            );
+            println!(
+                "{:>5} {:>12} {:>10} {:>10} {:>10} {:>10} {:>10} {:>3}",
+                "UID", "Stake(τ)", "Emission", "Incentive", "Trust", "Consensus", "Dividends", "VP"
+            );
+            println!("{}", "-".repeat(82));
+            // Sort by emission descending
+            let mut indices: Vec<usize> = (0..neurons.len()).collect();
+            indices.sort_unstable_by(|&a, &b| {
+                neurons[b]
+                    .emission
+                    .partial_cmp(&neurons[a].emission)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            for &i in indices.iter().take(show) {
+                let n = &neurons[i];
+                println!(
+                    "{:>5} {:>12.4} {:>10.4} {:>10.4} {:>10.4} {:>10.4} {:>10.4} {:>3}",
+                    n.uid,
+                    n.stake.tao(),
+                    n.emission,
+                    n.incentive,
+                    n.trust,
+                    n.consensus,
+                    n.dividends,
+                    if n.validator_permit { "Y" } else { "" }
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+// ──────── Axon Lookup ────────
+
+async fn handle_axon_lookup(
+    client: &Client,
+    netuid: NetUid,
+    uid: Option<u16>,
+    hotkey: Option<&str>,
+    output: OutputFormat,
+) -> Result<()> {
+    let target_uid = match (uid, hotkey) {
+        (Some(u), _) => u,
+        (None, Some(hk)) => {
+            let neurons = client.get_neurons_lite(netuid).await?;
+            neurons
+                .iter()
+                .find(|n| n.hotkey == hk)
+                .map(|n| n.uid)
+                .ok_or_else(|| anyhow::anyhow!("Hotkey {} not found on SN{}", hk, netuid.0))?
+        }
+        (None, None) => anyhow::bail!("Provide either --uid or --hotkey"),
+    };
+
+    let neuron = client.get_neuron(netuid, target_uid).await?;
+    match neuron {
+        Some(n) => {
+            if output.is_json() {
+                print_json(&serde_json::json!({
+                    "netuid": netuid.0,
+                    "uid": n.uid,
+                    "hotkey": n.hotkey,
+                    "axon": n.axon_info.as_ref().map(|a| serde_json::json!({
+                        "ip": format_ip(a), "port": a.port,
+                        "protocol": a.protocol, "version": a.version,
+                    })),
+                    "prometheus": n.prometheus_info.as_ref().map(|p| serde_json::json!({
+                        "ip": format_prometheus_ip(p), "port": p.port, "version": p.version,
+                    })),
+                }));
+            } else {
+                println!("Axon for UID {} on SN{}", n.uid, netuid.0);
+                println!("  Hotkey: {}", n.hotkey);
+                match &n.axon_info {
+                    Some(a) if a.port > 0 => {
+                        println!("  IP:       {}", format_ip(a));
+                        println!("  Port:     {}", a.port);
+                        println!("  Protocol: {}", a.protocol);
+                        println!("  Version:  {}", a.version);
+                    }
+                    _ => println!("  Axon: not serving"),
+                }
+                if let Some(p) = &n.prometheus_info {
+                    if p.port > 0 {
+                        println!("  Prometheus: {}:{}", format_prometheus_ip(p), p.port);
+                    }
+                }
+            }
+        }
+        None => anyhow::bail!("Neuron UID {} not found on SN{}", target_uid, netuid.0),
+    }
+    Ok(())
+}
+
+/// Format IP from u128 string to dotted-quad.
+fn format_ip(axon: &crate::types::chain_data::AxonInfo) -> String {
+    if let Ok(ip_u128) = axon.ip.parse::<u128>() {
+        if axon.ip_type == 4 && ip_u128 <= u32::MAX as u128 {
+            let ip = ip_u128 as u32;
+            return format!(
+                "{}.{}.{}.{}",
+                (ip >> 24) & 0xff,
+                (ip >> 16) & 0xff,
+                (ip >> 8) & 0xff,
+                ip & 0xff
+            );
+        }
+    }
+    axon.ip.clone()
+}
+
+fn format_prometheus_ip(info: &crate::types::chain_data::PrometheusInfo) -> String {
+    if let Ok(ip_u128) = info.ip.parse::<u128>() {
+        if info.ip_type == 4 && ip_u128 <= u32::MAX as u128 {
+            let ip = ip_u128 as u32;
+            return format!(
+                "{}.{}.{}.{}",
+                (ip >> 24) & 0xff,
+                (ip >> 16) & 0xff,
+                (ip >> 8) & 0xff,
+                ip & 0xff
+            );
+        }
+    }
+    info.ip.clone()
+}
+
+// ──────── Subnet Health ────────
+
+async fn handle_subnet_health(
+    client: &Client,
+    netuid: NetUid,
+    tcp_check: bool,
+    probe_timeout_ms: u64,
+    output: OutputFormat,
+) -> Result<()> {
+    let (neurons, dyn_info) = tokio::try_join!(
+        client.get_neurons_lite(netuid),
+        client.get_dynamic_info(netuid),
+    )?;
+
+    let total = neurons.len();
+    let active = neurons.iter().filter(|n| n.active).count();
+    let with_permit = neurons.iter().filter(|n| n.validator_permit).count();
+    let block = client.get_block_number().await?;
+
+    // If tcp_check requested, probe axons
+    let mut reachable = 0u32;
+    let mut unreachable = 0u32;
+    let mut probes: Vec<serde_json::Value> = Vec::new();
+
+    if tcp_check {
+        // Need full neuron info for axon endpoints
+        let timeout = std::time::Duration::from_millis(probe_timeout_ms);
+        let mut futs = Vec::new();
+
+        // Collect UIDs with axon info
+        for n in neurons.iter() {
+            let uid = n.uid;
+            let hk = n.hotkey.clone();
+            futs.push(async move {
+                let neuron_full = client.get_neuron(netuid, uid).await.ok().flatten();
+                (uid, hk, neuron_full)
+            });
+        }
+
+        // Probe up to 256 neurons to avoid overwhelming network
+        let probe_limit = 256.min(futs.len());
+        let batch: Vec<_> = futs.into_iter().take(probe_limit).collect();
+        let results = futures::future::join_all(batch).await;
+
+        for (uid, hk, neuron_full) in results {
+            if let Some(nf) = neuron_full {
+                if let Some(ref axon) = nf.axon_info {
+                    if axon.port > 0 {
+                        let ip_str = format_ip(axon);
+                        let addr = format!("{}:{}", ip_str, axon.port);
+                        let ok =
+                            tokio::time::timeout(timeout, tokio::net::TcpStream::connect(&addr))
+                                .await
+                                .map(|r| r.is_ok())
+                                .unwrap_or(false);
+                        if ok {
+                            reachable += 1;
+                        } else {
+                            unreachable += 1;
+                        }
+                        probes.push(serde_json::json!({
+                            "uid": uid, "hotkey": crate::utils::short_ss58(&hk),
+                            "endpoint": addr, "reachable": ok,
+                        }));
+                        continue;
+                    }
+                }
+            }
+            // No axon or port=0 → not serving
+        }
+    }
+
+    if output.is_json() {
+        let mut obj = serde_json::json!({
+            "netuid": netuid.0,
+            "block": block,
+            "total_neurons": total,
+            "active": active,
+            "active_pct": if total > 0 { active as f64 / total as f64 * 100.0 } else { 0.0 },
+            "validators": with_permit,
+        });
+        if let Some(d) = &dyn_info {
+            obj["name"] = serde_json::json!(d.name);
+            obj["tempo"] = serde_json::json!(d.tempo);
+            obj["price"] = serde_json::json!(d.price);
+        }
+        if tcp_check {
+            obj["tcp_probed"] = serde_json::json!(probes.len());
+            obj["reachable"] = serde_json::json!(reachable);
+            obj["unreachable"] = serde_json::json!(unreachable);
+            obj["probes"] = serde_json::json!(probes);
+        }
+        print_json(&obj);
+    } else {
+        let name = dyn_info.as_ref().map(|d| d.name.as_str()).unwrap_or("?");
+        println!(
+            "Subnet Health: SN{} ({}) at block {}\n",
+            netuid.0, name, block
+        );
+        println!(
+            "  Neurons:     {} total, {} active ({:.1}%)",
+            total,
+            active,
+            if total > 0 {
+                active as f64 / total as f64 * 100.0
+            } else {
+                0.0
+            }
+        );
+        println!("  Validators:  {} with permits", with_permit);
+        if let Some(d) = &dyn_info {
+            println!("  Tempo:       {} blocks", d.tempo);
+            println!("  Price:       {:.6} τ/α", d.price);
+        }
+        if tcp_check {
+            println!("\n  TCP Probes ({} tested):", probes.len());
+            println!("    Reachable:   {}", reachable);
+            println!("    Unreachable: {}", unreachable);
+            if reachable + unreachable > 0 {
+                println!(
+                    "    Reachability: {:.1}%",
+                    reachable as f64 / (reachable + unreachable) as f64 * 100.0
+                );
+            }
+            // Show unreachable nodes
+            let unreachable_probes: Vec<_> =
+                probes.iter().filter(|p| p["reachable"] == false).collect();
+            if !unreachable_probes.is_empty() && unreachable_probes.len() <= 20 {
+                println!("\n  Unreachable axons:");
+                for p in &unreachable_probes {
+                    println!("    UID {} ({}) — {}", p["uid"], p["hotkey"], p["endpoint"]);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// ──────── Per-UID Emission Breakdown ────────
+
+async fn handle_emissions(
+    client: &Client,
+    netuid: NetUid,
+    limit: Option<usize>,
+    output: OutputFormat,
+) -> Result<()> {
+    let (neurons, dyn_info) = tokio::try_join!(
+        client.get_neurons_lite(netuid),
+        client.get_dynamic_info(netuid),
+    )?;
+
+    let total_emission: f64 = neurons.iter().map(|n| n.emission).sum();
+    let show = limit.unwrap_or(neurons.len());
+
+    // Sort by emission descending
+    let mut indices: Vec<usize> = (0..neurons.len()).collect();
+    indices.sort_unstable_by(|&a, &b| {
+        neurons[b]
+            .emission
+            .partial_cmp(&neurons[a].emission)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    if output.is_json() {
+        let entries: Vec<serde_json::Value> = indices
+            .iter()
+            .take(show)
+            .map(|&i| {
+                let n = &neurons[i];
+                let pct = if total_emission > 0.0 {
+                    n.emission / total_emission * 100.0
+                } else {
+                    0.0
+                };
+                serde_json::json!({
+                    "uid": n.uid, "hotkey": n.hotkey,
+                    "emission": n.emission, "emission_pct": pct,
+                    "incentive": n.incentive, "dividends": n.dividends,
+                    "validator_permit": n.validator_permit,
+                })
+            })
+            .collect();
+        print_json(&serde_json::json!({
+            "netuid": netuid.0,
+            "total_emission": total_emission,
+            "name": dyn_info.as_ref().map(|d| d.name.as_str()).unwrap_or(""),
+            "neurons": entries,
+        }));
+    } else {
+        let name = dyn_info.as_ref().map(|d| d.name.as_str()).unwrap_or("?");
+        println!(
+            "Emission breakdown for SN{} ({}) — total emission: {:.4}\n",
+            netuid.0, name, total_emission
+        );
+        println!(
+            "{:>5} {:>12} {:>8} {:>10} {:>10} {:>3} Hotkey",
+            "UID", "Emission", "%", "Incentive", "Dividends", "VP"
+        );
+        println!("{}", "-".repeat(80));
+        for &i in indices.iter().take(show) {
+            let n = &neurons[i];
+            let pct = if total_emission > 0.0 {
+                n.emission / total_emission * 100.0
+            } else {
+                0.0
+            };
+            println!(
+                "{:>5} {:>12.4} {:>7.2}% {:>10.4} {:>10.4} {:>3} {}",
+                n.uid,
+                n.emission,
+                pct,
+                n.incentive,
+                n.dividends,
+                if n.validator_permit { "Y" } else { "" },
+                crate::utils::short_ss58(&n.hotkey)
+            );
+        }
+    }
     Ok(())
 }

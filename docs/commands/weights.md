@@ -11,13 +11,6 @@ Directly set weights on a subnet. Cannot be used when commit-reveal is enabled.
 agcli weights set --netuid 1 --weights "0:100,1:200,2:50" [--version-key 0] [--dry-run]
 ```
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--netuid` | yes | Subnet UID |
-| `--weights` | yes | Comma-separated `uid:weight` pairs (u16 values) |
-| `--version-key` | no | Version key for weight compatibility (default: 0) |
-| `--dry-run` | no | Pre-flight check: validate without submitting |
-
 **On-chain**: `SubtensorModule::set_weights(origin, netuid, dests, weights, version_key)`
 - Storage writes: `Weights` map for the hotkey's UID
 - Events: `WeightsSet(netuid, uid)`
@@ -37,10 +30,6 @@ Commit a blake2 hash of weights (phase 1 of commit-reveal). Save the salt for re
 ```bash
 agcli weights commit --netuid 1 --weights "0:100,1:200" [--salt "mysecret"]
 ```
-
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--salt` | no | Salt string (auto-generated 32-char random if omitted) |
 
 **On-chain**: `SubtensorModule::commit_crv3_weights(origin, netuid, commit_hash)`
 - Hash: blake2b-256 of (uids, weights, salt)
@@ -64,10 +53,6 @@ Atomic: commit, wait for reveal window, then auto-reveal in a single command.
 ```bash
 agcli weights commit-reveal --netuid 1 --weights "0:100,1:200" [--version-key 0] [--wait]
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--wait` | Block until reveal is confirmed on-chain |
 
 **Behavior**:
 1. Fetches hyperparams to check if commit-reveal is enabled

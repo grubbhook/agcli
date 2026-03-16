@@ -8,11 +8,6 @@ Submit multiple extrinsics atomically (or non-atomically) from a JSON file. Uses
 agcli batch --file calls.json [--no-atomic] [--password PW] [--yes]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--file` | Path to JSON file with call array |
-| `--no-atomic` | Use `batch` (continues on error) instead of `batch_all` (all-or-nothing) |
-
 ## JSON Format
 ```json
 [
