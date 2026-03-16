@@ -211,7 +211,10 @@ pub async fn run(config: &ScaffoldConfig) -> Result<ScaffoldResult> {
 }
 
 /// Run scaffold with a progress callback for CLI output.
-pub async fn run_with_progress<F>(config: &ScaffoldConfig, mut on_progress: F) -> Result<ScaffoldResult>
+pub async fn run_with_progress<F>(
+    config: &ScaffoldConfig,
+    mut on_progress: F,
+) -> Result<ScaffoldResult>
 where
     F: FnMut(&str),
 {
@@ -243,10 +246,8 @@ where
     // 3. Get Alice (sudo key)
     let alice = sr25519::Pair::from_string("//Alice", None)
         .map_err(|_| anyhow::anyhow!("Failed to derive //Alice keypair"))?;
-    let alice_ss58 = sp_core::crypto::Ss58Codec::to_ss58check_with_version(
-        &alice.public(),
-        42u16.into(),
-    );
+    let alice_ss58 =
+        sp_core::crypto::Ss58Codec::to_ss58check_with_version(&alice.public(), 42u16.into());
 
     if config.subnet.is_empty() {
         bail!("No subnets defined in scaffold config");
@@ -293,7 +294,11 @@ where
                             || msg.contains("not found")
                             || msg.contains("Bad origin")
                         {
-                            $cb(&format!("Warning: {} skipped — {}", $label, &msg[..80.min(msg.len())]));
+                            $cb(&format!(
+                                "Warning: {} skipped — {}",
+                                $label,
+                                &msg[..80.min(msg.len())]
+                            ));
                         } else {
                             return Err(e);
                         }
@@ -303,40 +308,94 @@ where
         }
 
         if let Some(tempo) = subnet_cfg.tempo {
-            try_admin!("set_tempo", admin::set_tempo(&client, &alice, netuid, tempo),
-                "tempo", tempo, hyperparams, on_progress);
+            try_admin!(
+                "set_tempo",
+                admin::set_tempo(&client, &alice, netuid, tempo),
+                "tempo",
+                tempo,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(max_val) = subnet_cfg.max_allowed_validators {
-            try_admin!("set_max_validators", admin::set_max_allowed_validators(&client, &alice, netuid, max_val),
-                "max_allowed_validators", max_val, hyperparams, on_progress);
+            try_admin!(
+                "set_max_validators",
+                admin::set_max_allowed_validators(&client, &alice, netuid, max_val),
+                "max_allowed_validators",
+                max_val,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(max_uids) = subnet_cfg.max_allowed_uids {
-            try_admin!("set_max_uids", admin::set_max_allowed_uids(&client, &alice, netuid, max_uids),
-                "max_allowed_uids", max_uids, hyperparams, on_progress);
+            try_admin!(
+                "set_max_uids",
+                admin::set_max_allowed_uids(&client, &alice, netuid, max_uids),
+                "max_allowed_uids",
+                max_uids,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(min_w) = subnet_cfg.min_allowed_weights {
-            try_admin!("set_min_weights", admin::set_min_allowed_weights(&client, &alice, netuid, min_w),
-                "min_allowed_weights", min_w, hyperparams, on_progress);
+            try_admin!(
+                "set_min_weights",
+                admin::set_min_allowed_weights(&client, &alice, netuid, min_w),
+                "min_allowed_weights",
+                min_w,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(max_wl) = subnet_cfg.max_weight_limit {
-            try_admin!("set_max_weight_limit", admin::set_max_weight_limit(&client, &alice, netuid, max_wl),
-                "max_weight_limit", max_wl, hyperparams, on_progress);
+            try_admin!(
+                "set_max_weight_limit",
+                admin::set_max_weight_limit(&client, &alice, netuid, max_wl),
+                "max_weight_limit",
+                max_wl,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(ip) = subnet_cfg.immunity_period {
-            try_admin!("set_immunity_period", admin::set_immunity_period(&client, &alice, netuid, ip),
-                "immunity_period", ip, hyperparams, on_progress);
+            try_admin!(
+                "set_immunity_period",
+                admin::set_immunity_period(&client, &alice, netuid, ip),
+                "immunity_period",
+                ip,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(wrl) = subnet_cfg.weights_rate_limit {
-            try_admin!("set_weights_rate_limit", admin::set_weights_set_rate_limit(&client, &alice, netuid, wrl),
-                "weights_rate_limit", wrl, hyperparams, on_progress);
+            try_admin!(
+                "set_weights_rate_limit",
+                admin::set_weights_set_rate_limit(&client, &alice, netuid, wrl),
+                "weights_rate_limit",
+                wrl,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(cr) = subnet_cfg.commit_reveal {
-            try_admin!("set_commit_reveal", admin::set_commit_reveal_weights_enabled(&client, &alice, netuid, cr),
-                "commit_reveal", cr, hyperparams, on_progress);
+            try_admin!(
+                "set_commit_reveal",
+                admin::set_commit_reveal_weights_enabled(&client, &alice, netuid, cr),
+                "commit_reveal",
+                cr,
+                hyperparams,
+                on_progress
+            );
         }
         if let Some(ac) = subnet_cfg.activity_cutoff {
-            try_admin!("set_activity_cutoff", admin::set_activity_cutoff(&client, &alice, netuid, ac),
-                "activity_cutoff", ac, hyperparams, on_progress);
+            try_admin!(
+                "set_activity_cutoff",
+                admin::set_activity_cutoff(&client, &alice, netuid, ac),
+                "activity_cutoff",
+                ac,
+                hyperparams,
+                on_progress
+            );
         }
 
         on_progress(&format!(
@@ -356,19 +415,15 @@ where
             let seed_uri = format!("//{}_sn{}", neuron_cfg.name, netuid);
             let pair = sr25519::Pair::from_string(&seed_uri, None)
                 .map_err(|_| anyhow::anyhow!("Failed to derive keypair for {}", seed_uri))?;
-            let ss58 = sp_core::crypto::Ss58Codec::to_ss58check_with_version(
-                &pair.public(),
-                42u16.into(),
-            );
+            let ss58 =
+                sp_core::crypto::Ss58Codec::to_ss58check_with_version(&pair.public(), 42u16.into());
 
             // Fund from Alice
             let mut balance_tao = None;
             if let Some(fund) = neuron_cfg.fund_tao {
                 if fund > 0.0 {
-                    retry_extrinsic(|| {
-                        client.transfer(&alice, &ss58, Balance::from_tao(fund))
-                    })
-                    .await?;
+                    retry_extrinsic(|| client.transfer(&alice, &ss58, Balance::from_tao(fund)))
+                        .await?;
                     balance_tao = Some(fund);
                 }
             }
@@ -376,10 +431,7 @@ where
             // Register on subnet
             let mut uid = None;
             if neuron_cfg.register {
-                retry_extrinsic(|| {
-                    client.burned_register(&alice, NetUid(netuid), &ss58)
-                })
-                .await?;
+                retry_extrinsic(|| client.burned_register(&alice, NetUid(netuid), &ss58)).await?;
                 wait_blocks(&client, 1).await;
 
                 // Look up UID

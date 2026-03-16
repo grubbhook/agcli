@@ -53,7 +53,11 @@ pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Res
                 }));
             } else {
                 println!("Localnet started successfully!");
-                println!("  Container: {} ({})", info.container_name, &info.container_id[..12]);
+                println!(
+                    "  Container: {} ({})",
+                    info.container_name,
+                    &info.container_id[..12]
+                );
                 println!("  Image:     {}", info.image);
                 println!("  Endpoint:  {}", info.endpoint);
                 println!("  Block:     {}", info.block_height);
@@ -142,7 +146,11 @@ pub(super) async fn handle_localnet(cmd: LocalnetCommands, ctx: &Ctx<'_>) -> Res
                 }));
             } else {
                 println!("Localnet reset complete!");
-                println!("  Container: {} ({})", info.container_name, &info.container_id[..12]);
+                println!(
+                    "  Container: {} ({})",
+                    info.container_name,
+                    &info.container_id[..12]
+                );
                 println!("  Endpoint:  {}", info.endpoint);
                 println!("  Block:     {}", info.block_height);
             }

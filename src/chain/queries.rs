@@ -1130,8 +1130,7 @@ impl Client {
         while let Some(Ok(kv)) = iter.next().await {
             let key_bytes = &kv.key_bytes;
             if key_bytes.len() >= 32 {
-                let account_bytes: [u8; 32] = match key_bytes[key_bytes.len() - 32..].try_into()
-                {
+                let account_bytes: [u8; 32] = match key_bytes[key_bytes.len() - 32..].try_into() {
                     Ok(b) => b,
                     Err(_) => continue, // skip malformed key
                 };
@@ -1274,11 +1273,10 @@ impl Client {
             // Extract the account_id from the storage key (last 32 bytes)
             let key_bytes = kv.key_bytes;
             if key_bytes.len() >= 32 {
-                let account_bytes: [u8; 32] =
-                    match key_bytes[key_bytes.len() - 32..].try_into() {
-                        Ok(b) => b,
-                        Err(_) => continue, // skip malformed key
-                    };
+                let account_bytes: [u8; 32] = match key_bytes[key_bytes.len() - 32..].try_into() {
+                    Ok(b) => b,
+                    Err(_) => continue, // skip malformed key
+                };
                 let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
                 let ss58 = account_id.to_string();
                 let block = kv.value.block;

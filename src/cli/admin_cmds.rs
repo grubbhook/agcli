@@ -9,10 +9,7 @@ use sp_core::{sr25519, Pair as _};
 use subxt::dynamic::Value;
 
 /// Resolve a sudo keypair from a URI string (e.g. "//Alice") or from the wallet.
-fn resolve_sudo_key(
-    sudo_key: &Option<String>,
-    ctx: &Ctx<'_>,
-) -> Result<sr25519::Pair> {
+fn resolve_sudo_key(sudo_key: &Option<String>, ctx: &Ctx<'_>) -> Result<sr25519::Pair> {
     if let Some(ref uri) = sudo_key {
         // Try as dev URI first (//Alice, //Bob, etc.)
         match sr25519::Pair::from_string(uri, None) {
@@ -31,11 +28,7 @@ fn resolve_sudo_key(
     Ok(wallet.coldkey()?.clone())
 }
 
-pub(super) async fn handle_admin(
-    cmd: AdminCommands,
-    client: &Client,
-    ctx: &Ctx<'_>,
-) -> Result<()> {
+pub(super) async fn handle_admin(cmd: AdminCommands, client: &Client, ctx: &Ctx<'_>) -> Result<()> {
     match cmd {
         AdminCommands::SetTempo {
             netuid,
@@ -44,7 +37,11 @@ pub(super) async fn handle_admin(
         } => {
             let pair = resolve_sudo_key(&sudo_key, ctx)?;
             let hash = admin::set_tempo(client, &pair, netuid, tempo).await?;
-            print_tx_result(ctx.output, &hash, &format!("Tempo set to {} on SN{}", tempo, netuid));
+            print_tx_result(
+                ctx.output,
+                &hash,
+                &format!("Tempo set to {} on SN{}", tempo, netuid),
+            );
             Ok(())
         }
 
@@ -129,8 +126,7 @@ pub(super) async fn handle_admin(
             sudo_key,
         } => {
             let pair = resolve_sudo_key(&sudo_key, ctx)?;
-            let hash =
-                admin::set_weights_set_rate_limit(client, &pair, netuid, limit).await?;
+            let hash = admin::set_weights_set_rate_limit(client, &pair, netuid, limit).await?;
             print_tx_result(
                 ctx.output,
                 &hash,
@@ -145,8 +141,8 @@ pub(super) async fn handle_admin(
             sudo_key,
         } => {
             let pair = resolve_sudo_key(&sudo_key, ctx)?;
-            let hash = admin::set_commit_reveal_weights_enabled(client, &pair, netuid, enabled)
-                .await?;
+            let hash =
+                admin::set_commit_reveal_weights_enabled(client, &pair, netuid, enabled).await?;
             let state = if enabled { "enabled" } else { "disabled" };
             print_tx_result(
                 ctx.output,

@@ -172,7 +172,10 @@ where
                     }
                     let delay = if msg.contains("banned") {
                         13_000
-                    } else if msg.contains("subscription") || msg.contains("closed") || msg.contains("Custom error") {
+                    } else if msg.contains("subscription")
+                        || msg.contains("closed")
+                        || msg.contains("Custom error")
+                    {
                         2_000
                     } else {
                         500
@@ -209,7 +212,10 @@ where
                 if retryable && attempt < 20 {
                     let delay = if msg.contains("banned") {
                         13_000
-                    } else if msg.contains("subscription") || msg.contains("closed") || msg.contains("Custom error") {
+                    } else if msg.contains("subscription")
+                        || msg.contains("closed")
+                        || msg.contains("Custom error")
+                    {
                         2_000 // longer delay for connection drops
                     } else {
                         500
@@ -264,11 +270,16 @@ async fn e2e_local_chain() {
                 for _attempt in 1..=10u64 {
                     match client.reconnect().await {
                         Ok(()) => {
-                            println!("  [reconnect] restored at block {}", client.get_block_number().await.unwrap_or(0));
+                            println!(
+                                "  [reconnect] restored at block {}",
+                                client.get_block_number().await.unwrap_or(0)
+                            );
                             break;
                         }
                         Err(_) => {
-                            if _attempt == 10 { panic!("[FATAL] could not reconnect after 10 attempts"); }
+                            if _attempt == 10 {
+                                panic!("[FATAL] could not reconnect after 10 attempts");
+                            }
                             tokio::time::sleep(Duration::from_millis(500 * _attempt)).await;
                         }
                     }
@@ -601,7 +612,9 @@ async fn test_burned_register(client: &Client) {
     let result = try_extrinsic(|| client.burned_register(&alice, netuid, &bob_ss58)).await;
     match &result {
         Ok(hash) => println!("  burned_register tx: {hash}"),
-        Err(e) if e.contains("AlreadyRegistered") => println!("  burned_register: Bob already registered (idempotent)"),
+        Err(e) if e.contains("AlreadyRegistered") => {
+            println!("  burned_register: Bob already registered (idempotent)")
+        }
         Err(e) => panic!("[FAIL] burned_register: {}", e),
     }
 
@@ -714,8 +727,7 @@ async fn test_snipe_register(client: &Client) {
             }
             Err(e) => {
                 let msg = format!("{}", e);
-                if msg.contains("TooManyRegistrationsThisBlock")
-                    || msg.contains("Custom error: 6")
+                if msg.contains("TooManyRegistrationsThisBlock") || msg.contains("Custom error: 6")
                 {
                     println!(
                         "  rate-limited at block #{}, waiting for next block",
@@ -1120,9 +1132,14 @@ async fn setup_subnet(client: &mut Client, alice: &sr25519::Pair, sn: NetUid) {
             let result = sudo_admin_call(client, alice, call, fields.clone()).await;
             match &result {
                 Ok(_) => return result,
-                Err(e) if e.contains("dispatch failed") || e.contains("WeightsWindow")
-                    || e.contains("Prohibited") || e.contains("connection")
-                    || e.contains("closed") || e.contains("restart") => {
+                Err(e)
+                    if e.contains("dispatch failed")
+                        || e.contains("WeightsWindow")
+                        || e.contains("Prohibited")
+                        || e.contains("connection")
+                        || e.contains("closed")
+                        || e.contains("restart") =>
+                {
                     if attempt <= 3 {
                         println!("    {} attempt {}/{}: {}", call, attempt, max, e);
                     }
@@ -1138,16 +1155,30 @@ async fn setup_subnet(client: &mut Client, alice: &sr25519::Pair, sn: NetUid) {
     println!("── Setup SN{} ──", sn.0);
 
     // Enable subtokens
-    match robust_sudo(client, alice, "sudo_set_subtoken_enabled",
-        vec![Value::u128(sn.0 as u128), Value::bool(true)], 10).await {
+    match robust_sudo(
+        client,
+        alice,
+        "sudo_set_subtoken_enabled",
+        vec![Value::u128(sn.0 as u128), Value::bool(true)],
+        10,
+    )
+    .await
+    {
         Ok(hash) => println!("  subtoken_enabled SN{}: {hash}", sn.0),
         Err(e) => println!("  [WARN] subtoken SN{}: {}", sn.0, e),
     }
     wait_blocks(client, 2).await;
 
     // Disable commit-reveal weights
-    match robust_sudo(client, alice, "sudo_set_commit_reveal_weights_enabled",
-        vec![Value::u128(sn.0 as u128), Value::bool(false)], 10).await {
+    match robust_sudo(
+        client,
+        alice,
+        "sudo_set_commit_reveal_weights_enabled",
+        vec![Value::u128(sn.0 as u128), Value::bool(false)],
+        10,
+    )
+    .await
+    {
         Ok(hash) => println!("  commit-reveal off SN{}: {hash}", sn.0),
         Err(e) => println!("  [WARN] commit-reveal SN{}: {}", sn.0, e),
     }
@@ -1158,8 +1189,15 @@ async fn setup_subnet(client: &mut Client, alice: &sr25519::Pair, sn: NetUid) {
         ("sudo_set_weights_set_rate_limit", "weights rate limit"),
         ("sudo_set_serving_rate_limit", "serving rate limit"),
     ] {
-        match robust_sudo(client, alice, name,
-            vec![Value::u128(sn.0 as u128), Value::u128(0)], 5).await {
+        match robust_sudo(
+            client,
+            alice,
+            name,
+            vec![Value::u128(sn.0 as u128), Value::u128(0)],
+            5,
+        )
+        .await
+        {
             Ok(hash) => println!("  zero {} SN{}: {hash}", desc, sn.0),
             Err(e) => println!("  [WARN] {} SN{}: {}", desc, sn.0, e),
         }
@@ -1167,8 +1205,14 @@ async fn setup_subnet(client: &mut Client, alice: &sr25519::Pair, sn: NetUid) {
     }
 
     // Set min burn for snipe guard test
-    let _ = robust_sudo(client, alice, "sudo_set_min_burn",
-        vec![Value::u128(sn.0 as u128), Value::u128(1_000_000_000)], 5).await;
+    let _ = robust_sudo(
+        client,
+        alice,
+        "sudo_set_min_burn",
+        vec![Value::u128(sn.0 as u128), Value::u128(1_000_000_000)],
+        5,
+    )
+    .await;
 
     wait_blocks(client, 2).await;
     println!("[PASS] setup SN{}", sn.0);
@@ -1201,8 +1245,14 @@ async fn setup_global_rate_limits(client: &mut Client, alice: &sr25519::Pair) {
             let result = sudo_admin_call(client, alice, call, fields.clone()).await;
             match &result {
                 Ok(_) => return result,
-                Err(e) if e.contains("connection") || e.contains("closed") || e.contains("restart") => {
-                    if attempt <= 3 { println!("    {} attempt {}/5: {}", call, attempt, e); }
+                Err(e)
+                    if e.contains("connection")
+                        || e.contains("closed")
+                        || e.contains("restart") =>
+                {
+                    if attempt <= 3 {
+                        println!("    {} attempt {}/5: {}", call, attempt, e);
+                    }
                     wait_blocks(client, 3).await;
                     continue;
                 }
@@ -1212,16 +1262,28 @@ async fn setup_global_rate_limits(client: &mut Client, alice: &sr25519::Pair) {
         Err(format!("{call}: max retries exhausted"))
     }
 
-    match robust_global_sudo(client, alice, "sudo_set_tx_rate_limit",
-        vec![Value::u128(0)]).await {
+    match robust_global_sudo(
+        client,
+        alice,
+        "sudo_set_tx_rate_limit",
+        vec![Value::u128(0)],
+    )
+    .await
+    {
         Ok(hash) => println!("  zero tx rate limit: {hash}"),
         Err(e) => println!("  [WARN] tx rate limit: {}", e),
     }
 
     wait_blocks(client, 2).await;
 
-    match robust_global_sudo(client, alice, "sudo_set_tx_delegate_take_rate_limit",
-        vec![Value::u128(0)]).await {
+    match robust_global_sudo(
+        client,
+        alice,
+        "sudo_set_tx_delegate_take_rate_limit",
+        vec![Value::u128(0)],
+    )
+    .await
+    {
         Ok(hash) => println!("  zero delegate take rate limit: {hash}"),
         Err(e) => println!("  [WARN] delegate take rate limit: {}", e),
     }
@@ -1249,11 +1311,17 @@ async fn test_set_weights(client: &Client, netuid: NetUid) {
                 println!("  Alice already registered on SN{}", netuid.0);
             }
             Err(e) => {
-                panic!("[FAIL] set_weights — could not register Alice on SN{}: {}", netuid.0, e);
+                panic!(
+                    "[FAIL] set_weights — could not register Alice on SN{}: {}",
+                    netuid.0, e
+                );
             }
         }
         wait_blocks(&client, 3).await;
-        let neurons2 = client.get_neurons_lite(netuid).await.expect("neurons after register");
+        let neurons2 = client
+            .get_neurons_lite(netuid)
+            .await
+            .expect("neurons after register");
         neurons2.iter().find(|n| n.hotkey == ALICE_SS58).cloned()
     } else {
         alice_neuron.cloned()
@@ -1399,8 +1467,7 @@ async fn test_add_remove_stake(client: &Client) {
     // Now remove some stake
     let remove_amount = Balance::from_tao(2.0);
     let hash =
-        retry_extrinsic(|| client.remove_stake(&alice, &bob_ss58, netuid, remove_amount))
-            .await;
+        retry_extrinsic(|| client.remove_stake(&alice, &bob_ss58, netuid, remove_amount)).await;
     println!("  remove_stake tx: {hash}");
 
     wait_blocks(&client, 3).await;
@@ -1697,7 +1764,9 @@ async fn test_commitments(client: &Client, netuid: NetUid) {
                     );
                 }
                 None => {
-                    panic!("[FAIL] set_commitment — extrinsic submitted but commitment not readable");
+                    panic!(
+                        "[FAIL] set_commitment — extrinsic submitted but commitment not readable"
+                    );
                 }
             }
 
@@ -2121,7 +2190,10 @@ async fn test_commit_weights(client: &Client, netuid: NetUid) {
         }
     }
     if !cr_enabled {
-        println!("[PASS] commit_weights — skipped (commit-reveal could not be enabled on SN{})", netuid.0);
+        println!(
+            "[PASS] commit_weights — skipped (commit-reveal could not be enabled on SN{})",
+            netuid.0
+        );
         return;
     }
     wait_blocks(&client, 3).await;
@@ -2347,7 +2419,11 @@ async fn test_dissolve_network(client: &Client) {
 async fn test_block_queries(client: &Client) {
     // block latest: get current block number and hash
     let block_num = client.get_block_number().await.expect("get_block_number");
-    assert!(block_num > 10, "should be well past genesis, got {}", block_num);
+    assert!(
+        block_num > 10,
+        "should be well past genesis, got {}",
+        block_num
+    );
 
     let block_hash = client
         .get_block_hash(block_num as u32)
@@ -2363,10 +2439,7 @@ async fn test_block_queries(client: &Client) {
         .get_block_header(block_hash)
         .await
         .expect("get_block_header");
-    assert_eq!(
-        number, block_num as u32,
-        "header block number should match"
-    );
+    assert_eq!(number, block_num as u32, "header block number should match");
     assert!(
         parent_hash != subxt::utils::H256::zero(),
         "parent hash should not be zero"
@@ -2445,10 +2518,7 @@ async fn test_view_queries(client: &Client, netuid: NetUid) {
     // view network: total issuance and stake
     let issuance = client.get_total_issuance().await.expect("total_issuance");
     let total_stake = client.get_total_stake().await.expect("total_stake");
-    assert!(
-        issuance.rao() > 0,
-        "total issuance should be positive"
-    );
+    assert!(issuance.rao() > 0, "total issuance should be positive");
     println!(
         "  network: issuance={:.2}τ, stake={:.2}τ",
         issuance.tao(),
@@ -2465,7 +2535,10 @@ async fn test_view_queries(client: &Client, netuid: NetUid) {
         "should have at least 1 subnet in dynamic info"
     );
     let root_dyn = dynamics.iter().find(|d| d.netuid == NetUid(0));
-    assert!(root_dyn.is_some(), "root network (SN0) should be in dynamic info");
+    assert!(
+        root_dyn.is_some(),
+        "root network (SN0) should be in dynamic info"
+    );
     println!(
         "  dynamic: {} subnets, root_tempo={}",
         dynamics.len(),
@@ -2476,21 +2549,24 @@ async fn test_view_queries(client: &Client, netuid: NetUid) {
     let neurons = client.get_neurons_lite(netuid).await.expect("neurons_lite");
     if !neurons.is_empty() {
         let uid0 = neurons[0].uid;
-        let neuron = client
-            .get_neuron(netuid, uid0)
-            .await
-            .expect("get_neuron");
+        let neuron = client.get_neuron(netuid, uid0).await.expect("get_neuron");
         match neuron {
             Some(n) => {
                 assert_eq!(n.uid, uid0, "neuron UID should match");
                 assert_eq!(n.netuid, netuid, "neuron netuid should match");
                 println!(
                     "  neuron: SN{} UID {} hotkey={} active={}",
-                    netuid.0, n.uid, &n.hotkey[..12], n.active
+                    netuid.0,
+                    n.uid,
+                    &n.hotkey[..12],
+                    n.active
                 );
             }
             None => {
-                println!("  neuron: SN{} UID {} returned None (may be pruned)", netuid.0, uid0);
+                println!(
+                    "  neuron: SN{} UID {} returned None (may be pruned)",
+                    netuid.0, uid0
+                );
             }
         }
     }
@@ -2505,7 +2581,10 @@ async fn test_view_queries(client: &Client, netuid: NetUid) {
             assert_eq!(d.netuid, netuid, "dynamic netuid should match");
             println!(
                 "  dynamic(SN{}): name={}, price={:.4}, tao_in={:.2}τ",
-                netuid.0, d.name, d.price, d.tao_in.tao()
+                netuid.0,
+                d.name,
+                d.price,
+                d.tao_in.tao()
             );
         }
         None => {
@@ -2531,7 +2610,12 @@ async fn test_subnet_detail_queries(client: &Client, netuid: NetUid) {
             assert!(si.tempo > 0, "tempo should be positive");
             println!(
                 "  subnet_show: SN{} name={} n={}/{} tempo={} burn={}",
-                si.netuid.0, si.name, si.n, si.max_n, si.tempo, si.burn.display_tao()
+                si.netuid.0,
+                si.name,
+                si.n,
+                si.max_n,
+                si.tempo,
+                si.burn.display_tao()
             );
         }
         None => {
@@ -2562,10 +2646,7 @@ async fn test_subnet_detail_queries(client: &Client, netuid: NetUid) {
 
     // all subnets query
     let all_subnets = client.get_all_subnets().await.expect("get_all_subnets");
-    assert!(
-        !all_subnets.is_empty(),
-        "should have at least 1 subnet"
-    );
+    assert!(!all_subnets.is_empty(), "should have at least 1 subnet");
     let our_sn = all_subnets.iter().find(|s| s.netuid == netuid);
     assert!(
         our_sn.is_some(),
@@ -2586,10 +2667,7 @@ async fn test_subnet_detail_queries(client: &Client, netuid: NetUid) {
 async fn test_delegate_queries(client: &Client) {
     // delegate list: get all delegates
     let delegates = client.get_delegates().await.expect("get_delegates");
-    println!(
-        "  delegate_list: {} delegates",
-        delegates.len()
-    );
+    println!("  delegate_list: {} delegates", delegates.len());
 
     // delegate show: query Alice as delegate (she should be one after decrease_take)
     let alice_delegate = client
@@ -2599,7 +2677,11 @@ async fn test_delegate_queries(client: &Client) {
     match alice_delegate {
         Some(d) => {
             assert_eq!(d.hotkey, ALICE_SS58, "delegate hotkey should match Alice");
-            assert!(d.take >= 0.0 && d.take <= 1.0, "take should be 0..1, got {}", d.take);
+            assert!(
+                d.take >= 0.0 && d.take <= 1.0,
+                "take should be 0..1, got {}",
+                d.take
+            );
             println!(
                 "[PASS] delegate_queries — Alice: take={:.2}%, nominators={}, registrations={:?}",
                 d.take * 100.0,
@@ -2609,7 +2691,10 @@ async fn test_delegate_queries(client: &Client) {
         }
         None => {
             // Alice may not be a delegate yet — still pass the query test
-            println!("[PASS] delegate_queries — list={} delegates, Alice not found as delegate", delegates.len());
+            println!(
+                "[PASS] delegate_queries — list={} delegates, Alice not found as delegate",
+                delegates.len()
+            );
         }
     }
 }
@@ -2618,10 +2703,7 @@ async fn test_delegate_queries(client: &Client) {
 
 async fn test_identity_show(client: &Client) {
     // Query Alice's on-chain identity (likely not set, but the query should work)
-    let identity = client
-        .get_identity(ALICE_SS58)
-        .await
-        .expect("get_identity");
+    let identity = client.get_identity(ALICE_SS58).await.expect("get_identity");
     match identity {
         Some(id) => {
             println!(
@@ -2643,7 +2725,11 @@ async fn test_identity_show(client: &Client) {
     println!(
         "  identity_at_block: pinned={:?}, result={}",
         pin,
-        if identity_at.is_some() { "found" } else { "none" }
+        if identity_at.is_some() {
+            "found"
+        } else {
+            "none"
+        }
     );
 }
 
@@ -2677,23 +2763,24 @@ async fn test_serve_reset(client: &Client, netuid: NetUid) {
                     wait_blocks(&client, 3).await;
 
                     // Verify axon was zeroed
-                    let neuron_full = client
-                        .get_neuron(netuid, uid)
-                        .await
-                        .expect("get_neuron");
+                    let neuron_full = client.get_neuron(netuid, uid).await.expect("get_neuron");
                     match neuron_full {
-                        Some(n) => {
-                            match n.axon_info {
-                                Some(ax) => {
-                                    assert_eq!(ax.port, 0, "port should be 0 after reset");
-                                    assert_eq!(ax.version, 0, "version should be 0 after reset");
-                                    println!("[PASS] serve_reset — axon zeroed on SN{} UID {}", netuid.0, uid);
-                                }
-                                None => {
-                                    println!("[PASS] serve_reset — axon cleared (None) on SN{} UID {}", netuid.0, uid);
-                                }
+                        Some(n) => match n.axon_info {
+                            Some(ax) => {
+                                assert_eq!(ax.port, 0, "port should be 0 after reset");
+                                assert_eq!(ax.version, 0, "version should be 0 after reset");
+                                println!(
+                                    "[PASS] serve_reset — axon zeroed on SN{} UID {}",
+                                    netuid.0, uid
+                                );
                             }
-                        }
+                            None => {
+                                println!(
+                                    "[PASS] serve_reset — axon cleared (None) on SN{} UID {}",
+                                    netuid.0, uid
+                                );
+                            }
+                        },
                         None => {
                             println!("[PASS] serve_reset — extrinsic submitted (neuron pruned)");
                         }
@@ -2705,7 +2792,10 @@ async fn test_serve_reset(client: &Client, netuid: NetUid) {
             }
         }
         None => {
-            panic!("[FAIL] serve_reset — Alice not registered on SN{}", netuid.0);
+            panic!(
+                "[FAIL] serve_reset — Alice not registered on SN{}",
+                netuid.0
+            );
         }
     }
 }
@@ -2741,11 +2831,7 @@ async fn test_subscribe_blocks(client: &Client) {
         timeout.is_ok(),
         "should receive 3 blocks within 10 seconds on fast-block chain"
     );
-    assert_eq!(
-        blocks_seen.len(),
-        3,
-        "should have seen exactly 3 blocks"
-    );
+    assert_eq!(blocks_seen.len(), 3, "should have seen exactly 3 blocks");
 
     // Verify blocks are sequential
     assert!(
@@ -2790,10 +2876,7 @@ async fn test_wallet_sign_verify() {
     // Verify fails with wrong message
     let wrong_msg = b"Wrong message";
     let invalid2 = sr25519::Pair::verify(&signature, wrong_msg, &alice.public());
-    assert!(
-        !invalid2,
-        "signature should NOT verify with wrong message"
-    );
+    assert!(!invalid2, "signature should NOT verify with wrong message");
 
     // Test with hex-encoded message (like the CLI does)
     let hex_msg = hex::encode(b"0xdeadbeef");
@@ -2899,14 +2982,14 @@ async fn test_crowdloan_lifecycle(client: &Client) {
 
             // List crowdloans to verify
             let loans = client.list_crowdloans().await.expect("list_crowdloans");
-            println!(
-                "  crowdloans after create: {} total",
-                loans.len()
-            );
+            println!("  crowdloans after create: {} total", loans.len());
 
             if !loans.is_empty() {
                 let (id, _owner, _deposit, _min, _cap, _end, _active) = &loans[loans.len() - 1];
-                let info = client.get_crowdloan_info(*id).await.expect("crowdloan_info");
+                let info = client
+                    .get_crowdloan_info(*id)
+                    .await
+                    .expect("crowdloan_info");
                 match info {
                     Some((owner, deposit, _min_c, cap, end, raised, active, _target)) => {
                         println!(
@@ -2935,11 +3018,7 @@ async fn test_crowdloan_lifecycle(client: &Client) {
                             .get_crowdloan_contributors(*id)
                             .await
                             .expect("contributors");
-                        println!(
-                            "  crowdloan #{}: {} contributors",
-                            id,
-                            contributors.len()
-                        );
+                        println!("  crowdloan #{}: {} contributors", id, contributors.len());
                     }
                     Err(e) => {
                         println!("  crowdloan_contribute skipped: {}", e);
@@ -2984,10 +3063,7 @@ async fn test_swap_hotkey(client: &Client, netuid: NetUid) {
     let new_hk_ss58 = to_ss58(&new_hk.public());
 
     // Swap old→new
-    let result = try_extrinsic(|| {
-        client.swap_hotkey(&alice, &old_hk_ss58, &new_hk_ss58)
-    })
-    .await;
+    let result = try_extrinsic(|| client.swap_hotkey(&alice, &old_hk_ss58, &new_hk_ss58)).await;
 
     match result {
         Ok(hash) => {
@@ -3008,10 +3084,7 @@ async fn test_swap_hotkey(client: &Client, netuid: NetUid) {
 // ──── 33. Metagraph Snapshot ────
 
 async fn test_metagraph(client: &Client, netuid: NetUid) {
-    let mg = client
-        .get_metagraph(netuid)
-        .await
-        .expect("get_metagraph");
+    let mg = client.get_metagraph(netuid).await.expect("get_metagraph");
 
     assert_eq!(mg.netuid, netuid, "metagraph netuid should match");
     assert!(mg.block > 0, "metagraph block should be positive");
@@ -3020,21 +3093,9 @@ async fn test_metagraph(client: &Client, netuid: NetUid) {
         mg.n as usize,
         "neurons.len() should equal n"
     );
-    assert_eq!(
-        mg.stake.len(),
-        mg.n as usize,
-        "stake.len() should equal n"
-    );
-    assert_eq!(
-        mg.ranks.len(),
-        mg.n as usize,
-        "ranks.len() should equal n"
-    );
-    assert_eq!(
-        mg.uids.len(),
-        mg.n as usize,
-        "uids.len() should equal n"
-    );
+    assert_eq!(mg.stake.len(), mg.n as usize, "stake.len() should equal n");
+    assert_eq!(mg.ranks.len(), mg.n as usize, "ranks.len() should equal n");
+    assert_eq!(mg.uids.len(), mg.n as usize, "uids.len() should equal n");
     assert_eq!(
         mg.active.len(),
         mg.n as usize,
@@ -3069,11 +3130,7 @@ async fn test_multi_balance(client: &Client) {
         .await
         .expect("get_balances_multi");
 
-    assert_eq!(
-        balances.len(),
-        2,
-        "should get exactly 2 balances"
-    );
+    assert_eq!(balances.len(), 2, "should get exactly 2 balances");
 
     let (alice_addr, alice_bal) = &balances[0];
     let (bob_addr, bob_bal) = &balances[1];
@@ -3084,10 +3141,7 @@ async fn test_multi_balance(client: &Client) {
         alice_bal.tao() > 100_000.0,
         "Alice should still have >100k TAO"
     );
-    assert!(
-        bob_bal.tao() > 0.0,
-        "Bob should have positive balance"
-    );
+    assert!(bob_bal.tao() > 0.0, "Bob should have positive balance");
 
     println!(
         "[PASS] multi_balance — Alice={:.2}τ, Bob={:.2}τ",
@@ -3103,10 +3157,7 @@ async fn test_extended_state_queries(client: &Client, netuid: NetUid) {
     let delegated = client.get_delegated(ALICE_SS58).await;
     match delegated {
         Ok(infos) => {
-            println!(
-                "  get_delegated(Alice): {} entries",
-                infos.len()
-            );
+            println!("  get_delegated(Alice): {} entries", infos.len());
             println!("[PASS] get_delegated — query succeeded");
         }
         Err(e) => {
@@ -3134,7 +3185,10 @@ async fn test_extended_state_queries(client: &Client, netuid: NetUid) {
             println!("[PASS] get_dynamic_info — SN{} fields valid", netuid.0);
         }
         None => {
-            println!("[PASS] get_dynamic_info — SN{} returned None (may not exist)", netuid.0);
+            println!(
+                "[PASS] get_dynamic_info — SN{} returned None (may not exist)",
+                netuid.0
+            );
         }
     }
 
@@ -3272,7 +3326,11 @@ async fn test_all_weights(client: &Client, netuid: NetUid) {
             for (uid, entries) in w.iter().take(3) {
                 println!("    UID {}: {} weight entries", uid, entries.len());
             }
-            println!("[PASS] get_all_weights — SN{} returned {} entries", netuid.0, w.len());
+            println!(
+                "[PASS] get_all_weights — SN{} returned {} entries",
+                netuid.0,
+                w.len()
+            );
         }
         Err(e) => {
             let msg = format!("{}", e);
@@ -3349,7 +3407,11 @@ async fn test_at_block_queries(client: &Client, netuid: NetUid) {
     let neurons = client.get_neurons_lite_at_block(netuid, hash).await;
     match neurons {
         Ok(n) => {
-            println!("  neurons_lite_at_block SN{}: {} neurons", netuid.0, n.len());
+            println!(
+                "  neurons_lite_at_block SN{}: {} neurons",
+                netuid.0,
+                n.len()
+            );
         }
         Err(e) => {
             let msg = format!("{}", e);
@@ -3395,7 +3457,9 @@ async fn test_at_block_queries(client: &Client, netuid: NetUid) {
     }
 
     // get_stake_for_coldkey_at_block
-    let stakes = client.get_stake_for_coldkey_at_block(ALICE_SS58, hash).await;
+    let stakes = client
+        .get_stake_for_coldkey_at_block(ALICE_SS58, hash)
+        .await;
     match stakes {
         Ok(s) => {
             println!("  stake_at_block(Alice): {} stakes", s.len());

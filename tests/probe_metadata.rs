@@ -7,7 +7,9 @@ const LOCAL_WS: &str = "ws://127.0.0.1:9944";
 
 #[tokio::test]
 async fn probe_runtime_metadata() {
-    let client = Client::connect(LOCAL_WS).await.expect("connect to localnet");
+    let client = Client::connect(LOCAL_WS)
+        .await
+        .expect("connect to localnet");
     let metadata = client.metadata();
 
     println!("\n═══ Runtime Metadata Probe ═══\n");

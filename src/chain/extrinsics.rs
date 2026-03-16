@@ -1273,11 +1273,7 @@ impl Client {
         match metadata.pallet_by_name(pallet) {
             Some(p) => {
                 if p.call_variant_by_name(call).is_none() {
-                    anyhow::bail!(
-                        "Call {}.{} not found in runtime metadata",
-                        pallet,
-                        call
-                    );
+                    anyhow::bail!("Call {}.{} not found in runtime metadata", pallet, call);
                 }
             }
             None => {
@@ -1309,11 +1305,7 @@ impl Client {
         match metadata.pallet_by_name(pallet) {
             Some(p) => {
                 if p.call_variant_by_name(call).is_none() {
-                    anyhow::bail!(
-                        "Call {}.{} not found in runtime metadata",
-                        pallet,
-                        call
-                    );
+                    anyhow::bail!("Call {}.{} not found in runtime metadata", pallet, call);
                 }
             }
             None => {

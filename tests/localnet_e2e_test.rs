@@ -210,14 +210,22 @@ async fn t10_admin_requires_subnet() {
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 let after = client.get_total_networks().await.unwrap_or(before);
                 if after > before {
-                    println!("[PASS] t10_admin — subnet registered: netuid {} (attempt {})", after - 1, attempt);
+                    println!(
+                        "[PASS] t10_admin — subnet registered: netuid {} (attempt {})",
+                        after - 1,
+                        attempt
+                    );
                     success = true;
                     break;
                 }
             }
             Err(e) => {
                 let msg = e.to_string();
-                println!("  [t10] attempt {} failed: {}...", attempt, &msg[..80.min(msg.len())]);
+                println!(
+                    "  [t10] attempt {} failed: {}...",
+                    attempt,
+                    &msg[..80.min(msg.len())]
+                );
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
         }
@@ -568,9 +576,7 @@ async fn t33_scaffold_load_missing_file() {
 
 #[tokio::test]
 async fn t90_localnet_reset() {
-    let info = localnet::reset(&test_config())
-        .await
-        .expect("reset failed");
+    let info = localnet::reset(&test_config()).await.expect("reset failed");
     assert_eq!(info.container_name, TEST_CONTAINER);
     assert!(info.block_height > 0);
     println!(

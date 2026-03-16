@@ -261,18 +261,70 @@ pub async fn raw_admin_call(
 /// Returns (call_name, description, arg_types).
 pub fn known_params() -> Vec<(&'static str, &'static str, &'static [&'static str])> {
     vec![
-        ("sudo_set_tempo", "Blocks per epoch", &["netuid: u16", "tempo: u16"]),
-        ("sudo_set_max_allowed_validators", "Max validator slots", &["netuid: u16", "max: u16"]),
-        ("sudo_set_max_allowed_uids", "Max total UID slots", &["netuid: u16", "max: u16"]),
-        ("sudo_set_immunity_period", "Blocks of immunity after registration", &["netuid: u16", "period: u16"]),
-        ("sudo_set_min_allowed_weights", "Minimum weights a validator must set", &["netuid: u16", "min: u16"]),
-        ("sudo_set_max_weight_limit", "Maximum weight value", &["netuid: u16", "limit: u16"]),
-        ("sudo_set_weights_set_rate_limit", "Blocks between weight submissions (0=unlimited)", &["netuid: u16", "limit: u64"]),
-        ("sudo_set_commit_reveal_weights_enabled", "Enable/disable commit-reveal weights", &["netuid: u16", "enabled: bool"]),
-        ("sudo_set_difficulty", "POW registration difficulty", &["netuid: u16", "difficulty: u64"]),
-        ("sudo_set_bonds_moving_average", "Bonds moving average", &["netuid: u16", "avg: u64"]),
-        ("sudo_set_target_registrations_per_interval", "Target registrations per interval", &["netuid: u16", "target: u16"]),
-        ("sudo_set_activity_cutoff", "Blocks before a neuron is considered inactive", &["netuid: u16", "cutoff: u16"]),
-        ("sudo_set_serving_rate_limit", "Axon serving rate limit", &["netuid: u16", "limit: u64"]),
+        (
+            "sudo_set_tempo",
+            "Blocks per epoch",
+            &["netuid: u16", "tempo: u16"],
+        ),
+        (
+            "sudo_set_max_allowed_validators",
+            "Max validator slots",
+            &["netuid: u16", "max: u16"],
+        ),
+        (
+            "sudo_set_max_allowed_uids",
+            "Max total UID slots",
+            &["netuid: u16", "max: u16"],
+        ),
+        (
+            "sudo_set_immunity_period",
+            "Blocks of immunity after registration",
+            &["netuid: u16", "period: u16"],
+        ),
+        (
+            "sudo_set_min_allowed_weights",
+            "Minimum weights a validator must set",
+            &["netuid: u16", "min: u16"],
+        ),
+        (
+            "sudo_set_max_weight_limit",
+            "Maximum weight value",
+            &["netuid: u16", "limit: u16"],
+        ),
+        (
+            "sudo_set_weights_set_rate_limit",
+            "Blocks between weight submissions (0=unlimited)",
+            &["netuid: u16", "limit: u64"],
+        ),
+        (
+            "sudo_set_commit_reveal_weights_enabled",
+            "Enable/disable commit-reveal weights",
+            &["netuid: u16", "enabled: bool"],
+        ),
+        (
+            "sudo_set_difficulty",
+            "POW registration difficulty",
+            &["netuid: u16", "difficulty: u64"],
+        ),
+        (
+            "sudo_set_bonds_moving_average",
+            "Bonds moving average",
+            &["netuid: u16", "avg: u64"],
+        ),
+        (
+            "sudo_set_target_registrations_per_interval",
+            "Target registrations per interval",
+            &["netuid: u16", "target: u16"],
+        ),
+        (
+            "sudo_set_activity_cutoff",
+            "Blocks before a neuron is considered inactive",
+            &["netuid: u16", "cutoff: u16"],
+        ),
+        (
+            "sudo_set_serving_rate_limit",
+            "Axon serving rate limit",
+            &["netuid: u16", "limit: u64"],
+        ),
     ]
 }

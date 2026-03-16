@@ -188,7 +188,10 @@ pub fn stop(container_name: &str) -> Result<()> {
     // docker rm -f may return exit 0 even for missing containers (Docker 28+),
     // so check stderr regardless of exit code.
     if stderr.contains("No such container") {
-        bail!("Container '{}' not found (already stopped?)", container_name);
+        bail!(
+            "Container '{}' not found (already stopped?)",
+            container_name
+        );
     }
 
     if !output.status.success() {
