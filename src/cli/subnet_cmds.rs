@@ -1070,12 +1070,21 @@ async fn handle_subnet_liquidity(
     output: OutputFormat,
     netuid: Option<u16>,
 ) -> Result<()> {
-    let dynamic: Vec<crate::types::chain_data::DynamicInfo> = match netuid {
+    // Avoid cloning the full Arc<Vec<DynamicInfo>> — keep owned single-subnet or Arc for all
+    let single;
+    let all;
+    let dynamic: &[crate::types::chain_data::DynamicInfo] = match netuid {
         Some(n) => match client.get_dynamic_info(NetUid(n)).await? {
-            Some(d) => vec![d],
+            Some(d) => {
+                single = vec![d];
+                &single
+            }
             None => anyhow::bail!("Subnet SN{} not found", n),
         },
-        None => (*client.get_all_dynamic_info().await?).clone(),
+        None => {
+            all = client.get_all_dynamic_info().await?;
+            &all
+        }
     };
 
     // Common trade sizes for slippage estimation
@@ -1083,7 +1092,7 @@ async fn handle_subnet_liquidity(
 
     if output.is_json() {
         let mut results = Vec::new();
-        for d in &dynamic {
+        for d in dynamic {
             if d.tao_in.rao() == 0 {
                 continue;
             }
@@ -1565,17 +1574,20 @@ async fn handle_subnet_emissions(client: &Client, netuid: u16, output: OutputFor
     let tempo = dynamic.as_ref().map(|d| d.tempo as f64).unwrap_or(360.0);
     let daily_emission = emission_per_block * 7200.0;
 
-    let mut sorted = neurons.clone();
-    sorted.sort_by(|a, b| {
-        b.emission
-            .partial_cmp(&a.emission)
+    // Sort by index to avoid cloning the entire Vec<NeuronInfoLite>
+    let mut indices: Vec<usize> = (0..neurons.len()).collect();
+    indices.sort_unstable_by(|&a, &b| {
+        neurons[b]
+            .emission
+            .partial_cmp(&neurons[a].emission)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     if output.is_json() {
-        let entries: Vec<serde_json::Value> = sorted
+        let entries: Vec<serde_json::Value> = indices
             .iter()
-            .map(|n| {
+            .map(|&i| {
+                let n = &neurons[i];
                 let share = if total_emission > 0.0 {
                     n.emission / total_emission * 100.0
                 } else {
@@ -1606,7 +1618,7 @@ async fn handle_subnet_emissions(client: &Client, netuid: u16, output: OutputFor
     println!("  Daily emission: {:.2} τ", daily_emission);
     println!("  Tempo:          {:.0} blocks\n", tempo);
 
-    let top: Vec<_> = sorted.into_iter().take(50).collect();
+    let top: Vec<_> = indices.iter().take(50).map(|&i| &neurons[i]).collect();
     render_rows(
         OutputFormat::Table,
         &top,

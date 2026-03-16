@@ -213,23 +213,33 @@ impl Client {
 
     // ──────── Delegate Queries ────────
 
-    /// Get all delegates (via runtime API).
-    pub async fn get_delegates(&self) -> Result<Vec<DelegateInfo>> {
+    /// Get all delegates (via runtime API, cached for 30s).
+    /// Returns `Arc<Vec<DelegateInfo>>` to avoid cloning the entire collection.
+    pub async fn get_all_delegates_cached(&self) -> Result<std::sync::Arc<Vec<DelegateInfo>>> {
         let inner = &self.inner;
-        let result = retry_on_transient("get_delegates", RPC_RETRIES, || async {
-            let payload = api::apis().delegate_info_runtime_api().get_delegates();
-            let r = inner
-                .runtime_api()
-                .at_latest()
+        self.cache
+            .get_all_delegates(|| async {
+                retry_on_transient("get_delegates", RPC_RETRIES, || async {
+                    let payload = api::apis().delegate_info_runtime_api().get_delegates();
+                    let r = inner
+                        .runtime_api()
+                        .at_latest()
+                        .await
+                        .context("Failed to get latest block for delegate query")?
+                        .call(payload)
+                        .await
+                        .context("Failed to query delegates")?;
+                    Ok(r.into_iter().map(DelegateInfo::from).collect())
+                })
                 .await
-                .context("Failed to get latest block for delegate query")?
-                .call(payload)
-                .await
-                .context("Failed to query delegates")?;
-            Ok(r)
-        })
-        .await?;
-        Ok(result.into_iter().map(DelegateInfo::from).collect())
+            })
+            .await
+    }
+
+    /// Get all delegates (via runtime API). Uncached — prefer `get_all_delegates_cached()`.
+    pub async fn get_delegates(&self) -> Result<Vec<DelegateInfo>> {
+        let arc = self.get_all_delegates_cached().await?;
+        Ok((*arc).clone())
     }
 
     /// Get delegate info for a specific hotkey.

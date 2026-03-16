@@ -12,7 +12,7 @@ use moka::future::Cache;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::types::chain_data::{DynamicInfo, SubnetInfo};
+use crate::types::chain_data::{DelegateInfo, DynamicInfo, SubnetInfo};
 
 /// Default in-memory cache TTL in seconds.
 const DEFAULT_TTL_SECS: u64 = 30;
@@ -34,6 +34,8 @@ pub struct QueryCache {
     all_dynamic: Cache<(), Arc<Vec<DynamicInfo>>>,
     /// Cached dynamic info per subnet.
     dynamic_by_netuid: Cache<u16, Arc<DynamicInfo>>,
+    /// Cached delegate list (all delegates).
+    delegates: Cache<(), Arc<Vec<DelegateInfo>>>,
     /// Whether to use the disk cache layer. Disabled for tests with custom TTLs.
     use_disk: bool,
 }
@@ -56,6 +58,7 @@ impl QueryCache {
             subnets: Cache::builder().time_to_live(ttl).max_capacity(1).build(),
             all_dynamic: Cache::builder().time_to_live(ttl).max_capacity(1).build(),
             dynamic_by_netuid: Cache::builder().time_to_live(ttl).max_capacity(100).build(),
+            delegates: Cache::builder().time_to_live(ttl).max_capacity(1).build(),
             use_disk,
         }
     }
@@ -209,11 +212,38 @@ impl QueryCache {
         }
     }
 
+    /// Get or fetch all delegates. Concurrent callers coalesce into one fetch.
+    /// In-memory only (no disk cache) since delegate data is less stable.
+    pub async fn get_all_delegates<F, Fut>(
+        &self,
+        fetch: F,
+    ) -> anyhow::Result<Arc<Vec<DelegateInfo>>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<Vec<DelegateInfo>>>,
+    {
+        self.delegates
+            .try_get_with((), async {
+                tracing::debug!("cache miss: all_delegates — fetching from chain");
+                let start = std::time::Instant::now();
+                let data = fetch().await?;
+                tracing::debug!(
+                    elapsed_ms = start.elapsed().as_millis() as u64,
+                    count = data.len(),
+                    "fetched all_delegates"
+                );
+                Ok(Arc::new(data)) as anyhow::Result<_>
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))
+    }
+
     /// Invalidate all cached data (both in-memory and disk).
     pub async fn invalidate_all(&self) {
         self.subnets.invalidate_all();
         self.all_dynamic.invalidate_all();
         self.dynamic_by_netuid.invalidate_all();
+        self.delegates.invalidate_all();
         super::disk_cache::remove("all_subnets");
         super::disk_cache::remove("all_dynamic_info");
     }

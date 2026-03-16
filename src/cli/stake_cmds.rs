@@ -388,25 +388,27 @@ pub async fn handle_stake(cmd: StakeCommands, client: &Client, ctx: &Ctx<'_>) ->
         StakeCommands::ShowAuto { address } => {
             let addr = resolve_coldkey_address(address, wallet_dir, wallet_name);
             let subnets = client.get_all_subnets().await?;
+            // Parallel fetch: query all subnets concurrently instead of one-by-one
+            let addr_ref = &addr;
+            let futures: Vec<_> = subnets
+                .iter()
+                .map(|subnet| {
+                    let netuid = subnet.netuid;
+                    async move { (netuid, client.get_auto_stake_hotkey(addr_ref, netuid).await) }
+                })
+                .collect();
+            let results = futures::future::join_all(futures).await;
             let mut found = false;
-            for subnet in subnets.iter() {
-                match client.get_auto_stake_hotkey(&addr, subnet.netuid).await {
-                    Ok(Some(hotkey)) => {
-                        if !found {
-                            println!(
-                                "Auto-stake destinations for {}:",
-                                crate::utils::short_ss58(&addr)
-                            );
-                            found = true;
-                        }
+            for (netuid, result) in &results {
+                if let Ok(Some(hotkey)) = result {
+                    if !found {
                         println!(
-                            "  SN{:<4} → {}",
-                            subnet.netuid,
-                            crate::utils::short_ss58(&hotkey)
+                            "Auto-stake destinations for {}:",
+                            crate::utils::short_ss58(&addr)
                         );
+                        found = true;
                     }
-                    Ok(None) => {} // No auto-stake set for this subnet
-                    Err(_) => {}   // Storage key may not exist
+                    println!("  SN{:<4} → {}", netuid, crate::utils::short_ss58(hotkey));
                 }
             }
             if !found {

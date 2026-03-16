@@ -103,9 +103,13 @@ pub(super) async fn handle_delegate(
                     println!("  VP subnets:    {:?}", d.validator_permits);
                     if !d.nominators.is_empty() {
                         println!("  Top nominators:");
-                        let mut sorted = d.nominators.clone();
-                        sorted.sort_by(|a, b| b.1.rao().cmp(&a.1.rao()));
-                        for (addr, stake) in sorted.iter().take(10) {
+                        // Sort indices to avoid cloning the full nominators list
+                        let mut indices: Vec<usize> = (0..d.nominators.len()).collect();
+                        indices.sort_unstable_by(|&a, &b| {
+                            d.nominators[b].1.rao().cmp(&d.nominators[a].1.rao())
+                        });
+                        for &i in indices.iter().take(10) {
+                            let (addr, stake) = &d.nominators[i];
                             println!(
                                 "    {} — {}",
                                 crate::utils::short_ss58(addr),

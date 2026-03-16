@@ -872,13 +872,13 @@ async fn handle_subnet_analytics(client: &Client, netuid: u16, output: OutputFor
     };
 
     let mut top_miners = miners.clone();
-    top_miners.sort_by(|a, b| {
+    top_miners.sort_unstable_by(|a, b| {
         b.incentive
             .partial_cmp(&a.incentive)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut top_vals = validators.clone();
-    top_vals.sort_by(|a, b| {
+    top_vals.sort_unstable_by(|a, b| {
         b.dividends
             .partial_cmp(&a.dividends)
             .unwrap_or(std::cmp::Ordering::Equal)
