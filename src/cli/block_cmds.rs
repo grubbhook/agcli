@@ -180,10 +180,8 @@ pub(super) async fn handle_diff(
                 anyhow::bail!("No address provided and no wallet found. Use --address <SS58>.");
             }
 
-            let (hash1, hash2) = tokio::try_join!(
-                client.get_block_hash(block1),
-                client.get_block_hash(block2),
-            )?;
+            let (hash1, hash2) =
+                tokio::try_join!(client.get_block_hash(block1), client.get_block_hash(block2),)?;
 
             let (bal1, stakes1, bal2, stakes2) = tokio::try_join!(
                 client.get_balance_at_block(&addr, hash1),
@@ -271,10 +269,8 @@ pub(super) async fn handle_diff(
             block1,
             block2,
         } => {
-            let (hash1, hash2) = tokio::try_join!(
-                client.get_block_hash(block1),
-                client.get_block_hash(block2),
-            )?;
+            let (hash1, hash2) =
+                tokio::try_join!(client.get_block_hash(block1), client.get_block_hash(block2),)?;
             let nuid = NetUid(netuid);
 
             let (dyn1, dyn2) = tokio::try_join!(
@@ -372,10 +368,8 @@ pub(super) async fn handle_diff(
             Ok(())
         }
         DiffCommands::Network { block1, block2 } => {
-            let (hash1, hash2) = tokio::try_join!(
-                client.get_block_hash(block1),
-                client.get_block_hash(block2),
-            )?;
+            let (hash1, hash2) =
+                tokio::try_join!(client.get_block_hash(block1), client.get_block_hash(block2),)?;
 
             let (issuance1, stake1, subnets1, issuance2, stake2, subnets2) = tokio::try_join!(
                 client.get_total_issuance_at_block(hash1),
@@ -453,6 +447,77 @@ pub(super) async fn handle_diff(
                     subnets2.len(),
                     format!("{:+}", subnets2.len() as i64 - subnets1.len() as i64)
                 );
+            }
+            Ok(())
+        }
+        DiffCommands::Metagraph {
+            netuid,
+            block1,
+            block2,
+        } => {
+            let nuid = NetUid(netuid);
+            let (hash1, hash2) =
+                tokio::try_join!(client.get_block_hash(block1), client.get_block_hash(block2),)?;
+            let (neurons1, neurons2) = tokio::try_join!(
+                client.get_neurons_lite_at_block(nuid, hash1),
+                client.get_neurons_lite_at_block(nuid, hash2),
+            )?;
+
+            let map1: std::collections::HashMap<u16, &crate::types::chain_data::NeuronInfoLite> =
+                neurons1.iter().map(|n| (n.uid, n)).collect();
+
+            let mut changes = Vec::new();
+            for n2 in neurons2.iter() {
+                if let Some(n1) = map1.get(&n2.uid) {
+                    let stake_diff = n2.stake.tao() - n1.stake.tao();
+                    let emission_diff = n2.emission - n1.emission;
+                    let incentive_diff = n2.incentive - n1.incentive;
+                    if stake_diff.abs() > 0.001
+                        || emission_diff.abs() > 0.0001
+                        || incentive_diff.abs() > 0.0001
+                        || n2.hotkey != n1.hotkey
+                    {
+                        changes.push(serde_json::json!({
+                            "uid": n2.uid, "hotkey": n2.hotkey,
+                            "change": if n2.hotkey != n1.hotkey { "replaced" } else { "changed" },
+                            "stake_diff": stake_diff, "emission_diff": emission_diff,
+                            "incentive_diff": incentive_diff,
+                        }));
+                    }
+                } else {
+                    changes.push(serde_json::json!({
+                        "uid": n2.uid, "hotkey": n2.hotkey, "change": "new",
+                        "stake_diff": n2.stake.tao(), "emission_diff": n2.emission,
+                        "incentive_diff": n2.incentive,
+                    }));
+                }
+            }
+
+            if output.is_json() {
+                print_json(&serde_json::json!({
+                    "netuid": netuid, "block1": block1, "block2": block2,
+                    "neurons_block1": neurons1.len(), "neurons_block2": neurons2.len(),
+                    "changed": changes.len(), "diffs": changes,
+                }));
+            } else {
+                println!(
+                    "Metagraph Diff SN{}: block {} → {} ({} changed)\n",
+                    netuid,
+                    block1,
+                    block2,
+                    changes.len()
+                );
+                for d in &changes {
+                    println!(
+                        "  UID {:>4} [{}] ({}) stake:{:>+.4}τ emission:{:>+.4} incentive:{:>+.4}",
+                        d["uid"],
+                        d["change"].as_str().unwrap_or(""),
+                        crate::utils::short_ss58(d["hotkey"].as_str().unwrap_or("")),
+                        d["stake_diff"].as_f64().unwrap_or(0.0),
+                        d["emission_diff"].as_f64().unwrap_or(0.0),
+                        d["incentive_diff"].as_f64().unwrap_or(0.0)
+                    );
+                }
             }
             Ok(())
         }
