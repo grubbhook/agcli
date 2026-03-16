@@ -305,6 +305,10 @@ impl Wallet {
             let entry = entry?;
             if entry.file_type()?.is_file() {
                 if let Some(name) = entry.file_name().to_str() {
+                    // Skip lock files and hidden files
+                    if name.ends_with(".lock") || name.starts_with('.') {
+                        continue;
+                    }
                     names.push(name.to_string());
                 }
             }
