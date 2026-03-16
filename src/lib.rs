@@ -19,12 +19,14 @@
 //! }
 //! ```
 
+pub mod admin;
 pub mod chain;
 pub mod config;
 pub mod error;
 pub mod events;
 pub mod extrinsics;
 pub mod live;
+pub mod localnet;
 pub mod queries;
 pub mod types;
 pub mod utils;

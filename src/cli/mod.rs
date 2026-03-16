@@ -6,7 +6,9 @@ pub mod stake_cmds;
 pub mod view_cmds;
 pub mod wallet_cmds;
 
+mod admin_cmds;
 mod block_cmds;
+mod localnet_cmds;
 mod network_cmds;
 mod subnet_cmds;
 mod system_cmds;
@@ -312,6 +314,16 @@ pub enum Commands {
         #[arg(long)]
         no_atomic: bool,
     },
+
+    // ──── Localnet ────
+    /// Local chain management (Docker subtensor for development/testing)
+    #[command(subcommand)]
+    Localnet(LocalnetCommands),
+
+    // ──── Admin ────
+    /// AdminUtils sudo calls — set subnet hyperparameters (requires sudo key)
+    #[command(subcommand)]
+    Admin(AdminCommands),
 }
 
 #[derive(Subcommand, Debug)]
@@ -438,6 +450,16 @@ pub enum WalletCommands {
         /// Public key (0x hex) or mnemonic phrase
         #[arg(long)]
         input: String,
+    },
+    /// Create wallet from a Substrate dev account (Alice, Bob, Charlie, Dave, Eve, Ferdie)
+    #[command(alias = "dev")]
+    DevKey {
+        /// Dev account name or URI (e.g. "Alice", "//Alice", "Bob")
+        #[arg(long, default_value = "Alice")]
+        uri: String,
+        /// Coldkey password (non-interactive)
+        #[arg(long, env = "AGCLI_PASSWORD", hide_env_values = true)]
+        password: Option<String>,
     },
     /// Associate a hotkey with your coldkey on-chain
     AssociateHotkey {
@@ -1721,6 +1743,178 @@ pub enum ConfigCommands {
     CacheClear,
     /// Show disk cache info (entries, size, path)
     CacheInfo,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum LocalnetCommands {
+    /// Start a local subtensor chain (Docker container)
+    Start {
+        /// Docker image tag (default: devnet-ready)
+        #[arg(long)]
+        image: Option<String>,
+        /// Container name
+        #[arg(long)]
+        container: Option<String>,
+        /// Host port (default: 9944)
+        #[arg(long)]
+        port: Option<u16>,
+        /// Wait for blocks to be produced (default: true, use --wait false to skip)
+        #[arg(long)]
+        wait: Option<bool>,
+        /// Wait timeout in seconds (default: 120)
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
+    /// Stop the local chain container
+    Stop {
+        /// Container name (default: agcli_localnet)
+        #[arg(long)]
+        container: Option<String>,
+    },
+    /// Show local chain status
+    Status {
+        /// Container name
+        #[arg(long)]
+        container: Option<String>,
+        /// Host port (for block height check)
+        #[arg(long)]
+        port: Option<u16>,
+    },
+    /// Wipe state and restart the local chain
+    Reset {
+        /// Docker image tag
+        #[arg(long)]
+        image: Option<String>,
+        /// Container name
+        #[arg(long)]
+        container: Option<String>,
+        /// Host port
+        #[arg(long)]
+        port: Option<u16>,
+        /// Wait timeout in seconds
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
+    /// Show container logs
+    Logs {
+        /// Container name
+        #[arg(long)]
+        container: Option<String>,
+        /// Number of lines to show (from end)
+        #[arg(long)]
+        tail: Option<u32>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AdminCommands {
+    /// Set tempo (blocks per epoch)
+    SetTempo {
+        /// Subnet UID
+        #[arg(long)]
+        netuid: u16,
+        /// Tempo value
+        #[arg(long)]
+        tempo: u16,
+        /// Sudo key URI (e.g. //Alice)
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set max allowed validators
+    SetMaxValidators {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        max: u16,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set max allowed UIDs
+    SetMaxUids {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        max: u16,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set immunity period
+    SetImmunityPeriod {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        period: u16,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set minimum allowed weights
+    SetMinWeights {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        min: u16,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set max weight limit
+    SetMaxWeightLimit {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        limit: u16,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set weights rate limit (0 = unlimited)
+    SetWeightsRateLimit {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        limit: u64,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Enable/disable commit-reveal weights
+    SetCommitReveal {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        enabled: bool,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set POW difficulty
+    SetDifficulty {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        difficulty: u64,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Set activity cutoff
+    SetActivityCutoff {
+        #[arg(long)]
+        netuid: u16,
+        #[arg(long)]
+        cutoff: u16,
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// Execute any AdminUtils call by name (generic escape hatch)
+    Raw {
+        /// AdminUtils call name (e.g. sudo_set_tempo)
+        #[arg(long)]
+        call: String,
+        /// Arguments as JSON array (e.g. '[1, 100]')
+        #[arg(long)]
+        args: String,
+        /// Sudo key URI
+        #[arg(long)]
+        sudo_key: Option<String>,
+    },
+    /// List all known AdminUtils parameters
+    List,
 }
 
 impl Cli {

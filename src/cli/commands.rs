@@ -78,6 +78,8 @@ pub async fn execute(cli: Cli) -> Result<()> {
         Commands::Block(_) => "block",
         Commands::Diff(_) => "diff",
         Commands::Batch { .. } => "batch",
+        Commands::Localnet(_) => "localnet",
+        Commands::Admin(_) => "admin",
     };
     tracing::info!(
         command = cmd_name,
@@ -429,6 +431,11 @@ pub async fn execute(cli: Cli) -> Result<()> {
             unlock_coldkey(&mut wallet, ctx.password)?;
             system_cmds::handle_batch(&client, wallet.coldkey()?, &file, no_atomic, ctx.output)
                 .await
+        }
+        Commands::Localnet(cmd) => localnet_cmds::handle_localnet(cmd, &ctx).await,
+        Commands::Admin(cmd) => {
+            let client = connect(&network, dry_run, best).await?;
+            admin_cmds::handle_admin(cmd, &client, &ctx).await
         }
     }
 }
