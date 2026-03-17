@@ -6438,7 +6438,7 @@ fn parse_wallet_global_hotkey_flag() {
     let cli = agcli::cli::Cli::try_parse_from(["agcli", "--hotkey", "miner1", "balance"]);
     assert!(cli.is_ok());
     let cli = cli.unwrap();
-    assert_eq!(cli.hotkey, "miner1");
+    assert_eq!(cli.hotkey_name, "miner1");
 }
 
 #[test]

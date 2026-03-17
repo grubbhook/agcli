@@ -283,7 +283,7 @@ pub fn is_nacl_encrypted(data: &[u8]) -> bool {
 
 /// Read and decrypt a Python bittensor-wallet NaCl-encrypted keyfile.
 /// Format: "$NACL" prefix + SecretBox encrypted data (nonce + ciphertext + MAC).
-/// KDF: Argon2i with opslimit=4, memlimit=1GiB, fixed NACL_SALT.
+/// KDF: Argon2i with opslimit=8, memlimit=512MiB, fixed NACL_SALT.
 pub fn read_python_keyfile(path: &Path, password: &str) -> Result<String> {
     let data = fs::read(path).context("read keyfile")?;
     decrypt_nacl_keyfile_data(&data, password)
