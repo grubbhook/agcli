@@ -39,7 +39,7 @@ pub async fn execute(cli: Cli) -> Result<()> {
     let ctx = Ctx {
         wallet_dir: &cli.wallet_dir,
         wallet_name: &cli.wallet,
-        hotkey_name: &cli.hotkey,
+        hotkey_name: &cli.hotkey_name,
         output: cli.output,
         password: password.as_deref(),
         yes: cli.yes,

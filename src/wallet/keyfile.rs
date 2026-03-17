@@ -215,10 +215,41 @@ pub fn write_public_key(path: &Path, public: &sr25519::Public) -> Result<()> {
 }
 
 /// Read a public key from file.
+///
+/// Supports two formats:
+/// - **agcli format**: plain hex-encoded 32-byte public key (with or without `0x` prefix)
+/// - **Python bittensor-wallet format**: JSON object with `publicKey` (hex) or `ss58Address`
 pub fn read_public_key(path: &Path) -> Result<sr25519::Public> {
-    let hex_str = fs::read_to_string(path).context("read public key file")?;
-    let hex_str = hex_str.trim().strip_prefix("0x").unwrap_or(hex_str.trim());
-    let bytes = hex::decode(hex_str).context("invalid hex")?;
+    let content = fs::read_to_string(path).context("read public key file")?;
+    let trimmed = content.trim();
+
+    // Python bittensor-wallet stores coldkeypub.txt as JSON:
+    // {"publicKey":"0x...","ss58Address":"5...","accountId":"0x..."}
+    if trimmed.starts_with('{') {
+        let v: serde_json::Value =
+            serde_json::from_str(trimmed).context("Failed to parse coldkeypub.txt JSON")?;
+        // Prefer publicKey hex over ss58Address (avoids SS58 codec round-trip)
+        if let Some(hex_str) = v.get("publicKey").and_then(|s| s.as_str()) {
+            let hex_str = hex_str.trim().strip_prefix("0x").unwrap_or(hex_str.trim());
+            let bytes = hex::decode(hex_str).context("invalid hex in publicKey")?;
+            if bytes.len() != 32 {
+                anyhow::bail!("publicKey must be 32 bytes, got {}", bytes.len());
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            return Ok(sr25519::Public::from_raw(arr));
+        }
+        if let Some(ss58) = v.get("ss58Address").and_then(|s| s.as_str()) {
+            use sp_core::crypto::Ss58Codec;
+            return sr25519::Public::from_ss58check(ss58.trim())
+                .map_err(|e| anyhow::anyhow!("invalid ss58Address in coldkeypub.txt: {:?}", e));
+        }
+        anyhow::bail!("coldkeypub.txt JSON has no publicKey or ss58Address field");
+    }
+
+    // agcli format: plain hex string
+    let hex_str = trimmed.strip_prefix("0x").unwrap_or(trimmed);
+    let bytes = hex::decode(hex_str).context("invalid hex in public key file")?;
     if bytes.len() != 32 {
         anyhow::bail!("public key must be 32 bytes, got {}", bytes.len());
     }
@@ -266,13 +297,13 @@ pub fn decrypt_nacl_keyfile_data(data: &[u8], password: &str) -> Result<String> 
         data
     };
 
-    // Derive key using Argon2i (matching Python bittensor-wallet / libsodium:
-    //   opslimit = pwhash.argon2i.OPSLIMIT_SENSITIVE = 4
-    //   memlimit = pwhash.argon2i.MEMLIMIT_SENSITIVE = 1 GiB = 1048576 KiB
+    // Derive key using Argon2i matching libsodium / PyNaCl constants:
+    //   crypto_pwhash_argon2i_OPSLIMIT_SENSITIVE = 8
+    //   crypto_pwhash_argon2i_MEMLIMIT_SENSITIVE = 536870912 bytes = 524288 KiB (512 MiB)
     let argon2_params = argon2::Params::new(
-        1_048_576, // 1 GiB in KiB (argon2i MEMLIMIT_SENSITIVE)
-        4,         // t_cost (argon2i OPSLIMIT_SENSITIVE)
-        1,         // p_cost (parallelism)
+        524_288, // 512 MiB in KiB (crypto_pwhash_argon2i_MEMLIMIT_SENSITIVE)
+        8,       // t_cost (crypto_pwhash_argon2i_OPSLIMIT_SENSITIVE)
+        1,       // p_cost (parallelism — libsodium argon2i uses 1)
         Some(KEY_LEN),
     )
     .map_err(|e| anyhow::anyhow!("argon2 params error: {}", e))?;
@@ -307,6 +338,8 @@ pub fn decrypt_nacl_keyfile_data(data: &[u8], password: &str) -> Result<String> 
 
 /// Detect keyfile format and decrypt accordingly.
 /// Supports both agcli's AES-256-GCM format and Python's NaCl SecretBox format.
+/// Returns raw decrypted content — may be a mnemonic string or a JSON object.
+/// Use [`extract_secret_phrase`] to get the mnemonic from either format.
 pub fn read_any_encrypted_keyfile(path: &Path, password: &str) -> Result<String> {
     let data = fs::read(path).context("read keyfile")?;
     if is_nacl_encrypted(&data) {
@@ -315,6 +348,26 @@ pub fn read_any_encrypted_keyfile(path: &Path, password: &str) -> Result<String>
         // Try our AES-256-GCM format
         read_encrypted_keyfile(path, password)
     }
+}
+
+/// Extract the secret phrase (mnemonic) from decrypted keyfile content.
+///
+/// Handles both plain-mnemonic format (agcli) and JSON format (Python bittensor-wallet).
+/// For JSON, looks for `secretPhrase` first, then falls back to `secretSeed`.
+pub fn extract_secret_phrase(decrypted: &str) -> Result<String> {
+    let trimmed = decrypted.trim();
+    if trimmed.starts_with('{') {
+        let v: serde_json::Value =
+            serde_json::from_str(trimmed).context("Failed to parse keyfile JSON")?;
+        if let Some(phrase) = v.get("secretPhrase").and_then(|s| s.as_str()) {
+            return Ok(phrase.trim().to_string());
+        }
+        if let Some(seed) = v.get("secretSeed").and_then(|s| s.as_str()) {
+            return Ok(seed.trim().to_string());
+        }
+        anyhow::bail!("Keyfile JSON has no secretPhrase or secretSeed field");
+    }
+    Ok(trimmed.to_string())
 }
 
 #[cfg(test)]

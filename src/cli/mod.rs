@@ -76,9 +76,9 @@ pub struct Cli {
     )]
     pub wallet: String,
 
-    /// Hotkey name
+    /// Hotkey name (file under wallet's hotkeys/ directory)
     #[arg(long, global = true, default_value = "default", env = "AGCLI_HOTKEY")]
-    pub hotkey: String,
+    pub hotkey_name: String,
 
     /// Output format
     #[arg(long, global = true, default_value = "table", value_enum)]
@@ -2331,9 +2331,9 @@ impl Cli {
                 self.wallet = w.clone();
             }
         }
-        if self.hotkey == "default" {
+        if self.hotkey_name == "default" {
             if let Some(ref h) = cfg.hotkey {
-                self.hotkey = h.clone();
+                self.hotkey_name = h.clone();
             }
         }
         if self.output == OutputFormat::Table {
