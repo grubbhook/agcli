@@ -427,6 +427,7 @@ pub(super) async fn handle_multisig(
             threshold,
             call_hash,
         } => {
+            validate_call_hash(&call_hash, "multisig approve")?;
             let mut client = Client::connect_network(network).await?;
             client.set_dry_run(dry_run);
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
@@ -497,6 +498,7 @@ pub(super) async fn handle_multisig(
             timepoint_height,
             timepoint_index,
         } => {
+            validate_call_hash(&call_hash, "multisig cancel")?;
             let mut client = Client::connect_network(network).await?;
             client.set_dry_run(dry_run);
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
@@ -1193,6 +1195,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
         }
         ProxyCommands::Announce { real, call_hash } => {
             validate_ss58(&real, "real")?;
+            validate_call_hash(&call_hash, "proxy announce")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);
@@ -1254,6 +1257,7 @@ pub(super) async fn handle_proxy(cmd: ProxyCommands, client: &Client, ctx: &Ctx<
             call_hash,
         } => {
             validate_ss58(&delegate, "delegate")?;
+            validate_call_hash(&call_hash, "proxy reject")?;
             let mut wallet = open_wallet(wallet_dir, wallet_name)?;
             unlock_coldkey(&mut wallet, password)?;
             let hash_hex = call_hash.strip_prefix("0x").unwrap_or(&call_hash);

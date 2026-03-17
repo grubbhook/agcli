@@ -3,13 +3,13 @@
 
 use agcli::cli::helpers::{
     json_to_subxt_value, parse_children, parse_weight_pairs, validate_admin_call_name,
-    validate_amount, validate_batch_file, validate_delegate_take, validate_derive_input,
-    validate_emission_weights, validate_evm_address, validate_gas_limit,
-    validate_github_repo, validate_hex_data, validate_ipv4, validate_max_cost,
-    validate_mnemonic, validate_multisig_json_args, validate_name, validate_pallet_call,
-    validate_schedule_id, validate_subnet_name, validate_symbol, validate_take_pct,
-    validate_threads, validate_url, validate_view_limit, validate_wasm_file,
-    validate_weight_input,
+    validate_amount, validate_batch_file, validate_call_hash, validate_config_network,
+    validate_delegate_take, validate_derive_input, validate_emission_weights,
+    validate_evm_address, validate_gas_limit, validate_github_repo, validate_hex_data,
+    validate_ipv4, validate_max_cost, validate_mnemonic, validate_multisig_json_args,
+    validate_name, validate_pallet_call, validate_schedule_id, validate_subnet_name,
+    validate_symbol, validate_take_pct, validate_threads, validate_url, validate_view_limit,
+    validate_wasm_file, validate_weight_input,
 };
 use agcli::utils::explain;
 
@@ -4093,4 +4093,212 @@ fn validate_spending_limit_netuid_with_text() {
 fn validate_spending_limit_fractional_valid() {
     assert!(validate_spending_limit(0.5, "1").is_ok());
     assert!(validate_spending_limit(99.99, "2").is_ok());
+}
+
+// ── validate_call_hash ──────────────────────────────────────────────
+
+#[test]
+fn validate_call_hash_valid_with_0x_prefix() {
+    let hash = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    assert!(validate_call_hash(hash, "test").is_ok());
+}
+
+#[test]
+fn validate_call_hash_valid_bare_hex() {
+    let hash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    assert!(validate_call_hash(hash, "test").is_ok());
+}
+
+#[test]
+fn validate_call_hash_valid_uppercase_prefix() {
+    let hash = "0Xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    assert!(validate_call_hash(hash, "test").is_ok());
+}
+
+#[test]
+fn validate_call_hash_valid_mixed_case_hex() {
+    let hash = "0xABCDEF1234567890abcdef1234567890ABCDEF1234567890abcdef1234567890";
+    assert!(validate_call_hash(hash, "test").is_ok());
+}
+
+#[test]
+fn validate_call_hash_valid_all_zeros() {
+    let hash = "0x0000000000000000000000000000000000000000000000000000000000000000";
+    assert!(validate_call_hash(hash, "test").is_ok());
+}
+
+#[test]
+fn validate_call_hash_valid_all_f() {
+    let hash = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    assert!(validate_call_hash(hash, "test").is_ok());
+}
+
+#[test]
+fn validate_call_hash_empty_rejected() {
+    let err = validate_call_hash("", "test").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_whitespace_only_rejected() {
+    let err = validate_call_hash("   ", "test").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_only_0x_prefix_rejected() {
+    let err = validate_call_hash("0x", "test").unwrap_err();
+    assert!(err.to_string().contains("empty after '0x'"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_too_short_rejected() {
+    let err = validate_call_hash("0xabcdef", "test").unwrap_err();
+    assert!(err.to_string().contains("64 hex chars"), "err: {}", err);
+    assert!(err.to_string().contains("got 6"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_too_long_rejected() {
+    let hash = "0x".to_string() + &"ab".repeat(33); // 66 hex chars
+    let err = validate_call_hash(&hash, "test").unwrap_err();
+    assert!(err.to_string().contains("64 hex chars"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_non_hex_rejected() {
+    let hash = "0xgggggg1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    let err = validate_call_hash(hash, "test").unwrap_err();
+    assert!(err.to_string().contains("not valid hex"), "err: {}", err);
+    assert!(err.to_string().contains("'g'"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_one_byte_short_rejected() {
+    // 62 hex chars = 31 bytes
+    let hash = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678";
+    let err = validate_call_hash(hash, "test").unwrap_err();
+    assert!(err.to_string().contains("64 hex chars"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_one_byte_long_rejected() {
+    // 66 hex chars = 33 bytes
+    let hash = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab";
+    let err = validate_call_hash(hash, "test").unwrap_err();
+    assert!(err.to_string().contains("64 hex chars"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_spaces_around_hash() {
+    let hash = "  0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890  ";
+    assert!(validate_call_hash(hash, "test").is_ok(), "should trim whitespace");
+}
+
+#[test]
+fn validate_call_hash_evm_address_length_rejected() {
+    // 40 hex chars = 20 bytes (EVM address size, not call hash)
+    let hash = "0xabcdef1234567890abcdef1234567890abcdef12";
+    let err = validate_call_hash(hash, "test").unwrap_err();
+    assert!(err.to_string().contains("64 hex chars"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_special_chars_rejected() {
+    let hash = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef123456789!";
+    let err = validate_call_hash(hash, "test").unwrap_err();
+    assert!(err.to_string().contains("not valid hex"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_embedded_spaces_rejected() {
+    let hash = "0xabcdef12 34567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    let err = validate_call_hash(hash, "test").unwrap_err();
+    assert!(err.to_string().contains("not valid hex"), "err: {}", err);
+}
+
+#[test]
+fn validate_call_hash_label_in_error() {
+    let err = validate_call_hash("", "proxy announce").unwrap_err();
+    assert!(err.to_string().contains("proxy announce"), "err: {}", err);
+}
+
+// ── validate_config_network ──────────────────────────────────────────
+
+#[test]
+fn validate_config_network_finney() {
+    assert!(validate_config_network("finney").is_ok());
+}
+
+#[test]
+fn validate_config_network_test() {
+    assert!(validate_config_network("test").is_ok());
+}
+
+#[test]
+fn validate_config_network_local() {
+    assert!(validate_config_network("local").is_ok());
+}
+
+#[test]
+fn validate_config_network_archive() {
+    assert!(validate_config_network("archive").is_ok());
+}
+
+#[test]
+fn validate_config_network_case_insensitive() {
+    assert!(validate_config_network("Finney").is_ok());
+    assert!(validate_config_network("FINNEY").is_ok());
+    assert!(validate_config_network("Test").is_ok());
+    assert!(validate_config_network("TEST").is_ok());
+    assert!(validate_config_network("Local").is_ok());
+    assert!(validate_config_network("LOCAL").is_ok());
+    assert!(validate_config_network("Archive").is_ok());
+    assert!(validate_config_network("ARCHIVE").is_ok());
+}
+
+#[test]
+fn validate_config_network_with_whitespace() {
+    assert!(validate_config_network("  finney  ").is_ok());
+    assert!(validate_config_network(" test ").is_ok());
+}
+
+#[test]
+fn validate_config_network_unknown_rejected() {
+    let err = validate_config_network("mainnet").unwrap_err();
+    assert!(err.to_string().contains("Unknown network"), "err: {}", err);
+    assert!(err.to_string().contains("mainnet"), "err: {}", err);
+}
+
+#[test]
+fn validate_config_network_empty_rejected() {
+    let err = validate_config_network("").unwrap_err();
+    assert!(err.to_string().contains("Unknown network"), "err: {}", err);
+}
+
+#[test]
+fn validate_config_network_custom_url_rejected() {
+    // Users should use --endpoint for custom URLs, not --network
+    let err = validate_config_network("wss://example.com").unwrap_err();
+    assert!(err.to_string().contains("Unknown network"), "err: {}", err);
+    assert!(err.to_string().contains("--endpoint"), "err: {}", err);
+}
+
+#[test]
+fn validate_config_network_misspelled_rejected() {
+    let err = validate_config_network("finey").unwrap_err();
+    assert!(err.to_string().contains("Unknown network"), "err: {}", err);
+}
+
+#[test]
+fn validate_config_network_devnet_rejected() {
+    let err = validate_config_network("devnet").unwrap_err();
+    assert!(err.to_string().contains("Unknown network"), "err: {}", err);
+}
+
+#[test]
+fn validate_config_network_testnet_vs_test() {
+    // "testnet" is wrong, "test" is correct
+    let err = validate_config_network("testnet").unwrap_err();
+    assert!(err.to_string().contains("Unknown network"), "err: {}", err);
 }

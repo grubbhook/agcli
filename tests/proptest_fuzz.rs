@@ -10,14 +10,14 @@ use proptest::prelude::*;
 
 use agcli::cli::helpers::{
     json_to_subxt_value, parse_children, parse_json_args, parse_weight_pairs,
-    validate_amount, validate_batch_axon_json, validate_commitment_data,
-    validate_crowdloan_amount, validate_delegate_take, validate_derive_input,
-    validate_emission_weights, validate_event_filter, validate_evm_address,
-    validate_hex_data, validate_ipv4, validate_max_cost, validate_mnemonic,
-    validate_multisig_json_args, validate_name, validate_netuid, validate_pallet_call,
-    validate_password_strength, validate_port, validate_price, validate_proxy_type,
-    validate_schedule_id, validate_spending_limit, validate_ss58, validate_symbol,
-    validate_take_pct,
+    validate_amount, validate_batch_axon_json, validate_call_hash, validate_commitment_data,
+    validate_config_network, validate_crowdloan_amount, validate_delegate_take,
+    validate_derive_input, validate_emission_weights, validate_event_filter,
+    validate_evm_address, validate_hex_data, validate_ipv4, validate_max_cost,
+    validate_mnemonic, validate_multisig_json_args, validate_name, validate_netuid,
+    validate_pallet_call, validate_password_strength, validate_port, validate_price,
+    validate_proxy_type, validate_schedule_id, validate_spending_limit, validate_ss58,
+    validate_symbol, validate_take_pct,
 };
 
 // ──── validate_amount: never panics, valid amounts always accepted ────
@@ -1114,5 +1114,58 @@ proptest! {
     fn fuzz_spending_limit_invalid_netuid_rejected(s in "[a-zA-Z]{1,10}") {
         prop_assert!(validate_spending_limit(100.0, &s).is_err(),
             "non-numeric netuid '{}' should be rejected", s);
+    }
+
+    // ── validate_call_hash fuzz ──────────────────────────────────────
+
+    #[test]
+    fn fuzz_call_hash_no_panic(s in "\\PC{0,200}") {
+        let _ = validate_call_hash(&s, "fuzz");
+    }
+
+    #[test]
+    fn fuzz_call_hash_valid_hex_accepted(hex_bytes in prop::collection::vec(0u8..=255u8, 32..=32)) {
+        let hex_str = format!("0x{}", hex::encode(&hex_bytes));
+        prop_assert!(validate_call_hash(&hex_str, "fuzz").is_ok(),
+            "valid 32-byte hex '{}' should be accepted", hex_str);
+    }
+
+    #[test]
+    fn fuzz_call_hash_wrong_length_rejected(hex_bytes in prop::collection::vec(0u8..=255u8, 1..=31)) {
+        let hex_str = format!("0x{}", hex::encode(&hex_bytes));
+        prop_assert!(validate_call_hash(&hex_str, "fuzz").is_err(),
+            "wrong-length hex '{}' ({} bytes) should be rejected", hex_str, hex_bytes.len());
+    }
+
+    #[test]
+    fn fuzz_call_hash_too_long_rejected(hex_bytes in prop::collection::vec(0u8..=255u8, 33..=64)) {
+        let hex_str = format!("0x{}", hex::encode(&hex_bytes));
+        prop_assert!(validate_call_hash(&hex_str, "fuzz").is_err(),
+            "too-long hex '{}' ({} bytes) should be rejected", hex_str, hex_bytes.len());
+    }
+
+    #[test]
+    fn fuzz_call_hash_random_strings_rejected(s in "[^0-9a-fA-F]{1,64}") {
+        // Strings with no hex chars should always be rejected
+        let with_prefix = format!("0x{}", s);
+        prop_assert!(validate_call_hash(&with_prefix, "fuzz").is_err(),
+            "non-hex '{}' should be rejected", with_prefix);
+    }
+
+    // ── validate_config_network fuzz ─────────────────────────────────
+
+    #[test]
+    fn fuzz_config_network_no_panic(s in "\\PC{0,100}") {
+        let _ = validate_config_network(&s);
+    }
+
+    #[test]
+    fn fuzz_config_network_random_rejected(s in "[a-z]{5,20}") {
+        // Random 5+ letter strings (not matching known networks) should be rejected
+        let lower = s.to_lowercase();
+        if !["finney", "test", "local", "archive"].contains(&lower.as_str()) {
+            prop_assert!(validate_config_network(&s).is_err(),
+                "unknown network '{}' should be rejected", s);
+        }
     }
 }

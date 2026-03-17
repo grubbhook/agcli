@@ -23,8 +23,14 @@ pub(super) async fn handle_config(cmd: ConfigCommands) -> Result<()> {
         ConfigCommands::Set { key, value } => {
             let mut cfg = crate::config::Config::load();
             match key.as_str() {
-                "network" => cfg.network = Some(value),
-                "endpoint" => cfg.endpoint = Some(value),
+                "network" => {
+                    validate_config_network(&value)?;
+                    cfg.network = Some(value);
+                }
+                "endpoint" => {
+                    validate_url(&value, "endpoint")?;
+                    cfg.endpoint = Some(value);
+                }
                 "wallet_dir" => cfg.wallet_dir = Some(value),
                 "wallet" => cfg.wallet = Some(value),
                 "hotkey" => cfg.hotkey = Some(value),
@@ -34,7 +40,10 @@ pub(super) async fn handle_config(cmd: ConfigCommands) -> Result<()> {
                     }
                     cfg.output = Some(value);
                 }
-                "proxy" => cfg.proxy = Some(value),
+                "proxy" => {
+                    validate_ss58(&value, "proxy address")?;
+                    cfg.proxy = Some(value);
+                }
                 "live_interval" => {
                     let v: u64 = value.parse().map_err(|_| anyhow::anyhow!("Invalid interval '{}'", value))?;
                     cfg.live_interval = Some(v);

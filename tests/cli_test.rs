@@ -10936,3 +10936,658 @@ fn parse_subscribe_events_with_filter_s16() {
     ]);
     assert!(cli.is_ok(), "subscribe events filter: {:?}", cli.err());
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// Step 17 — Call hash validation, config validation, multisig tests
+// ══════════════════════════════════════════════════════════════════════
+
+// ── Proxy announce with call_hash ─────────────────────────────────────
+
+#[test]
+fn parse_proxy_announce_with_valid_hash_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "announce",
+        "--real", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--call-hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    ]);
+    assert!(cli.is_ok(), "proxy announce: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_announce_bare_hash_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "announce",
+        "--real", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--call-hash", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    ]);
+    assert!(cli.is_ok(), "proxy announce bare hash: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_reject_with_hash_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "reject-announcement",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--call-hash", "0x0000000000000000000000000000000000000000000000000000000000000001",
+    ]);
+    assert!(cli.is_ok(), "proxy reject: {:?}", cli.err());
+}
+
+// ── Multisig with call_hash ──────────────────────────────────────────
+
+#[test]
+fn parse_multisig_approve_with_hash_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "approve",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--call-hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    ]);
+    assert!(cli.is_ok(), "multisig approve: {:?}", cli.err());
+}
+
+#[test]
+fn parse_multisig_cancel_with_hash_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "cancel",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--call-hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "--timepoint-height", "100",
+        "--timepoint-index", "1",
+    ]);
+    assert!(cli.is_ok(), "multisig cancel: {:?}", cli.err());
+}
+
+#[test]
+fn parse_multisig_approve_missing_hash_fails_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "approve",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+    ]);
+    assert!(cli.is_err(), "multisig approve without call-hash should fail");
+}
+
+#[test]
+fn parse_multisig_cancel_missing_timepoint_fails_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "cancel",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--call-hash", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    ]);
+    assert!(cli.is_err(), "multisig cancel without timepoint should fail");
+}
+
+#[test]
+fn parse_multisig_execute_with_timepoint_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "execute",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+        "--args", "[\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", 1000000000]",
+        "--timepoint-height", "100",
+        "--timepoint-index", "1",
+    ]);
+    assert!(cli.is_ok(), "multisig execute with timepoint: {:?}", cli.err());
+}
+
+#[test]
+fn parse_multisig_execute_without_timepoint_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "execute",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+    ]);
+    assert!(cli.is_ok(), "multisig execute without timepoint (optional): {:?}", cli.err());
+}
+
+#[test]
+fn parse_multisig_list_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "list",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "multisig list: {:?}", cli.err());
+}
+
+#[test]
+fn parse_multisig_list_missing_address_fails_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "list",
+    ]);
+    assert!(cli.is_err(), "multisig list without address should fail");
+}
+
+// ── Config set with validation ──────────────────────────────────────
+
+#[test]
+fn parse_config_set_network_valid_values_s17() {
+    for network in &["finney", "test", "local", "archive"] {
+        let cli = agcli::cli::Cli::try_parse_from([
+            "agcli", "config", "set", "--key", "network", "--value", network,
+        ]);
+        assert!(cli.is_ok(), "config set network {}: {:?}", network, cli.err());
+    }
+}
+
+#[test]
+fn parse_config_set_endpoint_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "set", "--key", "endpoint", "--value", "wss://example.com:443",
+    ]);
+    assert!(cli.is_ok(), "config set endpoint: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_set_proxy_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "set", "--key", "proxy", "--value", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "config set proxy: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_cache_clear_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "cache-clear",
+    ]);
+    assert!(cli.is_ok(), "config cache-clear: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_cache_info_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "cache-info",
+    ]);
+    assert!(cli.is_ok(), "config cache-info: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_path_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "path",
+    ]);
+    assert!(cli.is_ok(), "config path: {:?}", cli.err());
+}
+
+// ── Proxy list-announcements ─────────────────────────────────────────
+
+#[test]
+fn parse_proxy_list_announcements_with_address_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "list-announcements",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "proxy list-announcements with addr: {:?}", cli.err());
+}
+
+#[test]
+fn parse_proxy_list_announcements_default_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "list-announcements",
+    ]);
+    assert!(cli.is_ok(), "proxy list-announcements default: {:?}", cli.err());
+}
+
+// ── Admin commands — boundary tests ─────────────────────────────────
+
+#[test]
+fn parse_admin_set_tempo_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-tempo",
+        "--netuid", "1",
+        "--tempo", "100",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-tempo: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_validators_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-validators",
+        "--netuid", "1",
+        "--max", "64",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-validators: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_uids_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-uids",
+        "--netuid", "1",
+        "--max", "4096",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-uids: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_immunity_period_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-immunity-period",
+        "--netuid", "1",
+        "--period", "100",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-immunity-period: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_min_weights_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-min-weights",
+        "--netuid", "1",
+        "--min", "1",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-min-weights: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_max_weight_limit_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-max-weight-limit",
+        "--netuid", "1",
+        "--limit", "65535",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-max-weight-limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_weights_rate_limit_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-weights-rate-limit",
+        "--netuid", "1",
+        "--limit", "0",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-weights-rate-limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_commit_reveal_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-commit-reveal",
+        "--netuid", "1",
+        "--enabled",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-commit-reveal: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_difficulty_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-difficulty",
+        "--netuid", "1",
+        "--difficulty", "1000000",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-difficulty: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_bonds_moving_avg_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--call", "sudo_set_bonds_moving_average",
+        "--args", "[1, 900000]",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin raw bonds_moving_average: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_target_regs_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--call", "sudo_set_target_registrations_per_interval",
+        "--args", "[1, 3]",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin raw target_registrations: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_set_activity_cutoff_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "set-activity-cutoff",
+        "--netuid", "1",
+        "--cutoff", "5000",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin set-activity-cutoff: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_serving_rate_limit_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "admin", "raw",
+        "--call", "sudo_set_serving_rate_limit",
+        "--args", "[1, 10]",
+        "--sudo-key", "//Alice",
+    ]);
+    assert!(cli.is_ok(), "admin raw serving_rate_limit: {:?}", cli.err());
+}
+
+// ── Admin raw with all known call names ──────────────────────────────
+
+#[test]
+fn parse_admin_raw_all_known_calls_s17() {
+    let known_calls = [
+        "sudo_set_tempo",
+        "sudo_set_max_allowed_validators",
+        "sudo_set_max_allowed_uids",
+        "sudo_set_immunity_period",
+        "sudo_set_min_allowed_weights",
+        "sudo_set_max_weight_limit",
+        "sudo_set_weights_set_rate_limit",
+        "sudo_set_commit_reveal_weights_enabled",
+        "sudo_set_difficulty",
+        "sudo_set_bonds_moving_average",
+        "sudo_set_target_registrations_per_interval",
+        "sudo_set_activity_cutoff",
+        "sudo_set_serving_rate_limit",
+    ];
+    for call in &known_calls {
+        let cli = agcli::cli::Cli::try_parse_from([
+            "agcli", "admin", "raw",
+            "--call", call,
+            "--args", "[1, 100]",
+            "--sudo-key", "//Alice",
+        ]);
+        assert!(cli.is_ok(), "admin raw --call {}: {:?}", call, cli.err());
+    }
+}
+
+// ── Multisig execute with various arg formats ───────────────────────
+
+#[test]
+fn parse_multisig_execute_empty_args_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "execute",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--pallet", "System",
+        "--call", "remark",
+        "--args", "[\"hello\"]",
+    ]);
+    assert!(cli.is_ok(), "multisig execute remark: {:?}", cli.err());
+}
+
+#[test]
+fn parse_multisig_submit_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "submit",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--threshold", "2",
+        "--pallet", "Balances",
+        "--call", "transfer_allow_death",
+        "--args", "[\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", 1000000000]",
+    ]);
+    assert!(cli.is_ok(), "multisig submit: {:?}", cli.err());
+}
+
+// ── Proxy advanced combinations ──────────────────────────────────────
+
+#[test]
+fn parse_proxy_all_types_announce_hash_s17() {
+    // Test that proxy announce parsing works with various hash formats
+    let hashes = [
+        "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890",
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+    ];
+    for hash in &hashes {
+        let cli = agcli::cli::Cli::try_parse_from([
+            "agcli", "proxy", "announce",
+            "--real", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+            "--call-hash", hash,
+        ]);
+        assert!(cli.is_ok(), "proxy announce hash {}: {:?}", hash, cli.err());
+    }
+}
+
+// ── Config edge cases ───────────────────────────────────────────────
+
+#[test]
+fn parse_config_set_live_interval_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "set", "--key", "live_interval", "--value", "5",
+    ]);
+    assert!(cli.is_ok(), "config set live_interval: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_set_batch_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "set", "--key", "batch", "--value", "true",
+    ]);
+    assert!(cli.is_ok(), "config set batch: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_set_wallet_dir_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "set", "--key", "wallet_dir", "--value", "/home/user/.bittensor/wallets",
+    ]);
+    assert!(cli.is_ok(), "config set wallet_dir: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_set_wallet_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "set", "--key", "wallet", "--value", "default",
+    ]);
+    assert!(cli.is_ok(), "config set wallet: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_set_hotkey_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "config", "set", "--key", "hotkey", "--value", "default",
+    ]);
+    assert!(cli.is_ok(), "config set hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_config_set_output_all_formats_s17() {
+    for fmt in &["table", "json", "csv"] {
+        let cli = agcli::cli::Cli::try_parse_from([
+            "agcli", "config", "set", "--key", "output", "--value", fmt,
+        ]);
+        assert!(cli.is_ok(), "config set output {}: {:?}", fmt, cli.err());
+    }
+}
+
+#[test]
+fn parse_config_unset_all_keys_s17() {
+    let keys = ["network", "endpoint", "wallet_dir", "wallet", "hotkey", "output", "proxy", "live_interval", "batch"];
+    for key in &keys {
+        let cli = agcli::cli::Cli::try_parse_from([
+            "agcli", "config", "unset", "--key", key,
+        ]);
+        assert!(cli.is_ok(), "config unset {}: {:?}", key, cli.err());
+    }
+}
+
+// ── Multisig submit with multiple signatories ───────────────────────
+
+#[test]
+fn parse_multisig_submit_multiple_signatories_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "multisig", "submit",
+        "--others", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty,5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--threshold", "3",
+        "--pallet", "System",
+        "--call", "remark",
+    ]);
+    assert!(cli.is_ok(), "multisig submit multi signers: {:?}", cli.err());
+}
+
+// ── Proxy proxy-announced with full args ────────────────────────────
+
+#[test]
+fn parse_proxy_announced_full_args_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "proxy", "proxy-announced",
+        "--delegate", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--real", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        "--proxy-type", "Staking",
+        "--pallet", "SubtensorModule",
+        "--call", "add_stake",
+        "--args", "[\"0xabcd\", 1000000000]",
+    ]);
+    assert!(cli.is_ok(), "proxy announced full: {:?}", cli.err());
+}
+
+// ── Subscribe with all variations ───────────────────────────────────
+
+#[test]
+fn parse_subscribe_blocks_with_output_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "subscribe", "blocks", "--output", "json",
+    ]);
+    assert!(cli.is_ok(), "subscribe blocks json output: {:?}", cli.err());
+}
+
+// ── Global flags with various commands ──────────────────────────────
+
+#[test]
+fn parse_global_json_output_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "balance",
+    ]);
+    assert!(cli.is_ok(), "global json output: {:?}", cli.err());
+}
+
+#[test]
+fn parse_global_csv_output_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "csv", "balance",
+    ]);
+    assert!(cli.is_ok(), "global csv output: {:?}", cli.err());
+}
+
+#[test]
+fn parse_global_network_flag_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test", "balance",
+    ]);
+    assert!(cli.is_ok(), "global network flag: {:?}", cli.err());
+}
+
+#[test]
+fn parse_global_endpoint_flag_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--endpoint", "wss://custom.node.com:443", "balance",
+    ]);
+    assert!(cli.is_ok(), "global endpoint flag: {:?}", cli.err());
+}
+
+#[test]
+fn parse_global_wallet_dir_flag_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--wallet-dir", "/custom/wallets", "balance",
+    ]);
+    assert!(cli.is_ok(), "global wallet dir flag: {:?}", cli.err());
+}
+
+#[test]
+fn parse_transfer_dry_run_flag_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "transfer", "--dry-run", "--dest", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "--amount", "1.0",
+    ]);
+    assert!(cli.is_ok(), "transfer dry-run: {:?}", cli.err());
+}
+
+// ── Root commands ────────────────────────────────────────────────────
+
+#[test]
+fn parse_root_register_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "root", "register",
+    ]);
+    assert!(cli.is_ok(), "root register: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "root", "weights", "--weights", "1:100,2:200",
+    ]);
+    assert!(cli.is_ok(), "root weights: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_missing_arg_fails_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "root", "weights",
+    ]);
+    assert!(cli.is_err(), "root weights without --weights should fail");
+}
+
+// ── Doctor subcommand ───────────────────────────────────────────────
+
+#[test]
+fn parse_doctor_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "doctor",
+    ]);
+    assert!(cli.is_ok(), "doctor: {:?}", cli.err());
+}
+
+// ── Update subcommand ───────────────────────────────────────────────
+
+#[test]
+fn parse_update_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "update",
+    ]);
+    assert!(cli.is_ok(), "update: {:?}", cli.err());
+}
+
+// ── View with all parameters ───────────────────────────────────────
+
+#[test]
+fn parse_view_metagraph_with_limit_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "metagraph", "--netuid", "1", "--limit", "10",
+    ]);
+    assert!(cli.is_ok(), "view metagraph limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_subnet_analytics_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "subnet-analytics", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "view subnet-analytics: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_portfolio_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "portfolio",
+    ]);
+    assert!(cli.is_ok(), "view portfolio: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_portfolio_with_address_s17() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "portfolio",
+        "--address", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "view portfolio addr: {:?}", cli.err());
+}

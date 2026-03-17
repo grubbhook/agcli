@@ -1639,6 +1639,55 @@ pub fn validate_proxy_type(s: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validate a call hash string (e.g. for proxy announce/reject, multisig approve/cancel).
+/// Must be 0x-prefixed (or bare) hex encoding of exactly 32 bytes (64 hex chars).
+pub fn validate_call_hash(hash: &str, label: &str) -> Result<()> {
+    let trimmed = hash.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Invalid {} call hash: cannot be empty.\n  Tip: provide a 0x-prefixed 64 hex char hash (blake2_256 of the encoded call).",
+            label
+        );
+    }
+    let hex_str = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+        .unwrap_or(trimmed);
+    if hex_str.is_empty() {
+        anyhow::bail!(
+            "Invalid {} call hash: empty after '0x' prefix.\n  Tip: provide 64 hex characters (32 bytes) after '0x'.",
+            label
+        );
+    }
+    if let Some(pos) = hex_str.find(|c: char| !c.is_ascii_hexdigit()) {
+        let bad_char = hex_str.chars().nth(pos).unwrap();
+        anyhow::bail!(
+            "Invalid {} call hash: character '{}' at position {} is not valid hex.\n  Tip: use only 0-9 and a-f.",
+            label, bad_char, pos
+        );
+    }
+    if hex_str.len() != 64 {
+        anyhow::bail!(
+            "Invalid {} call hash: must be exactly 32 bytes (64 hex chars), got {} hex chars.\n  Tip: the call hash is the blake2_256 of the SCALE-encoded call data.",
+            label, hex_str.len()
+        );
+    }
+    Ok(())
+}
+
+/// Validate a config network value against known networks.
+/// Accepts: finney, test, local, archive (case-insensitive).
+pub fn validate_config_network(value: &str) -> Result<()> {
+    let lower = value.trim().to_lowercase();
+    match lower.as_str() {
+        "finney" | "test" | "local" | "archive" => Ok(()),
+        _ => anyhow::bail!(
+            "Unknown network '{}'. Valid networks: finney, test, local, archive.\n  Tip: use --endpoint <url> for custom endpoints.",
+            value
+        ),
+    }
+}
+
 /// Validate a spending limit value for config (must be non-negative and finite).
 pub fn validate_spending_limit(value: f64, netuid_str: &str) -> Result<()> {
     // Validate netuid suffix is a valid u16
