@@ -15,7 +15,7 @@ Validators evaluate miners by setting weights, which determines emission distrib
 agcli wallet create --name validator
 
 # Create a hotkey (operational key — used for on-chain validator operations)
-agcli wallet create-hotkey --name validator --hotkey default
+agcli wallet create-hotkey --name validator --hotkey-name default
 ```
 
 ### 2. Fund Your Coldkey

@@ -77,7 +77,7 @@ List admin params         → agcli admin list --output json
 | `--network NET` | `AGCLI_NETWORK` | finney\|test\|local\|archive |
 | `--endpoint URL` | `AGCLI_ENDPOINT` | Custom WS endpoint |
 | `-w NAME` | `AGCLI_WALLET` | Wallet name |
-| `--hotkey NAME` | `AGCLI_HOTKEY` | Hotkey name |
+| `--hotkey-name NAME` | `AGCLI_HOTKEY` | Hotkey name |
 | `--wallet-dir DIR` | `AGCLI_WALLET_DIR` | Wallet dir |
 | `--proxy SS58` | `AGCLI_PROXY` | Proxy account |
 | `--live [SECS]` | — | Live polling (default 12s) |
