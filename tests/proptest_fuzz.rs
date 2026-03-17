@@ -11,9 +11,10 @@ use proptest::prelude::*;
 use agcli::cli::helpers::{
     json_to_subxt_value, parse_children, parse_json_args, parse_weight_pairs,
     validate_amount, validate_batch_axon_json, validate_delegate_take, validate_derive_input,
-    validate_emission_weights, validate_ipv4, validate_max_cost, validate_mnemonic,
-    validate_multisig_json_args, validate_name, validate_netuid, validate_password_strength,
-    validate_port, validate_ss58, validate_symbol, validate_take_pct,
+    validate_emission_weights, validate_evm_address, validate_hex_data, validate_ipv4,
+    validate_max_cost, validate_mnemonic, validate_multisig_json_args, validate_name,
+    validate_netuid, validate_pallet_call, validate_password_strength, validate_port,
+    validate_schedule_id, validate_ss58, validate_symbol, validate_take_pct,
 };
 
 // ──── validate_amount: never panics, valid amounts always accepted ────
@@ -888,5 +889,78 @@ proptest! {
         if validate_netuid(netuid).is_ok() {
             prop_assert!(netuid > 0);
         }
+    }
+
+    // ──── validate_evm_address: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_evm_address_no_panic(s in "\\PC{0,100}") {
+        let _ = validate_evm_address(&s, "test");
+    }
+
+    #[test]
+    fn fuzz_evm_address_valid_always_accepted(bytes in proptest::collection::vec(any::<u8>(), 20)) {
+        let hex_str = format!("0x{}", hex::encode(&bytes));
+        prop_assert!(validate_evm_address(&hex_str, "test").is_ok(),
+            "valid 20-byte hex should be accepted: {}", hex_str);
+    }
+
+    #[test]
+    fn fuzz_evm_address_wrong_length_rejected(bytes in proptest::collection::vec(any::<u8>(), 0..40usize).prop_filter("not 20 bytes", |v| v.len() != 20)) {
+        let hex_str = format!("0x{}", hex::encode(&bytes));
+        prop_assert!(validate_evm_address(&hex_str, "test").is_err(),
+            "non-20-byte hex should be rejected: {} ({} bytes)", hex_str, bytes.len());
+    }
+
+    // ──── validate_hex_data: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_hex_data_no_panic(s in "\\PC{0,200}") {
+        let _ = validate_hex_data(&s, "test");
+    }
+
+    #[test]
+    fn fuzz_hex_data_valid_always_accepted(bytes in proptest::collection::vec(any::<u8>(), 0..100)) {
+        let hex_str = format!("0x{}", hex::encode(&bytes));
+        prop_assert!(validate_hex_data(&hex_str, "test").is_ok(),
+            "valid hex should be accepted: {}", hex_str);
+    }
+
+    // ──── validate_pallet_call: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_pallet_call_no_panic(s in "\\PC{0,200}") {
+        let _ = validate_pallet_call(&s, "test");
+    }
+
+    #[test]
+    fn fuzz_pallet_call_valid_pascal(name in "[A-Z][a-zA-Z0-9_]{0,50}") {
+        prop_assert!(validate_pallet_call(&name, "pallet").is_ok(),
+            "valid PascalCase should be accepted: {}", name);
+    }
+
+    #[test]
+    fn fuzz_pallet_call_valid_snake(name in "[a-z][a-z0-9_]{0,50}") {
+        prop_assert!(validate_pallet_call(&name, "call").is_ok(),
+            "valid snake_case should be accepted: {}", name);
+    }
+
+    // ──── validate_schedule_id: never panics on arbitrary input ────
+
+    #[test]
+    fn fuzz_schedule_id_no_panic(s in "\\PC{0,100}") {
+        let _ = validate_schedule_id(&s);
+    }
+
+    #[test]
+    fn fuzz_schedule_id_valid_short(s in "[a-zA-Z0-9_]{1,32}") {
+        prop_assert!(validate_schedule_id(&s).is_ok(),
+            "valid short id should be accepted: {}", s);
+    }
+
+    #[test]
+    fn fuzz_schedule_id_too_long_rejected(s in ".{33,100}") {
+        prop_assert!(validate_schedule_id(&s).is_err(),
+            "id > 32 bytes should be rejected: len={}", s.len());
     }
 }

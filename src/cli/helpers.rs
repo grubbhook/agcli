@@ -1051,6 +1051,128 @@ pub fn validate_multisig_json_args(json_str: &str) -> Result<Vec<serde_json::Val
     Ok(arr)
 }
 
+/// Validate an EVM address string (hex, 20 bytes). Accepts optional 0x prefix.
+/// Returns a helpful error for common mistakes.
+pub fn validate_evm_address(address: &str, label: &str) -> Result<()> {
+    let trimmed = address.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Invalid {} EVM address: cannot be empty.\n  Tip: provide a 0x-prefixed 40 hex char address, e.g. '0x1234...abcd'.",
+            label
+        );
+    }
+    let hex_str = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")).unwrap_or(trimmed);
+    if hex_str.is_empty() {
+        anyhow::bail!(
+            "Invalid {} EVM address: empty after '0x' prefix.\n  Tip: provide 40 hex characters after '0x'.",
+            label
+        );
+    }
+    if hex_str.len() % 2 != 0 {
+        anyhow::bail!(
+            "Invalid {} EVM address: odd hex length ({} chars). Hex bytes come in pairs.\n  Tip: check for a missing or extra character.",
+            label, hex_str.len()
+        );
+    }
+    if let Some(pos) = hex_str.find(|c: char| !c.is_ascii_hexdigit()) {
+        let bad_char = hex_str.chars().nth(pos).unwrap();
+        anyhow::bail!(
+            "Invalid {} EVM address: character '{}' at position {} is not valid hex.\n  Tip: use only 0-9 and a-f.",
+            label, bad_char, pos
+        );
+    }
+    let byte_len = hex_str.len() / 2;
+    if byte_len != 20 {
+        anyhow::bail!(
+            "Invalid {} EVM address: must be 20 bytes (40 hex chars), got {} bytes ({} hex chars).\n  Tip: Ethereum/EVM addresses are exactly 20 bytes.",
+            label, byte_len, hex_str.len()
+        );
+    }
+    Ok(())
+}
+
+/// Validate a hex data string. Accepts optional 0x prefix.
+/// Rejects odd-length and non-hex characters.
+pub fn validate_hex_data(data: &str, label: &str) -> Result<()> {
+    let trimmed = data.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Invalid {} hex data: cannot be empty.\n  Tip: use '0x' for empty data.",
+            label
+        );
+    }
+    let hex_str = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")).unwrap_or(trimmed);
+    // "0x" alone is valid (empty data)
+    if hex_str.is_empty() {
+        return Ok(());
+    }
+    if hex_str.len() % 2 != 0 {
+        anyhow::bail!(
+            "Invalid {} hex data: odd length ({} chars). Hex bytes come in pairs.\n  Tip: check for a missing or extra character.",
+            label, hex_str.len()
+        );
+    }
+    if let Some(pos) = hex_str.find(|c: char| !c.is_ascii_hexdigit()) {
+        let bad_char = hex_str.chars().nth(pos).unwrap();
+        anyhow::bail!(
+            "Invalid {} hex data: character '{}' at position {} is not valid hex.\n  Tip: use only 0-9 and a-f.",
+            label, bad_char, pos
+        );
+    }
+    Ok(())
+}
+
+/// Validate a pallet or call name for scheduler/preimage commands.
+/// Must be non-empty, reasonable length, and contain only valid Rust identifier characters.
+pub fn validate_pallet_call(name: &str, label: &str) -> Result<()> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!(
+            "Invalid {}: cannot be empty.\n  Tip: use the pallet name exactly as in the runtime, e.g. 'System', 'Balances', 'SubtensorModule'.",
+            label
+        );
+    }
+    if trimmed.len() > 128 {
+        let preview: String = trimmed.chars().take(32).collect();
+        anyhow::bail!(
+            "Invalid {}: '{}' is too long ({} chars, max 128).",
+            label, preview, trimmed.len()
+        );
+    }
+    // Must start with a letter (PascalCase for pallets, snake_case for calls)
+    if !trimmed.chars().next().unwrap().is_ascii_alphabetic() {
+        anyhow::bail!(
+            "Invalid {}: '{}' must start with a letter.\n  Tip: pallet names are PascalCase (e.g. 'System'), call names are snake_case (e.g. 'remark').",
+            label, trimmed
+        );
+    }
+    // Only allow alphanumeric and underscore (covers PascalCase + snake_case)
+    if let Some(bad) = trimmed.chars().find(|c| !c.is_ascii_alphanumeric() && *c != '_') {
+        anyhow::bail!(
+            "Invalid {}: character '{}' is not allowed.\n  Tip: use only letters, numbers, and underscores.",
+            label, bad
+        );
+    }
+    Ok(())
+}
+
+/// Validate a scheduler task ID (for schedule-named / cancel-named).
+/// Must be non-empty and ≤ 32 bytes (on-chain limit).
+pub fn validate_schedule_id(id: &str) -> Result<()> {
+    if id.is_empty() {
+        anyhow::bail!(
+            "Schedule ID cannot be empty.\n  Tip: provide a short, descriptive name for your scheduled task."
+        );
+    }
+    if id.len() > 32 {
+        anyhow::bail!(
+            "Schedule ID too long: {} bytes (max 32).\n  Tip: use a shorter ID.",
+            id.len()
+        );
+    }
+    Ok(())
+}
+
 /// Parse an optional JSON string into a vec of subxt dynamic Values.
 /// Validates the JSON structure before converting.
 pub fn parse_json_args(args: &Option<String>) -> anyhow::Result<Vec<subxt::dynamic::Value>> {

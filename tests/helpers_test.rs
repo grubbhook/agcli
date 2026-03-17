@@ -3,9 +3,10 @@
 
 use agcli::cli::helpers::{
     json_to_subxt_value, parse_children, parse_weight_pairs, validate_amount,
-    validate_delegate_take, validate_derive_input, validate_emission_weights, validate_ipv4,
-    validate_max_cost, validate_mnemonic, validate_multisig_json_args, validate_name,
-    validate_symbol, validate_take_pct,
+    validate_delegate_take, validate_derive_input, validate_emission_weights,
+    validate_evm_address, validate_hex_data, validate_ipv4, validate_max_cost,
+    validate_mnemonic, validate_multisig_json_args, validate_name, validate_pallet_call,
+    validate_schedule_id, validate_symbol, validate_take_pct,
 };
 use agcli::utils::explain;
 
@@ -2341,4 +2342,313 @@ fn parse_children_duplicate_hotkeys_allowed() {
     // Duplicate hotkeys should still parse — the chain will reject if needed
     assert!(result.is_ok(), "duplicate hotkeys: {:?}", result.err());
     assert_eq!(result.unwrap().len(), 2);
+}
+
+// =====================================================================
+// validate_evm_address tests
+// =====================================================================
+
+#[test]
+fn evm_address_valid_with_0x_prefix() {
+    assert!(validate_evm_address("0x1234567890abcdef1234567890abcdef12345678", "test").is_ok());
+}
+
+#[test]
+fn evm_address_valid_without_0x_prefix() {
+    assert!(validate_evm_address("1234567890abcdef1234567890abcdef12345678", "test").is_ok());
+}
+
+#[test]
+fn evm_address_valid_uppercase() {
+    assert!(validate_evm_address("0x1234567890ABCDEF1234567890ABCDEF12345678", "test").is_ok());
+}
+
+#[test]
+fn evm_address_valid_mixed_case() {
+    assert!(validate_evm_address("0xABCDef1234567890abcdef1234567890AbCdEf12", "test").is_ok());
+}
+
+#[test]
+fn evm_address_valid_all_zeros() {
+    assert!(validate_evm_address("0x0000000000000000000000000000000000000000", "test").is_ok());
+}
+
+#[test]
+fn evm_address_valid_all_f() {
+    assert!(validate_evm_address("0xffffffffffffffffffffffffffffffffffffffff", "test").is_ok());
+}
+
+#[test]
+fn evm_address_empty() {
+    let err = validate_evm_address("", "source").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_just_0x() {
+    let err = validate_evm_address("0x", "source").unwrap_err();
+    assert!(err.to_string().contains("empty after '0x'"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_too_short() {
+    let err = validate_evm_address("0x1234", "target").unwrap_err();
+    assert!(err.to_string().contains("20 bytes"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_too_long() {
+    let err = validate_evm_address("0x1234567890abcdef1234567890abcdef1234567800", "target").unwrap_err();
+    assert!(err.to_string().contains("20 bytes"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_odd_length() {
+    let err = validate_evm_address("0x1234567890abcdef1234567890abcdef1234567", "src").unwrap_err();
+    assert!(err.to_string().contains("odd hex length"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_invalid_hex_char() {
+    let err = validate_evm_address("0x1234567890abcdef1234567890abcdef1234567g", "src").unwrap_err();
+    assert!(err.to_string().contains("not valid hex"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_with_spaces() {
+    let err = validate_evm_address("  0x1234  ", "src").unwrap_err();
+    // trimmed = "0x1234" → too short
+    assert!(err.to_string().contains("20 bytes"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_0X_prefix() {
+    assert!(validate_evm_address("0X1234567890abcdef1234567890abcdef12345678", "test").is_ok());
+}
+
+#[test]
+fn evm_address_19_bytes() {
+    let err = validate_evm_address("0x1234567890abcdef1234567890abcdef123456", "test").unwrap_err();
+    assert!(err.to_string().contains("20 bytes"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_21_bytes() {
+    let err = validate_evm_address("0x1234567890abcdef1234567890abcdef123456789a", "test").unwrap_err();
+    assert!(err.to_string().contains("20 bytes"), "got: {}", err);
+}
+
+#[test]
+fn evm_address_error_includes_tip() {
+    let err = validate_evm_address("", "source").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
+
+#[test]
+fn evm_address_unicode() {
+    let err = validate_evm_address("0x123こんにちは", "test").unwrap_err();
+    assert!(err.to_string().contains("not valid hex"), "got: {}", err);
+}
+
+// =====================================================================
+// validate_hex_data tests
+// =====================================================================
+
+#[test]
+fn hex_data_valid_empty_0x() {
+    assert!(validate_hex_data("0x", "test").is_ok());
+}
+
+#[test]
+fn hex_data_valid_short() {
+    assert!(validate_hex_data("0xdeadbeef", "test").is_ok());
+}
+
+#[test]
+fn hex_data_valid_long() {
+    assert!(validate_hex_data("0x0000000000000000000000000000000000000000000000000000000000000001", "test").is_ok());
+}
+
+#[test]
+fn hex_data_valid_no_prefix() {
+    assert!(validate_hex_data("cafebabe", "test").is_ok());
+}
+
+#[test]
+fn hex_data_empty_string() {
+    let err = validate_hex_data("", "code-hash").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn hex_data_odd_length() {
+    let err = validate_hex_data("0xabc", "data").unwrap_err();
+    assert!(err.to_string().contains("odd length"), "got: {}", err);
+}
+
+#[test]
+fn hex_data_invalid_chars() {
+    let err = validate_hex_data("0xnothex", "salt").unwrap_err();
+    assert!(err.to_string().contains("not valid hex"), "got: {}", err);
+}
+
+#[test]
+fn hex_data_spaces_only() {
+    let err = validate_hex_data("   ", "test").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn hex_data_0X_prefix() {
+    assert!(validate_hex_data("0Xabcd", "test").is_ok());
+}
+
+#[test]
+fn hex_data_single_byte() {
+    assert!(validate_hex_data("0xff", "test").is_ok());
+}
+
+#[test]
+fn hex_data_error_includes_tip() {
+    let err = validate_hex_data("0xabc", "salt").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
+
+// =====================================================================
+// validate_pallet_call tests
+// =====================================================================
+
+#[test]
+fn pallet_call_valid_pascal_case() {
+    assert!(validate_pallet_call("System", "pallet").is_ok());
+}
+
+#[test]
+fn pallet_call_valid_pascal_multi_word() {
+    assert!(validate_pallet_call("SubtensorModule", "pallet").is_ok());
+}
+
+#[test]
+fn pallet_call_valid_snake_case() {
+    assert!(validate_pallet_call("remark", "call").is_ok());
+}
+
+#[test]
+fn pallet_call_valid_snake_multi_word() {
+    assert!(validate_pallet_call("transfer_keep_alive", "call").is_ok());
+}
+
+#[test]
+fn pallet_call_valid_with_numbers() {
+    assert!(validate_pallet_call("Erc20", "pallet").is_ok());
+}
+
+#[test]
+fn pallet_call_empty() {
+    let err = validate_pallet_call("", "pallet").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_spaces_only() {
+    let err = validate_pallet_call("   ", "call").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_starts_with_number() {
+    let err = validate_pallet_call("1System", "pallet").unwrap_err();
+    assert!(err.to_string().contains("must start with a letter"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_starts_with_underscore() {
+    let err = validate_pallet_call("_private", "call").unwrap_err();
+    assert!(err.to_string().contains("must start with a letter"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_contains_dash() {
+    let err = validate_pallet_call("my-pallet", "pallet").unwrap_err();
+    assert!(err.to_string().contains("not allowed"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_contains_space() {
+    let err = validate_pallet_call("my pallet", "pallet").unwrap_err();
+    assert!(err.to_string().contains("not allowed"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_contains_dot() {
+    let err = validate_pallet_call("System.remark", "pallet").unwrap_err();
+    assert!(err.to_string().contains("not allowed"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_too_long() {
+    let long = "A".repeat(129);
+    let err = validate_pallet_call(&long, "pallet").unwrap_err();
+    assert!(err.to_string().contains("too long"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_exactly_128() {
+    let ok = "A".repeat(128);
+    assert!(validate_pallet_call(&ok, "pallet").is_ok());
+}
+
+#[test]
+fn pallet_call_unicode() {
+    let err = validate_pallet_call("Sÿstem", "pallet").unwrap_err();
+    assert!(err.to_string().contains("not allowed"), "got: {}", err);
+}
+
+#[test]
+fn pallet_call_error_includes_tip() {
+    let err = validate_pallet_call("", "pallet").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
+}
+
+// =====================================================================
+// validate_schedule_id tests
+// =====================================================================
+
+#[test]
+fn schedule_id_valid_short() {
+    assert!(validate_schedule_id("my_task").is_ok());
+}
+
+#[test]
+fn schedule_id_valid_32_bytes() {
+    assert!(validate_schedule_id(&"x".repeat(32)).is_ok());
+}
+
+#[test]
+fn schedule_id_empty() {
+    let err = validate_schedule_id("").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "got: {}", err);
+}
+
+#[test]
+fn schedule_id_too_long() {
+    let err = validate_schedule_id(&"a".repeat(33)).unwrap_err();
+    assert!(err.to_string().contains("too long"), "got: {}", err);
+}
+
+#[test]
+fn schedule_id_single_char() {
+    assert!(validate_schedule_id("x").is_ok());
+}
+
+#[test]
+fn schedule_id_with_special_chars() {
+    // The chain interprets id as bytes; any non-empty ≤32 is valid
+    assert!(validate_schedule_id("my-task-#1!").is_ok());
+}
+
+#[test]
+fn schedule_id_error_includes_tip() {
+    let err = validate_schedule_id("").unwrap_err();
+    assert!(err.to_string().contains("Tip:"), "error should include Tip: {}", err);
 }

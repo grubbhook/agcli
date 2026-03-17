@@ -7425,3 +7425,420 @@ fn parse_evm_withdraw_zero_amount() {
     ]);
     assert!(cli.is_ok(), "evm withdraw zero amount: {:?}", cli.err());
 }
+
+// =====================================================================
+// Localnet commands — CLI parsing tests
+// =====================================================================
+
+#[test]
+fn parse_localnet_start_defaults() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+    ]);
+    assert!(cli.is_ok(), "localnet start defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_start_all_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--image", "my-image:latest",
+        "--container", "my_container",
+        "--port", "9955",
+        "--wait", "false",
+        "--timeout", "300",
+    ]);
+    assert!(cli.is_ok(), "localnet start all args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_start_custom_port() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--port", "8844",
+    ]);
+    assert!(cli.is_ok(), "localnet start port 8844: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_start_port_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--port", "0",
+    ]);
+    assert!(cli.is_ok(), "localnet start port 0 (clap parse succeeds, runtime validates): {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_start_port_max() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--port", "65535",
+    ]);
+    assert!(cli.is_ok(), "localnet start port 65535: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_start_port_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--port", "65536",
+    ]);
+    assert!(cli.is_err(), "localnet start port > 65535 should fail");
+}
+
+#[test]
+fn parse_localnet_start_timeout_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--timeout", "0",
+    ]);
+    assert!(cli.is_ok(), "localnet start timeout 0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_start_wait_true() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--wait", "true",
+    ]);
+    assert!(cli.is_ok(), "localnet start wait true: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_stop_defaults() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "stop",
+    ]);
+    assert!(cli.is_ok(), "localnet stop defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_stop_custom_container() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "stop",
+        "--container", "my_localnet",
+    ]);
+    assert!(cli.is_ok(), "localnet stop custom container: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_status_defaults() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "status",
+    ]);
+    assert!(cli.is_ok(), "localnet status defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_status_with_port() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "status",
+        "--port", "9944",
+        "--container", "agcli_localnet",
+    ]);
+    assert!(cli.is_ok(), "localnet status with port: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_reset_defaults() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "reset",
+    ]);
+    assert!(cli.is_ok(), "localnet reset defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_reset_all_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "reset",
+        "--image", "custom:tag",
+        "--container", "my_chain",
+        "--port", "10000",
+        "--timeout", "60",
+    ]);
+    assert!(cli.is_ok(), "localnet reset all args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_logs_defaults() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "logs",
+    ]);
+    assert!(cli.is_ok(), "localnet logs defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_logs_with_tail() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "logs",
+        "--tail", "100",
+    ]);
+    assert!(cli.is_ok(), "localnet logs tail 100: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_logs_with_container() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "logs",
+        "--container", "my_chain",
+        "--tail", "50",
+    ]);
+    assert!(cli.is_ok(), "localnet logs container+tail: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_scaffold_defaults() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "scaffold",
+    ]);
+    assert!(cli.is_ok(), "localnet scaffold defaults: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_scaffold_all_args() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "scaffold",
+        "--config", "scaffold.toml",
+        "--image", "my-image:v1",
+        "--port", "9955",
+        "--no-start",
+    ]);
+    assert!(cli.is_ok(), "localnet scaffold all args: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_scaffold_no_start_flag() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "scaffold",
+        "--no-start",
+    ]);
+    assert!(cli.is_ok(), "localnet scaffold no-start: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_start_negative_port() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "start",
+        "--port", "-1",
+    ]);
+    assert!(cli.is_err(), "localnet start negative port should fail");
+}
+
+#[test]
+fn parse_localnet_logs_tail_zero() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "logs",
+        "--tail", "0",
+    ]);
+    assert!(cli.is_ok(), "localnet logs tail 0: {:?}", cli.err());
+}
+
+#[test]
+fn parse_localnet_reset_port_string() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "localnet", "reset",
+        "--port", "abc",
+    ]);
+    assert!(cli.is_err(), "localnet reset non-numeric port should fail");
+}
+
+// =====================================================================
+// Doctor command — CLI parsing tests
+// =====================================================================
+
+#[test]
+fn parse_doctor_plain() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "doctor",
+    ]);
+    assert!(cli.is_ok(), "doctor plain: {:?}", cli.err());
+}
+
+#[test]
+fn parse_doctor_json_output() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--output", "json", "doctor",
+    ]);
+    assert!(cli.is_ok(), "doctor json output: {:?}", cli.err());
+}
+
+#[test]
+fn parse_doctor_with_network() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--network", "test", "doctor",
+    ]);
+    assert!(cli.is_ok(), "doctor with network: {:?}", cli.err());
+}
+
+#[test]
+fn parse_doctor_with_wallet() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--wallet", "mywallet", "doctor",
+    ]);
+    assert!(cli.is_ok(), "doctor with wallet: {:?}", cli.err());
+}
+
+// =====================================================================
+// EVM — additional boundary tests with validation
+// =====================================================================
+
+#[test]
+fn parse_evm_call_max_gas_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x0000000000000000000000000000000000000001",
+        "--target", "0x0000000000000000000000000000000000000002",
+        "--gas-limit", "18446744073709551615",
+    ]);
+    assert!(cli.is_ok(), "evm call max u64 gas: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_call_overflow_gas_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x0000000000000000000000000000000000000001",
+        "--target", "0x0000000000000000000000000000000000000002",
+        "--gas-limit", "18446744073709551616",
+    ]);
+    assert!(cli.is_err(), "evm call gas > u64::MAX should fail");
+}
+
+#[test]
+fn parse_evm_withdraw_max_u128() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "withdraw",
+        "--address", "0x1234567890abcdef1234567890abcdef12345678",
+        "--amount", "340282366920938463463374607431768211455",
+    ]);
+    assert!(cli.is_ok(), "evm withdraw max u128: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_withdraw_overflow_u128() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "withdraw",
+        "--address", "0x1234567890abcdef1234567890abcdef12345678",
+        "--amount", "340282366920938463463374607431768211456",
+    ]);
+    assert!(cli.is_err(), "evm withdraw > u128::MAX should fail");
+}
+
+#[test]
+fn parse_evm_call_with_input_data() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x0000000000000000000000000000000000000001",
+        "--target", "0x0000000000000000000000000000000000000002",
+        "--input", "0xa9059cbb0000000000000000000000000000000000000000000000000000000000000001",
+    ]);
+    assert!(cli.is_ok(), "evm call with ABI-encoded input: {:?}", cli.err());
+}
+
+#[test]
+fn parse_evm_call_with_value() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "evm", "call",
+        "--source", "0x0000000000000000000000000000000000000001",
+        "--target", "0x0000000000000000000000000000000000000002",
+        "--value", "0x0000000000000000000000000000000000000000000000000000000000000001",
+    ]);
+    assert!(cli.is_ok(), "evm call with value: {:?}", cli.err());
+}
+
+// =====================================================================
+// Scheduler — additional validation-related tests
+// =====================================================================
+
+#[test]
+fn parse_scheduler_schedule_repeat_both() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "1000",
+        "--pallet", "System",
+        "--call", "remark",
+        "--repeat-every", "100",
+        "--repeat-count", "5",
+    ]);
+    assert!(cli.is_ok(), "scheduler schedule with repeat: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_repeat_every_only() {
+    // Clap accepts partial repeats, runtime validates pair
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "1000",
+        "--pallet", "System",
+        "--call", "remark",
+        "--repeat-every", "100",
+    ]);
+    assert!(cli.is_ok(), "scheduler repeat-every alone (runtime validates): {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_max_when() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "4294967295",
+        "--pallet", "System",
+        "--call", "remark",
+    ]);
+    assert!(cli.is_ok(), "scheduler max u32 when: {:?}", cli.err());
+}
+
+#[test]
+fn parse_scheduler_schedule_when_overflow() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "schedule",
+        "--when", "4294967296",
+        "--pallet", "System",
+        "--call", "remark",
+    ]);
+    assert!(cli.is_err(), "scheduler when > u32::MAX should fail");
+}
+
+#[test]
+fn parse_scheduler_cancel_named_long_id() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "scheduler", "cancel-named",
+        "--id", "a_very_long_descriptive_task_name",
+    ]);
+    assert!(cli.is_ok(), "scheduler cancel-named long id: {:?}", cli.err());
+}
+
+// =====================================================================
+// Contracts — additional boundary + missing field tests
+// =====================================================================
+
+#[test]
+fn parse_contracts_instantiate_with_storage_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "instantiate",
+        "--code-hash", "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "--storage-deposit-limit", "1000000",
+    ]);
+    assert!(cli.is_ok(), "contracts instantiate with storage limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_upload_with_storage_limit() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "upload",
+        "--code", "/tmp/contract.wasm",
+        "--storage-deposit-limit", "5000000",
+    ]);
+    assert!(cli.is_ok(), "contracts upload with storage limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_contracts_instantiate_max_gas() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "contracts", "instantiate",
+        "--code-hash", "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "--gas-ref-time", "18446744073709551615",
+        "--gas-proof-size", "18446744073709551615",
+    ]);
+    assert!(cli.is_ok(), "contracts instantiate max u64 gas: {:?}", cli.err());
+}

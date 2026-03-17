@@ -545,6 +545,8 @@ pub(super) async fn handle_scheduler(
             repeat_every,
             repeat_count,
         } => {
+            validate_pallet_call(&pallet, "pallet")?;
+            validate_pallet_call(&call, "call")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let fields = parse_json_args(&args)?;
@@ -589,6 +591,9 @@ pub(super) async fn handle_scheduler(
             repeat_every,
             repeat_count,
         } => {
+            validate_schedule_id(&id)?;
+            validate_pallet_call(&pallet, "pallet")?;
+            validate_pallet_call(&call, "call")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let fields = parse_json_args(&args)?;
@@ -653,6 +658,8 @@ pub(super) async fn handle_preimage(
 ) -> Result<()> {
     match cmd {
         PreimageCommands::Note { pallet, call, args } => {
+            validate_pallet_call(&pallet, "pallet")?;
+            validate_pallet_call(&call, "call")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let fields = parse_json_args(&args)?;
@@ -664,6 +671,7 @@ pub(super) async fn handle_preimage(
             Ok(())
         }
         PreimageCommands::Unnote { hash } => {
+            validate_hex_data(&hash, "preimage hash")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let hash_hex = hash.strip_prefix("0x").unwrap_or(&hash);
@@ -712,6 +720,9 @@ pub(super) async fn handle_contracts(
             gas_proof_size,
             storage_deposit_limit,
         } => {
+            validate_hex_data(&code_hash, "code-hash")?;
+            validate_hex_data(&data, "data")?;
+            validate_hex_data(&salt, "salt")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let hash_hex = code_hash.strip_prefix("0x").unwrap_or(&code_hash);
@@ -746,6 +757,8 @@ pub(super) async fn handle_contracts(
             gas_proof_size,
             storage_deposit_limit,
         } => {
+            validate_ss58(&contract, "contract")?;
+            validate_hex_data(&data, "data")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let data_hex = data.strip_prefix("0x").unwrap_or(&data);
@@ -771,6 +784,7 @@ pub(super) async fn handle_contracts(
             Ok(())
         }
         ContractsCommands::RemoveCode { code_hash } => {
+            validate_hex_data(&code_hash, "code-hash")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let hash_hex = code_hash.strip_prefix("0x").unwrap_or(&code_hash);
@@ -799,6 +813,11 @@ pub(super) async fn handle_evm(cmd: EvmCommands, client: &Client, ctx: &Ctx<'_>)
             gas_limit,
             max_fee_per_gas,
         } => {
+            validate_evm_address(&source, "source")?;
+            validate_evm_address(&target, "target")?;
+            validate_hex_data(&input, "input")?;
+            validate_hex_data(&value, "value")?;
+            validate_hex_data(&max_fee_per_gas, "max-fee-per-gas")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let src_hex = source.strip_prefix("0x").unwrap_or(&source);
@@ -845,6 +864,7 @@ pub(super) async fn handle_evm(cmd: EvmCommands, client: &Client, ctx: &Ctx<'_>)
             Ok(())
         }
         EvmCommands::Withdraw { address, amount } => {
+            validate_evm_address(&address, "withdraw")?;
             let mut wallet = open_wallet(ctx.wallet_dir, ctx.wallet_name)?;
             unlock_coldkey(&mut wallet, ctx.password)?;
             let addr_hex = address.strip_prefix("0x").unwrap_or(&address);
