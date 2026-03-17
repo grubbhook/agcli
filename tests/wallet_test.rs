@@ -312,7 +312,8 @@ fn dev_key_all_standard_accounts() {
     // All 6 standard dev accounts should derive valid keypairs
     for name in keypair::DEV_ACCOUNTS {
         let uri = format!("//{}", name);
-        let pair = keypair::pair_from_uri(&uri).expect(&format!("//{} should derive", name));
+        let pair =
+            keypair::pair_from_uri(&uri).unwrap_or_else(|_| panic!("//{} should derive", name));
         let ss58 = keypair::to_ss58(&pair.public(), 42);
         assert!(
             ss58.starts_with("5"),
@@ -1018,7 +1019,7 @@ fn corrupted_coldkey_truncated() {
     Wallet::create(base, "corrupt_trunc", "pass", "default").unwrap();
     // Write a file that's too short to contain salt + nonce
     let coldkey_path = dir.path().join("corrupt_trunc").join("coldkey");
-    std::fs::write(&coldkey_path, &[1, 2, 3, 4, 5]).unwrap();
+    std::fs::write(&coldkey_path, [1, 2, 3, 4, 5]).unwrap();
     let mut wallet = Wallet::open(format!("{}/corrupt_trunc", base)).unwrap();
     let result = wallet.unlock_coldkey("pass");
     assert!(result.is_err(), "truncated coldkey should fail");
@@ -1050,7 +1051,7 @@ fn corrupted_coldkey_empty_file() {
     let base = dir.path().to_str().unwrap();
     Wallet::create(base, "corrupt_empty", "pass", "default").unwrap();
     let coldkey_path = dir.path().join("corrupt_empty").join("coldkey");
-    std::fs::write(&coldkey_path, &[]).unwrap();
+    std::fs::write(&coldkey_path, []).unwrap();
     let mut wallet = Wallet::open(format!("{}/corrupt_empty", base)).unwrap();
     let result = wallet.unlock_coldkey("pass");
     assert!(result.is_err(), "empty coldkey should fail");
@@ -1229,9 +1230,8 @@ fn nonexistent_hotkey_name() {
 fn wallet_open_nonexistent_directory() {
     let result = Wallet::open("/tmp/nonexistent_wallet_dir_xyz_12345");
     // Opening should succeed (it's lazy), but there's no coldkeypub
-    match result {
-        Ok(w) => assert!(w.coldkey_ss58().is_none()),
-        Err(_) => {} // Also acceptable
+    if let Ok(w) = result {
+        assert!(w.coldkey_ss58().is_none());
     }
 }
 
@@ -1241,7 +1241,7 @@ fn wallet_open_nonexistent_directory() {
 fn sign_verify_roundtrip_multiple_messages() {
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().to_str().unwrap();
-    let (mut wallet, _, _) = Wallet::create(base, "sv_multi", "pass", "default").unwrap();
+    let (wallet, _, _) = Wallet::create(base, "sv_multi", "pass", "default").unwrap();
     // wallet is already unlocked from create
 
     let messages = [

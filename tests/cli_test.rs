@@ -13930,3 +13930,1042 @@ fn parse_view_portfolio_with_address_s17() {
     ]);
     assert!(cli.is_ok(), "view portfolio addr: {:?}", cli.err());
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Step 18 — Expanded CLI tests for weak command groups + netuid validation
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── Drand commands ──────────────────────────────────────────────────
+
+#[test]
+fn parse_drand_write_pulse_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "drand",
+        "write-pulse",
+        "--payload",
+        "0xdeadbeef",
+        "--signature",
+        "0xcafebabe",
+    ]);
+    assert!(cli.is_ok(), "drand write-pulse: {:?}", cli.err());
+}
+
+#[test]
+fn parse_drand_write_pulse_missing_payload_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "drand",
+        "write-pulse",
+        "--signature",
+        "0xcafebabe",
+    ]);
+    assert!(cli.is_err(), "drand write-pulse should require --payload");
+}
+
+#[test]
+fn parse_drand_write_pulse_missing_signature_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "drand",
+        "write-pulse",
+        "--payload",
+        "0xdeadbeef",
+    ]);
+    assert!(cli.is_err(), "drand write-pulse should require --signature");
+}
+
+#[test]
+fn parse_drand_no_args_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "drand", "write-pulse"]);
+    assert!(cli.is_err(), "drand write-pulse without args should fail");
+}
+
+#[test]
+fn parse_drand_with_endpoint_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--endpoint",
+        "ws://localhost:9944",
+        "drand",
+        "write-pulse",
+        "--payload",
+        "0x01",
+        "--signature",
+        "0x02",
+    ]);
+    assert!(cli.is_ok(), "drand with endpoint: {:?}", cli.err());
+}
+
+#[test]
+fn parse_drand_with_wallet_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--wallet",
+        "test_wallet",
+        "drand",
+        "write-pulse",
+        "--payload",
+        "0xaabb",
+        "--signature",
+        "0xccdd",
+    ]);
+    assert!(cli.is_ok(), "drand with wallet: {:?}", cli.err());
+}
+
+// ── Balance commands ────────────────────────────────────────────────
+
+#[test]
+fn parse_balance_default_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance"]);
+    assert!(cli.is_ok(), "balance default: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_with_address_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "balance",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "balance with address: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_with_watch_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance", "--watch"]);
+    assert!(cli.is_ok(), "balance --watch: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_with_watch_interval_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance", "--watch", "30"]);
+    assert!(cli.is_ok(), "balance --watch 30: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_with_threshold_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance", "--threshold", "100.0"]);
+    assert!(cli.is_ok(), "balance --threshold: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_with_at_block_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "balance", "--at-block", "1000000"]);
+    assert!(cli.is_ok(), "balance --at-block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_all_flags_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "balance",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--threshold",
+        "50.0",
+    ]);
+    assert!(cli.is_ok(), "balance all flags: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_json_output_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "balance"]);
+    assert!(cli.is_ok(), "balance json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_balance_csv_output_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "csv", "balance"]);
+    assert!(cli.is_ok(), "balance csv: {:?}", cli.err());
+}
+
+// ── Completions commands ────────────────────────────────────────────
+
+#[test]
+fn parse_completions_bash_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions", "--shell", "bash"]);
+    assert!(cli.is_ok(), "completions bash: {:?}", cli.err());
+}
+
+#[test]
+fn parse_completions_zsh_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions", "--shell", "zsh"]);
+    assert!(cli.is_ok(), "completions zsh: {:?}", cli.err());
+}
+
+#[test]
+fn parse_completions_fish_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions", "--shell", "fish"]);
+    assert!(cli.is_ok(), "completions fish: {:?}", cli.err());
+}
+
+#[test]
+fn parse_completions_powershell_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions", "--shell", "powershell"]);
+    assert!(cli.is_ok(), "completions powershell: {:?}", cli.err());
+}
+
+#[test]
+fn parse_completions_missing_shell_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions"]);
+    assert!(cli.is_err(), "completions without --shell should fail");
+}
+
+#[test]
+fn parse_completions_invalid_shell_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "completions", "--shell", "cmd"]);
+    assert!(cli.is_err(), "completions --shell cmd should fail");
+}
+
+// ── Root commands ───────────────────────────────────────────────────
+
+#[test]
+fn parse_root_register_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "root", "register"]);
+    assert!(cli.is_ok(), "root register: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "root", "weights", "--weights", "1:100,2:200"]);
+    assert!(cli.is_ok(), "root weights: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_missing_arg_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "root", "weights"]);
+    assert!(cli.is_err(), "root weights without --weights should fail");
+}
+
+#[test]
+fn parse_root_register_with_wallet_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "--wallet", "mywallet", "root", "register"]);
+    assert!(cli.is_ok(), "root register wallet: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_with_password_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--password",
+        "secret123",
+        "root",
+        "weights",
+        "--weights",
+        "1:500",
+    ]);
+    assert!(cli.is_ok(), "root weights password: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_register_with_endpoint_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--endpoint",
+        "wss://entrypoint-finney.opentensor.ai:443",
+        "root",
+        "register",
+    ]);
+    assert!(cli.is_ok(), "root register endpoint: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_weights_json_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "root",
+        "weights",
+        "--weights",
+        r#"{"1": 500, "2": 300}"#,
+    ]);
+    assert!(cli.is_ok(), "root weights JSON: {:?}", cli.err());
+}
+
+#[test]
+fn parse_root_register_yes_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "-y", "root", "register"]);
+    assert!(cli.is_ok(), "root register -y: {:?}", cli.err());
+}
+
+// ── Wallet regen commands ───────────────────────────────────────────
+
+#[test]
+fn parse_wallet_regen_coldkey_bare_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "regen-coldkey"]);
+    assert!(cli.is_ok(), "regen-coldkey bare: {:?}", cli.err());
+}
+
+#[test]
+fn parse_wallet_regen_coldkey_with_mnemonic_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "regen-coldkey", "--mnemonic", "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"]);
+    assert!(cli.is_ok(), "regen-coldkey mnemonic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_wallet_regen_coldkey_with_password_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "wallet",
+        "regen-coldkey",
+        "--password",
+        "my_secure_pass",
+    ]);
+    assert!(cli.is_ok(), "regen-coldkey password: {:?}", cli.err());
+}
+
+#[test]
+fn parse_wallet_regen_coldkey_all_flags_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "regen-coldkey", "--mnemonic", "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", "--password", "secure"]);
+    assert!(cli.is_ok(), "regen-coldkey all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_wallet_regen_hotkey_bare_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "regen-hotkey"]);
+    assert!(cli.is_ok(), "regen-hotkey bare: {:?}", cli.err());
+}
+
+#[test]
+fn parse_wallet_regen_hotkey_with_name_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "wallet", "regen-hotkey", "--name", "myhot"]);
+    assert!(cli.is_ok(), "regen-hotkey name: {:?}", cli.err());
+}
+
+#[test]
+fn parse_wallet_regen_hotkey_with_mnemonic_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "regen-hotkey", "--mnemonic", "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"]);
+    assert!(cli.is_ok(), "regen-hotkey mnemonic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_wallet_regen_hotkey_all_flags_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "wallet", "regen-hotkey", "--name", "hot2", "--mnemonic", "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"]);
+    assert!(cli.is_ok(), "regen-hotkey all: {:?}", cli.err());
+}
+
+// ── Identity commands ───────────────────────────────────────────────
+
+#[test]
+fn parse_identity_show_addr_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "identity",
+        "show",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "identity show addr: {:?}", cli.err());
+}
+
+#[test]
+fn parse_identity_show_requires_address_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "identity", "show"]);
+    assert!(cli.is_err(), "identity show without --address should fail");
+}
+
+#[test]
+fn parse_identity_set_name_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "identity", "set", "--name", "MyIdentity"]);
+    assert!(cli.is_ok(), "identity set: {:?}", cli.err());
+}
+
+#[test]
+fn parse_identity_set_subnet_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "identity",
+        "set-subnet",
+        "--netuid",
+        "1",
+        "--name",
+        "MySubnet",
+    ]);
+    assert!(cli.is_ok(), "identity set-subnet: {:?}", cli.err());
+}
+
+#[test]
+fn parse_identity_set_all_fields_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "identity",
+        "set",
+        "--name",
+        "Test",
+        "--url",
+        "https://example.com",
+        "--github",
+        "user/repo",
+    ]);
+    assert!(cli.is_ok(), "identity set all: {:?}", cli.err());
+}
+
+#[test]
+fn parse_identity_set_subnet_all_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "identity",
+        "set-subnet",
+        "--netuid",
+        "5",
+        "--name",
+        "SubnetName",
+        "--url",
+        "https://subnet.io",
+        "--github",
+        "org/repo",
+    ]);
+    assert!(cli.is_ok(), "identity set-subnet all: {:?}", cli.err());
+}
+
+// ── Delegate commands ───────────────────────────────────────────────
+
+#[test]
+fn parse_delegate_show_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "delegate",
+        "show",
+        "--hotkey",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "delegate show: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_show_no_hotkey_s18() {
+    // hotkey is optional for delegate show
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "delegate", "show"]);
+    assert!(cli.is_ok(), "delegate show no hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_decrease_take_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "delegate", "decrease-take", "--take", "10.0"]);
+    assert!(cli.is_ok(), "delegate decrease-take: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_increase_take_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "delegate", "increase-take", "--take", "15.0"]);
+    assert!(cli.is_ok(), "delegate increase-take: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_show_json_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "delegate",
+        "show",
+        "--hotkey",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "delegate show json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_delegate_decrease_take_endpoint_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--endpoint",
+        "ws://localhost:9944",
+        "delegate",
+        "decrease-take",
+        "--take",
+        "5.5",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "delegate decrease-take endpoint: {:?}",
+        cli.err()
+    );
+}
+
+#[test]
+fn parse_delegate_list_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "delegate", "list"]);
+    assert!(cli.is_ok(), "delegate list: {:?}", cli.err());
+}
+
+// ── Subscribe commands ──────────────────────────────────────────────
+
+#[test]
+fn parse_subscribe_events_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subscribe", "events"]);
+    assert!(cli.is_ok(), "subscribe events: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_events_filter_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "subscribe", "events", "--filter", "staking"]);
+    assert!(cli.is_ok(), "subscribe events filter: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_blocks_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subscribe", "blocks"]);
+    assert!(cli.is_ok(), "subscribe blocks: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_events_json_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "subscribe", "events"]);
+    assert!(cli.is_ok(), "subscribe events json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_subscribe_events_all_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "subscribe", "events", "--filter", "all"]);
+    assert!(cli.is_ok(), "subscribe events all: {:?}", cli.err());
+}
+
+// ── View extra subcommands ──────────────────────────────────────────
+
+#[test]
+fn parse_view_neuron_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "view", "neuron", "--netuid", "1", "--uid", "0"]);
+    assert!(cli.is_ok(), "view neuron: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_neuron_at_block_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "neuron",
+        "--netuid",
+        "1",
+        "--uid",
+        "5",
+        "--at-block",
+        "100000",
+    ]);
+    assert!(cli.is_ok(), "view neuron at-block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_history_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "history"]);
+    assert!(cli.is_ok(), "view history: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_history_limit_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "history", "--limit", "50"]);
+    assert!(cli.is_ok(), "view history limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_account_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "account"]);
+    assert!(cli.is_ok(), "view account: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_account_addr_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "account",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "view account addr: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_staking_analytics_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "staking-analytics"]);
+    assert!(cli.is_ok(), "view staking-analytics: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_swap_sim_tao_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "swap-sim", "--netuid", "1", "--tao", "10.0",
+    ]);
+    assert!(cli.is_ok(), "view swap-sim tao: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_swap_sim_alpha_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "view", "swap-sim", "--netuid", "1", "--alpha", "100.0",
+    ]);
+    assert!(cli.is_ok(), "view swap-sim alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_nominations_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "nominations",
+        "--hotkey",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "view nominations: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_axon_uid_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "view", "axon", "--netuid", "1", "--uid", "0"]);
+    assert!(cli.is_ok(), "view axon uid: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_axon_hotkey_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "axon",
+        "--netuid",
+        "1",
+        "--hotkey",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "view axon hotkey: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_health_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "health", "--netuid", "1"]);
+    assert!(cli.is_ok(), "view health: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_health_tcp_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "health",
+        "--netuid",
+        "1",
+        "--tcp-check",
+    ]);
+    assert!(cli.is_ok(), "view health tcp: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_emissions_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "emissions", "--netuid", "1"]);
+    assert!(cli.is_ok(), "view emissions: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_emissions_limit_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "view",
+        "emissions",
+        "--netuid",
+        "1",
+        "--limit",
+        "20",
+    ]);
+    assert!(cli.is_ok(), "view emissions limit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_network_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "network"]);
+    assert!(cli.is_ok(), "view network: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_network_at_block_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "network", "--at-block", "500000"]);
+    assert!(cli.is_ok(), "view network at-block: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_dynamic_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "dynamic"]);
+    assert!(cli.is_ok(), "view dynamic: {:?}", cli.err());
+}
+
+#[test]
+fn parse_view_dynamic_at_block_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "view", "dynamic", "--at-block", "200000"]);
+    assert!(cli.is_ok(), "view dynamic at-block: {:?}", cli.err());
+}
+
+// ── Stake edge case commands ────────────────────────────────────────
+
+#[test]
+fn parse_stake_set_auto_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "stake", "set-auto", "--netuid", "1"]);
+    assert!(cli.is_ok(), "stake set-auto: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_show_auto_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "stake", "show-auto"]);
+    assert!(cli.is_ok(), "stake show-auto: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_claim_root_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "stake", "claim-root", "--netuid", "1"]);
+    assert!(cli.is_ok(), "stake claim-root: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_set_claim_swap_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "stake", "set-claim", "--claim-type", "swap"]);
+    assert!(cli.is_ok(), "stake set-claim swap: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_set_claim_keep_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "stake", "set-claim", "--claim-type", "keep"]);
+    assert!(cli.is_ok(), "stake set-claim keep: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_set_claim_invalid_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "stake", "set-claim", "--claim-type", "all"]);
+    assert!(
+        cli.is_err(),
+        "stake set-claim 'all' should fail (valid: swap, keep, keep-subnets)"
+    );
+}
+
+#[test]
+fn parse_stake_set_claim_subnets_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "set-claim",
+        "--claim-type",
+        "keep",
+        "--subnets",
+        "1,2,3",
+    ]);
+    assert!(cli.is_ok(), "stake set-claim subnets: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_process_claim_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "stake", "process-claim"]);
+    assert!(cli.is_ok(), "stake process-claim: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_process_claim_netuids_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "stake", "process-claim", "--netuids", "1,2"]);
+    assert!(cli.is_ok(), "stake process-claim netuids: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_transfer_stake_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "transfer-stake",
+        "--dest",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "--amount",
+        "10.0",
+        "--from",
+        "1",
+        "--to",
+        "2",
+    ]);
+    assert!(cli.is_ok(), "stake transfer-stake: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_recycle_alpha_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "recycle-alpha",
+        "--amount",
+        "5.0",
+        "--netuid",
+        "1",
+    ]);
+    assert!(cli.is_ok(), "stake recycle-alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_burn_alpha_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "stake",
+        "burn-alpha",
+        "--amount",
+        "1.0",
+        "--netuid",
+        "1",
+    ]);
+    assert!(cli.is_ok(), "stake burn-alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_unstake_all_alpha_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "stake", "unstake-all-alpha"]);
+    assert!(cli.is_ok(), "stake unstake-all-alpha: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_mev_add_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--mev", "stake", "add", "--amount", "1.0", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "stake add --mev: {:?}", cli.err());
+}
+
+#[test]
+fn parse_stake_mev_remove_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli", "--mev", "stake", "remove", "--amount", "1.0", "--netuid", "1",
+    ]);
+    assert!(cli.is_ok(), "stake remove --mev: {:?}", cli.err());
+}
+
+// ── Doctor & Audit ──────────────────────────────────────────────────
+
+#[test]
+fn parse_doctor_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "doctor"]);
+    assert!(cli.is_ok(), "doctor: {:?}", cli.err());
+}
+
+#[test]
+fn parse_doctor_json_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "doctor"]);
+    assert!(cli.is_ok(), "doctor json: {:?}", cli.err());
+}
+
+#[test]
+fn parse_audit_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "audit",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "audit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_audit_json_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "--output",
+        "json",
+        "audit",
+        "--address",
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    assert!(cli.is_ok(), "audit json: {:?}", cli.err());
+}
+
+// ── Weight commit/reveal/status ─────────────────────────────────────
+
+#[test]
+fn parse_weights_status_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "weights", "status", "--netuid", "1"]);
+    assert!(cli.is_ok(), "weights status: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "weights",
+        "commit",
+        "--netuid",
+        "1",
+        "--weights",
+        "0:100,1:200",
+    ]);
+    assert!(cli.is_ok(), "weights commit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_salt_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "weights",
+        "commit",
+        "--netuid",
+        "1",
+        "--weights",
+        "0:100",
+        "--salt",
+        "mysecret",
+    ]);
+    assert!(cli.is_ok(), "weights commit salt: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_reveal_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "weights",
+        "reveal",
+        "--netuid",
+        "1",
+        "--weights",
+        "0:100",
+        "--salt",
+        "mysecret",
+    ]);
+    assert!(cli.is_ok(), "weights reveal: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "weights",
+        "commit-reveal",
+        "--netuid",
+        "1",
+        "--weights",
+        "0:100,1:200",
+    ]);
+    assert!(cli.is_ok(), "weights commit-reveal: {:?}", cli.err());
+}
+
+#[test]
+fn parse_weights_commit_reveal_wait_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "weights",
+        "commit-reveal",
+        "--netuid",
+        "1",
+        "--weights",
+        "0:100",
+        "--wait",
+    ]);
+    assert!(cli.is_ok(), "weights commit-reveal wait: {:?}", cli.err());
+}
+
+// ── Preimage & Safe mode ────────────────────────────────────────────
+
+#[test]
+fn parse_preimage_note_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "preimage",
+        "note",
+        "--pallet",
+        "System",
+        "--call",
+        "remark",
+        "--args",
+        "[\"hello\"]",
+    ]);
+    assert!(cli.is_ok(), "preimage note: {:?}", cli.err());
+}
+
+#[test]
+fn parse_preimage_unnote_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "preimage",
+        "unnote",
+        "--hash",
+        "0x0000000000000000000000000000000000000000000000000000000000000001",
+    ]);
+    assert!(cli.is_ok(), "preimage unnote: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_enter_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "safe-mode", "enter"]);
+    assert!(cli.is_ok(), "safe-mode enter: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_extend_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "safe-mode", "extend"]);
+    assert!(cli.is_ok(), "safe-mode extend: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_force_exit_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "safe-mode", "force-exit"]);
+    assert!(cli.is_ok(), "safe-mode force-exit: {:?}", cli.err());
+}
+
+#[test]
+fn parse_safe_mode_force_enter_s18() {
+    let cli =
+        agcli::cli::Cli::try_parse_from(["agcli", "safe-mode", "force-enter", "--duration", "100"]);
+    assert!(cli.is_ok(), "safe-mode force-enter: {:?}", cli.err());
+}
+
+// ── Admin netuid 0 / high netuid parsing ────────────────────────────
+
+#[test]
+fn parse_admin_set_tempo_netuid_0_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "admin",
+        "set-tempo",
+        "--netuid",
+        "0",
+        "--tempo",
+        "100",
+    ]);
+    assert!(
+        cli.is_ok(),
+        "admin set-tempo netuid 0 parses: {:?}",
+        cli.err()
+    );
+}
+
+#[test]
+fn parse_admin_set_tempo_netuid_max_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "admin",
+        "set-tempo",
+        "--netuid",
+        "65535",
+        "--tempo",
+        "100",
+    ]);
+    assert!(cli.is_ok(), "admin set-tempo netuid max: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_raw_known_call_s18() {
+    let cli = agcli::cli::Cli::try_parse_from([
+        "agcli",
+        "admin",
+        "raw",
+        "--call",
+        "sudo_set_tempo",
+        "--args",
+        "[1, 100]",
+    ]);
+    assert!(cli.is_ok(), "admin raw known: {:?}", cli.err());
+}
+
+#[test]
+fn parse_admin_list_json_s18() {
+    let cli = agcli::cli::Cli::try_parse_from(["agcli", "--output", "json", "admin", "list"]);
+    assert!(cli.is_ok(), "admin list json: {:?}", cli.err());
+}

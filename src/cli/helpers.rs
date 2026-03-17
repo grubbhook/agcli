@@ -908,8 +908,7 @@ pub fn validate_mnemonic(mnemonic: &str) -> Result<()> {
             // Try to suggest a close match
             let suggestion = wordlist
                 .iter()
-                .filter(|w| w.starts_with(&word[..word.len().min(3)]))
-                .next();
+                .find(|w| w.starts_with(&word[..word.len().min(3)]));
             let tip = if let Some(s) = suggestion {
                 format!("  Did you mean \"{}\"?", s)
             } else {
@@ -955,7 +954,7 @@ pub fn validate_derive_input(input: &str) -> Result<()> {
                 "Hex public key is empty after '0x' prefix.\n  Tip: provide 64 hex characters, e.g. '0x0123...abcd'."
             );
         }
-        if hex_str.len() % 2 != 0 {
+        if !hex_str.len().is_multiple_of(2) {
             anyhow::bail!(
                 "Hex has odd length ({} chars). Hex bytes come in pairs.\n  Tip: check for a missing or extra character.",
                 hex_str.len()
@@ -1085,7 +1084,7 @@ pub fn validate_multisig_json_args(json_str: &str) -> Result<Vec<serde_json::Val
                 );
             }
             serde_json::Value::Number(n) => {
-                if n.as_f64().map_or(false, |f| f.is_nan() || f.is_infinite()) {
+                if n.as_f64().is_some_and(|f| f.is_nan() || f.is_infinite()) {
                     anyhow::bail!("NaN/Infinity not allowed in args.\n  Tip: use a finite number.");
                 }
             }
@@ -1129,7 +1128,7 @@ pub fn validate_evm_address(address: &str, label: &str) -> Result<()> {
             label
         );
     }
-    if hex_str.len() % 2 != 0 {
+    if !hex_str.len().is_multiple_of(2) {
         anyhow::bail!(
             "Invalid {} EVM address: odd hex length ({} chars). Hex bytes come in pairs.\n  Tip: check for a missing or extra character.",
             label, hex_str.len()
@@ -1170,7 +1169,7 @@ pub fn validate_hex_data(data: &str, label: &str) -> Result<()> {
     if hex_str.is_empty() {
         return Ok(());
     }
-    if hex_str.len() % 2 != 0 {
+    if !hex_str.len().is_multiple_of(2) {
         anyhow::bail!(
             "Invalid {} hex data: odd length ({} chars). Hex bytes come in pairs.\n  Tip: check for a missing or extra character.",
             label, hex_str.len()
@@ -1431,7 +1430,7 @@ pub fn validate_batch_file(content: &str, path: &str) -> Result<Vec<serde_json::
                 i
             );
         }
-        if !obj.get("pallet").and_then(|v| v.as_str()).is_some() {
+        if obj.get("pallet").and_then(|v| v.as_str()).is_none() {
             anyhow::bail!(
                 "Batch call #{}: \"pallet\" must be a string.\n  Tip: use the pallet name, e.g. \"SubtensorModule\".",
                 i
@@ -1443,7 +1442,7 @@ pub fn validate_batch_file(content: &str, path: &str) -> Result<Vec<serde_json::
                 i
             );
         }
-        if !obj.get("call").and_then(|v| v.as_str()).is_some() {
+        if obj.get("call").and_then(|v| v.as_str()).is_none() {
             anyhow::bail!(
                 "Batch call #{}: \"call\" must be a string.\n  Tip: use the call name, e.g. \"transfer_allow_death\".",
                 i
@@ -1455,7 +1454,7 @@ pub fn validate_batch_file(content: &str, path: &str) -> Result<Vec<serde_json::
                 i
             );
         }
-        if !obj.get("args").and_then(|v| v.as_array()).is_some() {
+        if obj.get("args").and_then(|v| v.as_array()).is_none() {
             anyhow::bail!(
                 "Batch call #{}: \"args\" must be an array.\n  Tip: use \"args\": [arg1, arg2, ...] or \"args\": [] for no arguments.",
                 i
@@ -1658,10 +1657,12 @@ pub fn validate_url(url: &str, label: &str) -> Result<()> {
         );
     }
     // Must have a host after the scheme
-    let after_scheme = if trimmed.starts_with("https://") {
-        &trimmed[8..]
+    let after_scheme = if let Some(rest) = trimmed.strip_prefix("https://") {
+        rest
+    } else if let Some(rest) = trimmed.strip_prefix("http://") {
+        rest
     } else {
-        &trimmed[7..]
+        trimmed
     };
     if after_scheme.is_empty() || after_scheme.starts_with('/') || after_scheme.starts_with('?') {
         anyhow::bail!("{} URL is missing a host name.", label);

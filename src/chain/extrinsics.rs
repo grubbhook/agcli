@@ -1,4 +1,5 @@
 //! Extrinsic submission methods — staking, weights, registration, governance, liquidity.
+#![allow(clippy::too_many_arguments)]
 
 use anyhow::{Context, Result};
 use sp_core::{sr25519, Pair as _};

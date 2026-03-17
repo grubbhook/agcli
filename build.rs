@@ -19,11 +19,9 @@ async fn main() {
     let metadata_path = Path::new(&out_dir).join("metadata.rs");
 
     // If metadata already exists and SKIP_METADATA_FETCH is set, reuse it
-    if metadata_path.exists() {
-        if env::var("SKIP_METADATA_FETCH").is_ok() {
-            eprintln!("agcli: reusing cached metadata (SKIP_METADATA_FETCH set)");
-            return;
-        }
+    if metadata_path.exists() && env::var("SKIP_METADATA_FETCH").is_ok() {
+        eprintln!("agcli: reusing cached metadata (SKIP_METADATA_FETCH set)");
+        return;
     }
 
     eprintln!("agcli: fetching chain metadata from {endpoint}...");

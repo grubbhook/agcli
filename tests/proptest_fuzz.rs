@@ -9,15 +9,15 @@
 use proptest::prelude::*;
 
 use agcli::cli::helpers::{
-    json_to_subxt_value, parse_children, parse_json_args, parse_weight_pairs, validate_amount,
-    validate_batch_axon_json, validate_call_hash, validate_commitment_data,
-    validate_config_network, validate_crowdloan_amount, validate_delegate_take,
-    validate_derive_input, validate_emission_weights, validate_event_filter, validate_evm_address,
-    validate_hex_data, validate_ipv4, validate_max_cost, validate_mnemonic,
-    validate_multisig_json_args, validate_name, validate_netuid, validate_pallet_call,
-    validate_password_strength, validate_port, validate_price, validate_proxy_type,
-    validate_schedule_id, validate_spending_limit, validate_ss58, validate_symbol,
-    validate_take_pct,
+    json_to_subxt_value, parse_children, parse_json_args, parse_weight_pairs,
+    validate_admin_call_name, validate_amount, validate_batch_axon_json, validate_call_hash,
+    validate_commitment_data, validate_config_network, validate_crowdloan_amount,
+    validate_delegate_take, validate_derive_input, validate_emission_weights,
+    validate_event_filter, validate_evm_address, validate_hex_data, validate_ipv4,
+    validate_max_cost, validate_mnemonic, validate_multisig_json_args, validate_name,
+    validate_netuid, validate_pallet_call, validate_password_strength, validate_port,
+    validate_price, validate_proxy_type, validate_schedule_id, validate_spending_limit,
+    validate_ss58, validate_symbol, validate_take_pct,
 };
 
 // ──── validate_amount: never panics, valid amounts always accepted ────
@@ -1167,5 +1167,62 @@ proptest! {
             prop_assert!(validate_config_network(&s).is_err(),
                 "unknown network '{}' should be rejected", s);
         }
+    }
+
+    // ── validate_admin_call_name fuzz ───────────────────────────────
+
+    #[test]
+    fn fuzz_admin_call_name_no_panic(s in "\\PC{0,200}") {
+        let _ = validate_admin_call_name(&s);
+    }
+
+    #[test]
+    fn fuzz_admin_call_name_known_accepted(
+        idx in 0..13usize
+    ) {
+        let known = [
+            "sudo_set_tempo",
+            "sudo_set_max_allowed_validators",
+            "sudo_set_max_allowed_uids",
+            "sudo_set_immunity_period",
+            "sudo_set_min_allowed_weights",
+            "sudo_set_max_weight_limit",
+            "sudo_set_weights_set_rate_limit",
+            "sudo_set_commit_reveal_weights_enabled",
+            "sudo_set_difficulty",
+            "sudo_set_bonds_moving_average",
+            "sudo_set_target_registrations_per_interval",
+            "sudo_set_activity_cutoff",
+            "sudo_set_serving_rate_limit",
+        ];
+        prop_assert!(validate_admin_call_name(known[idx]).is_ok(),
+            "known call '{}' should be accepted", known[idx]);
+    }
+
+    #[test]
+    fn fuzz_admin_call_name_special_chars_rejected(s in "[a-z]{1}[^a-zA-Z0-9_]{1,10}") {
+        // Any string starting with a letter but containing non-identifier chars
+        prop_assert!(validate_admin_call_name(&s).is_err(),
+            "special chars '{}' should be rejected", s);
+    }
+
+    #[test]
+    fn fuzz_admin_call_name_digit_start_rejected(s in "[0-9][a-z_]{0,20}") {
+        prop_assert!(validate_admin_call_name(&s).is_err(),
+            "digit-start '{}' should be rejected", s);
+    }
+
+    // ── validate_netuid fuzz ────────────────────────────────────────
+
+    #[test]
+    fn fuzz_netuid_nonzero_accepted(n in 1u16..=65535u16) {
+        prop_assert!(validate_netuid(n).is_ok(),
+            "netuid {} should be accepted", n);
+    }
+
+    #[test]
+    fn fuzz_netuid_zero_rejected(_ in 0..1u16) {
+        prop_assert!(validate_netuid(0).is_err(),
+            "netuid 0 should be rejected");
     }
 }

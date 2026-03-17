@@ -6,9 +6,10 @@ use agcli::cli::helpers::{
     validate_amount, validate_batch_file, validate_call_hash, validate_config_network,
     validate_delegate_take, validate_derive_input, validate_emission_weights, validate_evm_address,
     validate_gas_limit, validate_github_repo, validate_hex_data, validate_ipv4, validate_max_cost,
-    validate_mnemonic, validate_multisig_json_args, validate_name, validate_pallet_call,
-    validate_schedule_id, validate_subnet_name, validate_symbol, validate_take_pct,
-    validate_threads, validate_url, validate_view_limit, validate_wasm_file, validate_weight_input,
+    validate_mnemonic, validate_multisig_json_args, validate_name, validate_netuid,
+    validate_pallet_call, validate_schedule_id, validate_subnet_name, validate_symbol,
+    validate_take_pct, validate_threads, validate_url, validate_view_limit, validate_wasm_file,
+    validate_weight_input,
 };
 use agcli::utils::explain;
 
@@ -1707,8 +1708,6 @@ fn validate_port_one_ok() {
 }
 
 // ── validate_netuid ──
-
-use agcli::cli::helpers::validate_netuid;
 
 #[test]
 fn validate_netuid_normal_ok() {
@@ -4869,4 +4868,194 @@ fn validate_config_network_testnet_vs_test() {
     // "testnet" is wrong, "test" is correct
     let err = validate_config_network("testnet").unwrap_err();
     assert!(err.to_string().contains("Unknown network"), "err: {}", err);
+}
+
+// ── validate_admin_call_name (upgraded with known_params check) ─────
+
+#[test]
+fn validate_admin_call_name_known_calls_accepted() {
+    let known_calls = [
+        "sudo_set_tempo",
+        "sudo_set_max_allowed_validators",
+        "sudo_set_max_allowed_uids",
+        "sudo_set_immunity_period",
+        "sudo_set_min_allowed_weights",
+        "sudo_set_max_weight_limit",
+        "sudo_set_weights_set_rate_limit",
+        "sudo_set_commit_reveal_weights_enabled",
+        "sudo_set_difficulty",
+        "sudo_set_bonds_moving_average",
+        "sudo_set_target_registrations_per_interval",
+        "sudo_set_activity_cutoff",
+        "sudo_set_serving_rate_limit",
+    ];
+    for call in &known_calls {
+        assert!(
+            validate_admin_call_name(call).is_ok(),
+            "known call '{}' should be accepted",
+            call
+        );
+    }
+}
+
+#[test]
+fn validate_admin_call_name_empty_rejected() {
+    let err = validate_admin_call_name("").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "err: {}", err);
+}
+
+#[test]
+fn validate_admin_call_name_whitespace_only_rejected() {
+    let err = validate_admin_call_name("   ").unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"), "err: {}", err);
+}
+
+#[test]
+fn validate_admin_call_name_too_long_rejected() {
+    let long_name = "a".repeat(129);
+    let err = validate_admin_call_name(&long_name).unwrap_err();
+    assert!(err.to_string().contains("too long"), "err: {}", err);
+}
+
+#[test]
+fn validate_admin_call_name_starts_with_digit_rejected() {
+    let err = validate_admin_call_name("1sudo_set_tempo").unwrap_err();
+    assert!(
+        err.to_string().contains("must start with a letter"),
+        "err: {}",
+        err
+    );
+}
+
+#[test]
+fn validate_admin_call_name_starts_with_underscore_rejected() {
+    let err = validate_admin_call_name("_sudo_set_tempo").unwrap_err();
+    assert!(
+        err.to_string().contains("must start with a letter"),
+        "err: {}",
+        err
+    );
+}
+
+#[test]
+fn validate_admin_call_name_special_chars_rejected() {
+    let err = validate_admin_call_name("sudo-set-tempo").unwrap_err();
+    assert!(
+        err.to_string().contains("invalid character"),
+        "err: {}",
+        err
+    );
+}
+
+#[test]
+fn validate_admin_call_name_spaces_rejected() {
+    let err = validate_admin_call_name("sudo set tempo").unwrap_err();
+    assert!(
+        err.to_string().contains("invalid character"),
+        "err: {}",
+        err
+    );
+}
+
+#[test]
+fn validate_admin_call_name_dots_rejected() {
+    let err = validate_admin_call_name("sudo.set.tempo").unwrap_err();
+    assert!(
+        err.to_string().contains("invalid character"),
+        "err: {}",
+        err
+    );
+}
+
+#[test]
+fn validate_admin_call_name_unknown_still_accepted_with_warning() {
+    // Unknown calls should still pass (warning only, for future chain calls)
+    assert!(validate_admin_call_name("sudo_set_some_future_param").is_ok());
+}
+
+#[test]
+fn validate_admin_call_name_case_sensitive() {
+    // Valid format but unknown call — still accepted with warning
+    assert!(validate_admin_call_name("Sudo_Set_Tempo").is_ok());
+}
+
+#[test]
+fn validate_admin_call_name_with_whitespace_trimmed() {
+    assert!(validate_admin_call_name("  sudo_set_tempo  ").is_ok());
+}
+
+#[test]
+fn validate_admin_call_name_max_length_boundary() {
+    let name = "a".repeat(128);
+    assert!(validate_admin_call_name(&name).is_ok());
+}
+
+#[test]
+fn validate_admin_call_name_unicode_rejected() {
+    let err = validate_admin_call_name("sudo_set_tempö").unwrap_err();
+    assert!(
+        err.to_string().contains("invalid character"),
+        "err: {}",
+        err
+    );
+}
+
+#[test]
+fn validate_admin_call_name_emoji_rejected() {
+    let err = validate_admin_call_name("sudo_🔥").unwrap_err();
+    assert!(
+        err.to_string().contains("invalid character"),
+        "err: {}",
+        err
+    );
+}
+
+#[test]
+fn validate_admin_call_name_newline_rejected() {
+    let err = validate_admin_call_name("sudo\nset").unwrap_err();
+    assert!(
+        err.to_string().contains("invalid character"),
+        "err: {}",
+        err
+    );
+}
+
+// ── validate_netuid edge cases ──────────────────────────────────────
+
+#[test]
+fn validate_netuid_zero_rejected() {
+    let err = validate_netuid(0).unwrap_err();
+    assert!(err.to_string().contains("Root network"), "err: {}", err);
+}
+
+#[test]
+fn validate_netuid_one_accepted() {
+    assert!(validate_netuid(1).is_ok());
+}
+
+#[test]
+fn validate_netuid_max_u16_accepted() {
+    assert!(validate_netuid(65535).is_ok());
+}
+
+#[test]
+fn validate_netuid_typical_values_accepted() {
+    for netuid in [1, 2, 3, 5, 10, 18, 32, 100, 256, 1000] {
+        assert!(
+            validate_netuid(netuid).is_ok(),
+            "netuid {} should be valid",
+            netuid
+        );
+    }
+}
+
+#[test]
+fn validate_netuid_error_message_helpful() {
+    let err = validate_netuid(0).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Tip:") || msg.contains("netuid 1"),
+        "Error should guide user: {}",
+        msg
+    );
 }
