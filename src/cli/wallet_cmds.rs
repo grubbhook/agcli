@@ -352,14 +352,15 @@ pub async fn handle_wallet(
             let coldkey_path = std::path::PathBuf::from(wallet_dir)
                 .join(wallet_name)
                 .join("coldkey");
-            let mnemonic =
+            let decrypted =
                 crate::wallet::keyfile::read_any_encrypted_keyfile(&coldkey_path, &password)?;
+            let mnemonic = crate::wallet::keyfile::extract_secret_phrase(&decrypted)?;
             if output.is_json() {
                 crate::cli::helpers::print_json(&serde_json::json!({
-                    "mnemonic": mnemonic.trim(),
+                    "mnemonic": mnemonic,
                 }));
             } else {
-                println!("{}", mnemonic.trim());
+                println!("{}", mnemonic);
             }
             Ok(())
         }

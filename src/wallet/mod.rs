@@ -62,13 +62,8 @@ impl Wallet {
                 None
             }
         };
-        let hotkey_ss58 = match keyfile::read_public_key(&path.join("hotkeys").join("default")) {
-            Ok(pk) => Some(keypair::to_ss58(&pk, 42)),
-            Err(e) => {
-                tracing::debug!(wallet = %name, error = %e, "Could not read default hotkey public key");
-                None
-            }
-        };
+        // Try the hotkey keypair file first, then the pub-key-only file (Python btcli: defaultpub.txt)
+        let hotkey_ss58 = read_hotkey_ss58(&path, "default");
 
         Ok(Self {
             name,
@@ -239,27 +234,54 @@ impl Wallet {
     }
 
     /// Load the hotkey (unencrypted).
-    /// Supports both mnemonic plaintext and Python JSON keypair format.
+    ///
+    /// Resolution order:
+    /// 1. `hotkeys/{name}` — full keypair (mnemonic, JSON with secretPhrase/secretSeed, or dev URI)
+    /// 2. `hotkeys/{name}pub.txt` — public key only (Python btcli convention); sets SS58 but no pair
     pub fn load_hotkey(&mut self, hotkey_name: &str) -> Result<()> {
-        let data = keyfile::read_keyfile(&self.path.join("hotkeys").join(hotkey_name))?;
-        let pair = if data.trim().starts_with('{') {
-            let v: serde_json::Value =
-                serde_json::from_str(data.trim()).context("Failed to parse hotkey JSON")?;
-            if let Some(seed) = v.get("secretSeed").and_then(|s| s.as_str()) {
-                keypair::pair_from_seed_hex(seed)?
-            } else if let Some(phrase) = v.get("secretPhrase").and_then(|s| s.as_str()) {
-                keypair::pair_from_mnemonic(phrase)?
+        let keypair_path = self.path.join("hotkeys").join(hotkey_name);
+        if keypair_path.exists() {
+            let data = keyfile::read_keyfile(&keypair_path)?;
+            let pair = if data.trim().starts_with('{') {
+                let v: serde_json::Value =
+                    serde_json::from_str(data.trim()).context("Failed to parse hotkey JSON")?;
+                if let Some(seed) = v.get("secretSeed").and_then(|s| s.as_str()) {
+                    keypair::pair_from_seed_hex(seed)?
+                } else if let Some(phrase) = v.get("secretPhrase").and_then(|s| s.as_str()) {
+                    keypair::pair_from_mnemonic(phrase)?
+                } else {
+                    anyhow::bail!("Hotkey JSON has no secretSeed or secretPhrase");
+                }
+            } else if data.trim().starts_with("//") {
+                keypair::pair_from_uri(data.trim())?
             } else {
-                anyhow::bail!("Hotkey JSON has no secretSeed or secretPhrase");
+                keypair::pair_from_mnemonic(data.trim())?
+            };
+            self.hotkey_ss58 = Some(keypair::to_ss58(&pair.public(), 42));
+            self.hotkey = Some(pair);
+            return Ok(());
+        }
+
+        // Fallback: pub-key-only file (Python btcli stores {name}pub.txt alongside hotkey)
+        // Sufficient for operations that only need the hotkey address (staking, etc.)
+        if let Some(ss58) = read_hotkey_ss58(&self.path, hotkey_name) {
+            self.hotkey_ss58 = Some(ss58);
+            return Ok(());
+        }
+
+        anyhow::bail!(
+            "Hotkey '{}' not found in {}.\n  Available hotkeys: {}",
+            hotkey_name,
+            self.path.join("hotkeys").display(),
+            {
+                let keys = self.list_hotkeys().unwrap_or_default();
+                if keys.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    keys.join(", ")
+                }
             }
-        } else if data.trim().starts_with("//") {
-            keypair::pair_from_uri(data.trim())?
-        } else {
-            keypair::pair_from_mnemonic(data.trim())?
-        };
-        self.hotkey_ss58 = Some(keypair::to_ss58(&pair.public(), 42));
-        self.hotkey = Some(pair);
-        Ok(())
+        )
     }
 
     /// Get the coldkey pair (must be unlocked).
@@ -295,24 +317,47 @@ impl Wallet {
     }
 
     /// List all hotkeys in the wallet.
+    ///
+    /// Skips `.lock` and `*pub.txt` sidecar files. For Python btcli wallets that only have a
+    /// `{name}pub.txt` file (no matching `{name}` keypair file), still includes the name so
+    /// the hotkey address can be resolved via the pub file.
     pub fn list_hotkeys(&self) -> Result<Vec<String>> {
         let hotkey_dir = self.path.join("hotkeys");
         if !hotkey_dir.exists() {
             return Ok(vec![]);
         }
-        let mut names = Vec::new();
-        for entry in std::fs::read_dir(hotkey_dir)? {
+        let mut names = std::collections::HashSet::new();
+        let mut pub_only: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for entry in std::fs::read_dir(&hotkey_dir)? {
             let entry = entry?;
-            if entry.file_type()?.is_file() {
-                if let Some(name) = entry.file_name().to_str() {
-                    // Skip lock files and hidden files
-                    if name.ends_with(".lock") || name.starts_with('.') {
-                        continue;
-                    }
-                    names.push(name.to_string());
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let fname = match entry.file_name().into_string() {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            // Skip lock files and hidden files
+            if fname.ends_with(".lock") || fname.starts_with('.') {
+                continue;
+            }
+            // Pub sidecar: "{name}pub.txt" — record base name, don't add directly
+            if fname.ends_with("pub.txt") {
+                let base = fname.trim_end_matches("pub.txt").to_string();
+                if !base.is_empty() {
+                    pub_only.insert(base);
                 }
+                continue;
+            }
+            names.insert(fname);
+        }
+        // Add names from pub-only sidecars where no keypair file exists
+        for base in pub_only {
+            if !names.contains(&base) {
+                names.insert(base);
             }
         }
+        let mut names: Vec<String> = names.into_iter().collect();
         names.sort();
         Ok(names)
     }
@@ -335,6 +380,33 @@ impl Wallet {
         names.sort();
         Ok(names)
     }
+}
+
+/// Try to read a hotkey SS58 address from a wallet directory.
+///
+/// Checks in order:
+/// 1. `hotkeys/{name}` — may be a full JSON keypair (extract publicKey/ss58Address) or mnemonic
+/// 2. `hotkeys/{name}pub.txt` — Python btcli pub-key sidecar file
+fn read_hotkey_ss58(wallet_path: &Path, hotkey_name: &str) -> Option<String> {
+    let hotkey_dir = wallet_path.join("hotkeys");
+
+    // Try main keypair file — if it's a Python JSON, extract ss58Address directly
+    let keypair_path = hotkey_dir.join(hotkey_name);
+    if keypair_path.exists() {
+        if let Ok(pk) = keyfile::read_public_key(&keypair_path) {
+            return Some(keypair::to_ss58(&pk, 42));
+        }
+    }
+
+    // Try Python btcli pub sidecar: hotkeys/{name}pub.txt
+    let pub_path = hotkey_dir.join(format!("{}pub.txt", hotkey_name));
+    if pub_path.exists() {
+        if let Ok(pk) = keyfile::read_public_key(&pub_path) {
+            return Some(keypair::to_ss58(&pk, 42));
+        }
+    }
+
+    None
 }
 
 fn expand_tilde(path: &Path) -> PathBuf {
