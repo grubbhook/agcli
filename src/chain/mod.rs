@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use sp_core::sr25519;
 use subxt::backend::legacy::rpc_methods::LegacyRpcMethods;
 use subxt::backend::rpc::RpcClient;
-use subxt::tx::PairSigner;
+use subxt::tx::{PairSigner, TxStatus};
 use subxt::OnlineClient;
 
 use crate::queries::query_cache::QueryCache;
@@ -346,7 +346,7 @@ impl Client {
         // Retry submission on transient errors (connection drop before tx reaches node).
         // Once submitted, we do NOT retry — the finalization wait is non-idempotent.
         let inner = &self.inner;
-        let progress = retry_on_transient("sign_submit", RPC_RETRIES, || async {
+        let mut progress = retry_on_transient("sign_submit", RPC_RETRIES, || async {
             match inner
                 .tx()
                 .sign_and_submit_then_watch_default(tx, &signer)
@@ -365,28 +365,53 @@ impl Client {
             }
         })
         .await?;
-        spinner.set_message("Waiting for finalization...");
-        tracing::debug!("Extrinsic submitted, waiting for finalization");
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            progress.wait_for_finalized_success(),
-        )
+        spinner.set_message("Waiting for inclusion...");
+        tracing::debug!("Extrinsic submitted, waiting for in-block inclusion");
+        let in_block = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            loop {
+                match progress.next().await {
+                    Some(Ok(TxStatus::InBestBlock(b) | TxStatus::InFinalizedBlock(b))) => {
+                        return Ok(b);
+                    }
+                    Some(Ok(TxStatus::Error { message })) => {
+                        return Err(subxt::Error::Other(message));
+                    }
+                    Some(Ok(TxStatus::Invalid { message })) => {
+                        return Err(subxt::Error::Other(message));
+                    }
+                    Some(Ok(TxStatus::Dropped { message })) => {
+                        return Err(subxt::Error::Other(message));
+                    }
+                    Some(Ok(_)) => continue,
+                    Some(Err(e)) => return Err(e),
+                    None => {
+                        return Err(subxt::Error::Other(
+                            "Transaction stream ended before inclusion".to_string(),
+                        ))
+                    }
+                }
+            }
+        })
         .await
         .map_err(|_| {
             spinner.finish_and_clear();
             anyhow::anyhow!(
-                "Transaction timed out after 30s waiting for finalization. \
+                "Transaction timed out after 30s waiting for block inclusion. \
              The extrinsic may have been dropped from the pool \
              (insufficient balance, invalid state, or node not producing blocks)."
             )
         })?
         .map_err(|e| {
             spinner.finish_and_clear();
+            anyhow::anyhow!("{}", e)
+        })?;
+        let result = in_block.wait_for_success().await.map_err(|e| {
+            spinner.finish_and_clear();
             format_dispatch_error(e)
         })?;
         let hash = format!("{:?}", result.extrinsic_hash());
         spinner.finish_and_clear();
-        tracing::info!(tx_hash = %hash, elapsed_ms = start.elapsed().as_millis() as u64, "Extrinsic finalized");
+        tracing::info!(tx_hash = %hash, elapsed_ms = start.elapsed().as_millis() as u64, "Extrinsic included in block");
         Ok(hash)
     }
 
