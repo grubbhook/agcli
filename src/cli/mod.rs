@@ -54,12 +54,13 @@ pub struct Cli {
     pub network: String,
 
     /// Custom chain endpoint (overrides --network)
-    #[arg(long, global = true, env = "AGCLI_ENDPOINT")]
+    #[arg(long, short = 'e', global = true, env = "AGCLI_ENDPOINT")]
     pub endpoint: Option<String>,
 
     /// Wallet directory
     #[arg(
         long,
+        short = 'd',
         global = true,
         default_value = "~/.bittensor/wallets",
         env = "AGCLI_WALLET_DIR"
@@ -77,11 +78,17 @@ pub struct Cli {
     pub wallet: String,
 
     /// Hotkey name (file under wallet's hotkeys/ directory)
-    #[arg(long, global = true, default_value = "default", env = "AGCLI_HOTKEY")]
+    #[arg(
+        long,
+        short = 'H',
+        global = true,
+        default_value = "default",
+        env = "AGCLI_HOTKEY"
+    )]
     pub hotkey_name: String,
 
     /// Output format
-    #[arg(long, global = true, default_value = "table", value_enum)]
+    #[arg(long, short = 'o', global = true, default_value = "table", value_enum)]
     pub output: OutputFormat,
 
     /// Enable live polling mode (interval in seconds, default 12)
