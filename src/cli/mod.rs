@@ -182,7 +182,7 @@ pub enum Commands {
         #[arg(long)]
         dest: String,
         /// Amount of TAO to send
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
     },
 
@@ -388,7 +388,7 @@ pub enum CommitmentCommands {
     /// Set commitment data for a miner on a subnet (publishes endpoint info)
     Set {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Commitment data as key:value pairs (e.g., "endpoint:http://...,version:1.0")
         #[arg(long)]
@@ -397,7 +397,7 @@ pub enum CommitmentCommands {
     /// Get commitment for a specific hotkey on a subnet
     Get {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Hotkey SS58 address
         #[arg(long)]
@@ -406,7 +406,7 @@ pub enum CommitmentCommands {
     /// List all commitments on a subnet
     List {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
 }
@@ -421,7 +421,7 @@ pub enum SubscribeCommands {
         #[arg(long, default_value = "all")]
         filter: String,
         /// Filter by subnet UID (only show events mentioning this netuid)
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: Option<u16>,
         /// Filter by account SS58 (only show events involving this address)
         #[arg(long)]
@@ -546,10 +546,10 @@ pub enum StakeCommands {
     /// Add stake to a hotkey on a subnet
     Add {
         /// Amount of TAO to stake
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Hotkey SS58 (defaults to wallet hotkey)
         #[arg(long)]
@@ -561,10 +561,10 @@ pub enum StakeCommands {
     /// Remove stake from a hotkey on a subnet
     Remove {
         /// Amount to unstake
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Hotkey SS58
         #[arg(long)]
@@ -585,7 +585,7 @@ pub enum StakeCommands {
     /// Move stake between subnets
     Move {
         /// Amount of alpha to move
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Source subnet
         #[arg(long)]
@@ -600,10 +600,10 @@ pub enum StakeCommands {
     /// Swap stake between hotkeys on same subnet
     Swap {
         /// Amount
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Source hotkey
         #[arg(long)]
@@ -624,16 +624,16 @@ pub enum StakeCommands {
         #[arg(long)]
         hotkey: Option<String>,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Add stake with a limit price
     AddLimit {
         /// Amount of TAO
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Limit price
         #[arg(long)]
@@ -648,10 +648,10 @@ pub enum StakeCommands {
     /// Remove stake with limit price
     RemoveLimit {
         /// Amount of alpha
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Limit price
         #[arg(long)]
@@ -669,7 +669,7 @@ pub enum StakeCommands {
         #[arg(long)]
         take: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Hotkey SS58
         #[arg(long)]
@@ -678,7 +678,7 @@ pub enum StakeCommands {
     /// Set children for hotkey
     SetChildren {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Children as "proportion:hotkey_ss58" pairs, comma-separated
         #[arg(long)]
@@ -687,10 +687,10 @@ pub enum StakeCommands {
     /// Recycle alpha tokens back to TAO
     RecycleAlpha {
         /// Amount of alpha to recycle
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Hotkey SS58
         #[arg(long)]
@@ -705,10 +705,10 @@ pub enum StakeCommands {
     /// Burn alpha tokens permanently (reduce supply)
     BurnAlpha {
         /// Amount of alpha to burn
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Hotkey SS58
         #[arg(long)]
@@ -717,7 +717,7 @@ pub enum StakeCommands {
     /// Swap stake between subnets with a limit price
     SwapLimit {
         /// Amount of alpha to swap
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Source subnet
         #[arg(long)]
@@ -738,7 +738,7 @@ pub enum StakeCommands {
     /// Set auto-stake hotkey for a subnet (rewards auto-compound to this hotkey)
     SetAuto {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Hotkey SS58 to auto-stake to
         #[arg(long)]
@@ -774,7 +774,7 @@ pub enum StakeCommands {
         #[arg(long)]
         dest: String,
         /// Amount of TAO to transfer
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
         /// Source subnet UID
         #[arg(long)]
@@ -789,10 +789,10 @@ pub enum StakeCommands {
     /// Full staking wizard (interactive or non-interactive with flags)
     Wizard {
         /// Subnet UID (skip interactive subnet selection)
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: Option<u16>,
         /// Amount of TAO to stake (skip interactive amount input)
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: Option<f64>,
         /// Hotkey SS58 (skip interactive hotkey selection)
         #[arg(long)]
@@ -811,7 +811,7 @@ pub enum SubnetCommands {
     /// Show detailed info for a subnet
     Show {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Query at a specific block number (historical wayback)
         #[arg(long)]
@@ -820,13 +820,13 @@ pub enum SubnetCommands {
     /// Show subnet hyperparameters
     Hyperparams {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Show metagraph for a subnet (full or single UID)
     Metagraph {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Show only a specific neuron UID
         #[arg(long)]
@@ -844,7 +844,7 @@ pub enum SubnetCommands {
     /// Load a cached metagraph snapshot from disk
     CacheLoad {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Block number to load (default: latest)
         #[arg(long)]
@@ -853,13 +853,13 @@ pub enum SubnetCommands {
     /// List cached metagraph snapshots for a subnet
     CacheList {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Diff two metagraph snapshots (current vs cached, or two cached blocks)
     CacheDiff {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// First block number (older, default: latest cached)
         #[arg(long)]
@@ -871,7 +871,7 @@ pub enum SubnetCommands {
     /// Prune old cached metagraph snapshots
     CachePrune {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Number of snapshots to keep (default: 10)
         #[arg(long, default_value = "10")]
@@ -880,7 +880,7 @@ pub enum SubnetCommands {
     /// Probe axon health for neurons on a subnet
     Probe {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Only probe specific UIDs (comma-separated)
         #[arg(long)]
@@ -897,13 +897,13 @@ pub enum SubnetCommands {
     /// Register a neuron on a subnet (burn)
     RegisterNeuron {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Register via POW
     Pow {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Number of threads
         #[arg(long, default_value = "4")]
@@ -912,13 +912,13 @@ pub enum SubnetCommands {
     /// Dissolve a subnet (owner only)
     Dissolve {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Live watch: tempo countdown, rate limits, commit-reveal status
     Watch {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Polling interval in seconds (default 12)
         #[arg(long, default_value = "12")]
@@ -927,13 +927,13 @@ pub enum SubnetCommands {
     /// AMM liquidity dashboard: pool depth, slippage at common trade sizes
     Liquidity {
         /// Subnet UID (omit for all subnets)
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: Option<u16>,
     },
     /// Monitor a subnet: track registrations, weight changes, emission shifts, anomalies
     Monitor {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Polling interval in seconds (default 24 = ~2 blocks)
         #[arg(long, default_value = "24")]
@@ -945,25 +945,25 @@ pub enum SubnetCommands {
     /// Show subnet health: all miners, status, weights vs consensus
     Health {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Show who's earning what, projected next epoch
     Emissions {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Show current registration cost + recent trend
     Cost {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Show pending weight commits on a subnet (commit-reveal status)
     Commits {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Filter by hotkey SS58 address (default: show all)
         #[arg(long)]
@@ -972,7 +972,7 @@ pub enum SubnetCommands {
     /// Set a subnet hyperparameter (subnet owner only)
     SetParam {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Parameter name (e.g., tempo, max_allowed_uids, min_burn). Use --param list to see all.
         #[arg(long)]
@@ -984,7 +984,7 @@ pub enum SubnetCommands {
     /// Set subnet token symbol (subnet owner only)
     SetSymbol {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Token symbol (e.g. "ALPHA", "SN1")
         #[arg(long)]
@@ -993,13 +993,13 @@ pub enum SubnetCommands {
     /// Show emission split across mechanisms for a subnet
     EmissionSplit {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Trim UIDs to a specified max on your subnet (subnet owner only)
     Trim {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Maximum number of UIDs to keep
         #[arg(long)]
@@ -1008,25 +1008,25 @@ pub enum SubnetCommands {
     /// Check if a subnet's emission schedule can be started
     CheckStart {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Start a subnet's emission schedule (subnet owner only)
     Start {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Show mechanism count for a subnet
     MechanismCount {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Set mechanism count for a subnet (subnet owner only)
     SetMechanismCount {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Number of mechanisms
         #[arg(long)]
@@ -1035,7 +1035,7 @@ pub enum SubnetCommands {
     /// Set emission split weights across mechanisms (subnet owner only)
     SetEmissionSplit {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Emission weights as comma-separated u16 values (e.g. "50,50" or "70,30")
         #[arg(long)]
@@ -1044,7 +1044,7 @@ pub enum SubnetCommands {
     /// Snipe a registration slot — subscribe to blocks and register the instant a slot opens
     Snipe {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Maximum burn cost in TAO you're willing to pay (default: no limit)
         #[arg(long)]
@@ -1069,7 +1069,7 @@ pub enum WeightCommands {
     /// Set weights on a subnet
     Set {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Weights as "uid:weight" pairs, comma-separated.
         /// Use "-" to read from stdin, or "@path" to read from a JSON file.
@@ -1086,7 +1086,7 @@ pub enum WeightCommands {
     /// Commit weights (for commit-reveal enabled subnets)
     Commit {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Weights as "uid:weight" pairs
         #[arg(long)]
@@ -1098,7 +1098,7 @@ pub enum WeightCommands {
     /// Reveal previously committed weights
     Reveal {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Weights as "uid:weight" pairs
         #[arg(long)]
@@ -1113,7 +1113,7 @@ pub enum WeightCommands {
     /// Show on-chain weights set by validators on a subnet
     Show {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Show only weights set by this hotkey
         #[arg(long)]
@@ -1125,13 +1125,13 @@ pub enum WeightCommands {
     /// Check commit status for your hotkey on a subnet
     Status {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Atomic commit-reveal: commit weights, wait for reveal window, then auto-reveal
     CommitReveal {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Weights as "uid:weight" pairs, comma-separated.
         /// Use "-" to read from stdin, or "@path" to read from a JSON file.
@@ -1203,7 +1203,7 @@ pub enum ViewCommands {
     /// Show neuron details
     Neuron {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Neuron UID
         #[arg(long)]
@@ -1227,7 +1227,7 @@ pub enum ViewCommands {
     /// Show top validators by stake across subnets
     Validators {
         /// Subnet UID (omit for all subnets)
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: Option<u16>,
         /// Max number of validators to show
         #[arg(long, default_value = "50")]
@@ -1257,7 +1257,7 @@ pub enum ViewCommands {
     /// Subnet analytics (emission rates, top miners/validators, stats)
     SubnetAnalytics {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Staking analytics (APY estimates, emission projections)
@@ -1269,7 +1269,7 @@ pub enum ViewCommands {
     /// Simulate a TAO→Alpha swap (see how much alpha you'd get)
     SwapSim {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Amount of TAO to swap
         #[arg(long)]
@@ -1287,7 +1287,7 @@ pub enum ViewCommands {
     /// Show metagraph with optional diff against a previous block
     Metagraph {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Compare against this block number (shows only changed neurons)
         #[arg(long)]
@@ -1299,7 +1299,7 @@ pub enum ViewCommands {
     /// Look up axon endpoint for a specific UID or hotkey
     Axon {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Neuron UID
         #[arg(long)]
@@ -1311,7 +1311,7 @@ pub enum ViewCommands {
     /// Subnet health: neuron count, active %, axon reachability
     Health {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// TCP-probe each axon to check reachability (slower but thorough)
         #[arg(long)]
@@ -1323,7 +1323,7 @@ pub enum ViewCommands {
     /// Per-UID emission breakdown for a subnet
     Emissions {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Show only top N UIDs by emission
         #[arg(long)]
@@ -1357,7 +1357,7 @@ pub enum IdentityCommands {
     /// Set subnet identity (subnet owner only)
     SetSubnet {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Subnet name
         #[arg(long)]
@@ -1376,7 +1376,7 @@ pub enum ServeCommands {
     /// Set axon endpoint (IP, port, protocol) for a subnet
     Axon {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// IP address (IPv4)
         #[arg(long)]
@@ -1394,7 +1394,7 @@ pub enum ServeCommands {
     /// Reset axon information for a neuron (clears serving endpoint)
     Reset {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
     },
     /// Batch update axon endpoints from a JSON file
@@ -1873,7 +1873,7 @@ pub enum CrowdloanCommands {
         #[arg(long)]
         crowdloan_id: u32,
         /// Amount of TAO to contribute
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: f64,
     },
     /// Withdraw contribution from an active crowdloan
@@ -1948,7 +1948,7 @@ pub enum LiquidityCommands {
     /// Add a liquidity position to a subnet's AMM pool
     Add {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Lower price bound (TAO per Alpha)
         #[arg(long)]
@@ -1966,7 +1966,7 @@ pub enum LiquidityCommands {
     /// Remove a liquidity position entirely
     Remove {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Position ID
         #[arg(long)]
@@ -1978,7 +1978,7 @@ pub enum LiquidityCommands {
     /// Modify liquidity in an existing position
     Modify {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Position ID
         #[arg(long)]
@@ -1993,7 +1993,7 @@ pub enum LiquidityCommands {
     /// Toggle user liquidity for a subnet (subnet owner only)
     Toggle {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Enable user liquidity
         #[arg(long)]
@@ -2039,7 +2039,7 @@ pub enum DiffCommands {
     /// Compare subnet state between two blocks
     Subnet {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// First block number
         #[arg(long)]
@@ -2060,7 +2060,7 @@ pub enum DiffCommands {
     /// Compare metagraph neurons between two blocks (shows changed neurons only)
     Metagraph {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// First block number
         #[arg(long)]
@@ -2076,7 +2076,7 @@ pub enum UtilsCommands {
     /// Convert between TAO/RAO, or TAO/Alpha (requires --netuid for Alpha)
     Convert {
         /// Amount to convert
-        #[arg(long)]
+        #[arg(long, short = 'a')]
         amount: Option<f64>,
         /// Convert from TAO to RAO (default: RAO to TAO)
         #[arg(long)]
@@ -2088,7 +2088,7 @@ pub enum UtilsCommands {
         #[arg(long)]
         alpha: Option<f64>,
         /// Subnet UID (required for TAO↔Alpha conversion)
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: Option<u16>,
     },
     /// Benchmark latency to network endpoints
@@ -2210,7 +2210,7 @@ pub enum AdminCommands {
     /// Set tempo (blocks per epoch)
     SetTempo {
         /// Subnet UID
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         /// Tempo value
         #[arg(long)]
@@ -2221,7 +2221,7 @@ pub enum AdminCommands {
     },
     /// Set max allowed validators
     SetMaxValidators {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         max: u16,
@@ -2230,7 +2230,7 @@ pub enum AdminCommands {
     },
     /// Set max allowed UIDs
     SetMaxUids {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         max: u16,
@@ -2239,7 +2239,7 @@ pub enum AdminCommands {
     },
     /// Set immunity period
     SetImmunityPeriod {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         period: u16,
@@ -2248,7 +2248,7 @@ pub enum AdminCommands {
     },
     /// Set minimum allowed weights
     SetMinWeights {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         min: u16,
@@ -2257,7 +2257,7 @@ pub enum AdminCommands {
     },
     /// Set max weight limit
     SetMaxWeightLimit {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         limit: u16,
@@ -2266,7 +2266,7 @@ pub enum AdminCommands {
     },
     /// Set weights rate limit (0 = unlimited)
     SetWeightsRateLimit {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         limit: u64,
@@ -2275,7 +2275,7 @@ pub enum AdminCommands {
     },
     /// Enable/disable commit-reveal weights
     SetCommitReveal {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         enabled: bool,
@@ -2284,7 +2284,7 @@ pub enum AdminCommands {
     },
     /// Set POW difficulty
     SetDifficulty {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         difficulty: u64,
@@ -2293,7 +2293,7 @@ pub enum AdminCommands {
     },
     /// Set activity cutoff
     SetActivityCutoff {
-        #[arg(long)]
+        #[arg(long, short = 'u')]
         netuid: u16,
         #[arg(long)]
         cutoff: u16,
