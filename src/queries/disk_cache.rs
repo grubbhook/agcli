@@ -74,8 +74,11 @@ pub fn put<T: Serialize>(key: &str, data: &T) -> Result<()> {
     };
     let json = serde_json::to_string(&entry).context("Failed to serialize cache entry")?;
 
-    // Atomic write: temp file in same dir, then rename
-    let tmp = dir.join(format!(".{}-{}.tmp", key, std::process::id()));
+    // Atomic write: temp file in same dir, then rename.
+    // Include a per-write counter so concurrent threads don't share the same tmp path.
+    static TMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let tmp_id = TMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = dir.join(format!(".{}-{}-{}.tmp", key, std::process::id(), tmp_id));
     std::fs::write(&tmp, json.as_bytes())
         .with_context(|| format!("Failed to write cache temp file: {}", tmp.display()))?;
 
